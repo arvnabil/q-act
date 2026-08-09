@@ -30,11 +30,8 @@ export function renderLogin() {
           
           <!-- Logo & Brand Header -->
           <div class="flex items-center gap-3">
-            <div class="w-10 h-10 rounded-xl bg-white/10 backdrop-blur-md border border-white/20 flex items-center justify-center shadow-lg">
-              <svg width="24" height="24" viewBox="0 0 32 32" fill="none">
-                <path d="M6 24L16 4L26 24" stroke="#ffffff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
-                <path d="M10 18H22" stroke="#ffffff" stroke-width="3" stroke-linecap="round"/>
-              </svg>
+            <div class="w-10 h-10 rounded-xl bg-white p-1 flex items-center justify-center shadow-lg overflow-hidden shrink-0">
+              <img src="/logo.png" alt="ACTiV" class="w-full h-full object-contain" />
             </div>
             <div class="flex flex-col">
               <span class="text-lg font-extrabold tracking-wide text-white">ACTiV</span>
@@ -101,11 +98,11 @@ export function renderLogin() {
           </div>
 
           <!-- Bottom Footer Info -->
-          <div class="flex justify-between items-center text-xs text-brand-300">
+          <div class="flex justify-between items-center text-xs text-white/90 font-medium pt-4 border-t border-white/10">
             <span>© PT. Alfa Cipta Teknologi Virtual</span>
             <div class="flex gap-4">
-              <span class="hover:text-white transition-colors cursor-pointer">Panduan</span>
-              <span class="hover:text-white transition-colors cursor-pointer">Bantuan</span>
+              <a href="#guide" class="nav-footer-link text-white/80 hover:text-white transition-colors cursor-pointer">Panduan</a>
+              <a href="#support" class="nav-footer-link text-white/80 hover:text-white transition-colors cursor-pointer">Bantuan</a>
             </div>
           </div>
         </div>
@@ -144,7 +141,7 @@ export function renderLogin() {
                 <svg class="w-5 h-5 text-surface-400 shrink-0 mr-3" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 01-2.25 2.25H4.5A2.25 2.25 0 012.25 17.25V6.75m19.5 0A2.25 2.25 0 0019.5 4.5H4.5a2.25 2.25 0 00-2.25 2.25m19.5 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 8.91a2.25 2.25 0 01-1.07-1.916V6.75" />
                 </svg>
-                <input type="email" id="loginEmail" placeholder="contoh@activ.co.id" class="bg-transparent border-none outline-none text-sm text-surface-700 placeholder-surface-400 w-full" required />
+                <input type="email" id="loginEmail" value="rifki.dwi@activ.co.id" placeholder="contoh@activ.co.id" class="bg-transparent border-none outline-none text-sm text-surface-700 placeholder-surface-400 w-full" required />
               </div>
             </div>
 
@@ -157,7 +154,7 @@ export function renderLogin() {
                 <svg class="w-5 h-5 text-surface-400 shrink-0 mr-3" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
                 </svg>
-                <input type="password" id="loginPassword" placeholder="••••••••" class="bg-transparent border-none outline-none text-sm text-surface-700 placeholder-surface-400 w-full" required />
+                <input type="password" id="loginPassword" value="12345678" placeholder="••••••••" class="bg-transparent border-none outline-none text-sm text-surface-700 placeholder-surface-400 w-full" required />
                 <button type="button" id="togglePasswordBtn" class="text-surface-400 hover:text-surface-600 focus:outline-none transition-colors p-1" title="Show/Hide Password">
                   <svg id="eyeOpenIcon" class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z" />
@@ -170,16 +167,8 @@ export function renderLogin() {
               </div>
             </div>
 
-            <!-- Remember me & terms -->
-            <div class="flex items-center justify-between mt-1">
-              <label class="flex items-center gap-2 text-sm text-surface-500 cursor-pointer select-none">
-                <input type="checkbox" checked class="w-4 h-4 rounded text-brand-500 border-surface-200 focus:ring-brand-500 cursor-pointer" />
-                <span>Ingat saya</span>
-              </label>
-            </div>
-
             <!-- Submit button -->
-            <button type="submit" id="loginSubmitBtn" class="flex items-center justify-center gap-2 bg-brand-500 hover:bg-brand-600 text-white text-sm font-semibold py-3 px-4 rounded-xl shadow-sm hover:shadow-md transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-brand-400/50 mt-2 cursor-pointer">
+            <button type="submit" id="loginSubmitBtn" class="flex items-center justify-center gap-2 bg-brand-500 hover:bg-brand-600 text-white text-sm font-semibold py-3 px-4 rounded-xl shadow-sm hover:shadow-md transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-brand-400/50 mt-4 cursor-pointer">
               <span id="btnText">Masuk Ke Sistem</span>
               <svg id="btnSpinner" class="animate-spin h-5 w-5 text-white hidden" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                 <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
@@ -187,19 +176,6 @@ export function renderLogin() {
               </svg>
             </button>
           </form>
-
-          <!-- Divider -->
-          <div class="flex items-center gap-3 my-6">
-            <div class="h-[1px] bg-surface-200 flex-1"></div>
-            <span class="text-xs text-surface-400 font-medium whitespace-nowrap">Atau Masuk dengan Akun Demo</span>
-            <div class="h-[1px] bg-surface-200 flex-1"></div>
-          </div>
-
-          <!-- Quick Account Selection Panel -->
-          <div class="grid grid-cols-2 gap-3" id="quickSelectContainer">
-            ${quickSelectItems}
-          </div>
-
         </div>
 
         <!-- Mobile Footer -->

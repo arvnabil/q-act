@@ -153,10 +153,10 @@ export default function Profile() {
                 onChange={e => setForm({ ...form, role: e.target.value })}
                 className="w-full bg-surface-50 border border-surface-200 rounded-lg px-3 py-2.5 text-sm text-surface-700 outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-100 transition-all cursor-pointer"
               >
-                <option value="admin">Administrator</option>
-                <option value="Sales Manager">Sales Manager</option>
-                <option value="Account Executive">Account Executive</option>
-                <option value="Sales Representative">Sales Representative</option>
+                <option value="Administrator">Administrator</option>
+                <option value="Manager">Manager</option>
+                <option value="Sales">Sales</option>
+                <option value="Presales">Presales</option>
               </select>
             </div>
             <div>

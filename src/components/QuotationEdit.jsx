@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { ArrowLeft, Plus, Trash2, Save, Loader2, Info, ChevronDown, Check, Search, X } from 'lucide-react';
-import { useProducts, useCustomers, useBankAccounts } from '../hooks/useSupabase.js';
+import { ArrowLeft, Plus, Trash2, Save, Loader2, Info, ChevronDown, Check, Search, X, UploadCloud, Image as ImageIcon, Box } from 'lucide-react';
+import { useProducts, useCustomers, useBankAccounts, useBrands } from '../hooks/useSupabase.js';
+import * as api from '../services/api.js';
 import { PRODUCTS as DUMMY_PRODUCTS } from '../data.js';
 import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../services/supabase.js';
@@ -38,13 +39,16 @@ export default function QuotationEdit({ quotation, onBack, onSaved }) {
   const { data: products } = useProducts();
   const { data: customers } = useCustomers();
   const { data: bankAccounts = [] } = useBankAccounts();
+  const { data: brands = [] } = useBrands();
 
+  const [customerSearch, setCustomerSearch] = useState('');
   const [status, setStatus]             = useState(quotation?.status || 'draft');
   const [customerId, setCustomerId]     = useState(quotation?.customer_id || '');
   const [picId, setPicId]               = useState(quotation?.pic_id ? String(quotation.pic_id) : '');
   const [expiryDays, setExpiryDays]     = useState(7);
   const [calcTax, setCalcTax]           = useState(quotation?.calc_tax !== false);
   const [showTax, setShowTax]           = useState(quotation?.show_tax !== false);
+  const [ppnRate, setPpnRate]           = useState(quotation?.ppn_rate || 0.11);
   const [bankAccountId, setBankAccountId] = useState(quotation?.bank_account_id || '');
   const [termsText, setTermsText]       = useState(
     Array.isArray(quotation?.terms) && quotation.terms.length > 0
@@ -54,7 +58,10 @@ export default function QuotationEdit({ quotation, onBack, onSaved }) {
 
   // Inline New Product Modal State
   const [isInlineProductModalOpen, setIsInlineProductModalOpen] = useState(false);
-  const [newProdForm, setNewProdForm] = useState({ sku: '', name: '', brand: '', price: 0, description: '' });
+  const [isUploading, setIsUploading] = useState(false);
+  const inlineFileInputRef = useRef(null);
+  const [newProdForm, setNewProdForm] = useState({ sku: '', name: '', brand: '', price: 0, description: '', image_url: '' });
+  const [showDraftModal, setShowDraftModal] = useState(false);
 
   // Auto-select PIC when customerId changes or initially loads
   useEffect(() => {
@@ -201,14 +208,27 @@ export default function QuotationEdit({ quotation, onBack, onSaved }) {
 
   // Grand total calculation
   const subtotal = items.reduce((sum, item) => sum + ((Number(item.qty) || 0) * (Number(item.price) || 0)), 0);
-  const ppnRate = 0.11;
   const ppnAmount = (calcTax && showTax) ? subtotal * ppnRate : 0;
   const grandTotal = subtotal + ppnAmount;
 
-  // Save changes to Supabase
-  const handleSave = async (e) => {
-    e.preventDefault();
+  // Check draft status before saving
+  const handleSaveClick = (e) => {
+    if (e && e.preventDefault) e.preventDefault();
     if (!quotation?.id) return;
+
+    if (status === 'draft' || status === 'Draft') {
+      setShowDraftModal(true);
+    } else {
+      executeSave(status);
+    }
+  };
+
+  // Save changes to Supabase
+  const executeSave = async (targetStatus) => {
+    setShowDraftModal(false);
+    if (!quotation?.id) return;
+
+    const finalStatus = targetStatus || status;
 
     setIsSaving(true);
     try {
@@ -222,7 +242,7 @@ export default function QuotationEdit({ quotation, onBack, onSaved }) {
       const basePayload = {
         customer_id: customerId || quotation.customer_id,
         pic_id: picId ? Number(picId) : null,
-        status,
+        status: finalStatus,
         calc_tax: calcTax,
         show_tax: showTax,
         bank_account_id: bankAccountId || null,
@@ -250,6 +270,60 @@ export default function QuotationEdit({ quotation, onBack, onSaved }) {
       await supabase.from('quotation_items').delete().eq('quotation_id', quotation.id);
 
       if (items.length > 0) {
+        // Upsert ad-hoc products to prevent foreign key errors and save names
+        const adhocItems = items.filter(i => i.name && (!i.sku || !products?.some(p => p.sku === i.sku)));
+        if (adhocItems.length > 0) {
+          // Fetch existing brands to resolve brand_id
+          const { data: existingBrands } = await supabase.from('brands').select('id, name');
+          let currentBrands = existingBrands || [];
+          
+          const newProductsToInsert = [];
+          for (let idx = 0; idx < adhocItems.length; idx++) {
+            const i = adhocItems[idx];
+            if (!i.sku) {
+              i.sku = `ADHOC-${Date.now()}-${idx}`;
+            }
+
+            let brandId = null;
+            if (i.brand && typeof i.brand === 'string' && i.brand.trim() !== '') {
+              const brandName = i.brand.trim();
+              let foundBrand = currentBrands.find(b => b.name.toLowerCase() === brandName.toLowerCase());
+              
+              if (!foundBrand) {
+                // Create brand on the fly if it doesn't exist
+                const { data: newBrand, error: brandErr } = await supabase
+                  .from('brands')
+                  .insert([{ name: brandName }])
+                  .select('id, name')
+                  .single();
+                  
+                if (!brandErr && newBrand) {
+                  foundBrand = newBrand;
+                  currentBrands.push(newBrand);
+                  queryClient.invalidateQueries({ queryKey: ['brands'] });
+                }
+              }
+              if (foundBrand) {
+                brandId = foundBrand.id;
+              }
+            }
+
+            newProductsToInsert.push({
+              sku: i.sku,
+              name: i.name,
+              price: Number(i.price) || 0,
+              is_active: true,
+              brand_id: brandId,
+              description: i.description || null,
+              image_url: i.image_url || null,
+            });
+          }
+
+          const { error: insertProdErr } = await supabase.from('products').upsert(newProductsToInsert, { onConflict: 'sku' });
+          if (insertProdErr) throw insertProdErr;
+          queryClient.invalidateQueries({ queryKey: ['products'] });
+        }
+
         const itemsToInsert = items
           .filter(i => i.name || i.sku)
           .map((i, sortIdx) => ({
@@ -267,7 +341,8 @@ export default function QuotationEdit({ quotation, onBack, onSaved }) {
         }
       }
 
-      toast.success(`Quotation ${quotation.id} berhasil diperbarui!`);
+      setStatus(finalStatus);
+      toast.success(`Quotation ${quotation.id} berhasil diperbarui (Status: ${finalStatus === 'sent' ? 'Sent' : finalStatus})!`);
       queryClient.invalidateQueries({ queryKey: ['quotations'] });
       if (onSaved) onSaved();
       else onBack();
@@ -306,7 +381,7 @@ export default function QuotationEdit({ quotation, onBack, onSaved }) {
               Batal
             </button>
             <button
-              onClick={handleSave}
+              onClick={handleSaveClick}
               disabled={isSaving}
               className="flex items-center gap-2 px-5 py-2 text-xs font-bold bg-brand-500 text-white rounded-lg hover:bg-brand-600 transition-all shadow-sm cursor-pointer disabled:opacity-60"
             >
@@ -442,12 +517,15 @@ export default function QuotationEdit({ quotation, onBack, onSaved }) {
         })()}
       </div>
 
-      {/* Inline New Product Modal */}
+      {/* Inline New Product Modal matching Products page */}
       {isInlineProductModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-surface-900/50 backdrop-blur-sm animate-fade-in">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden flex flex-col">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg overflow-hidden flex flex-col max-h-[90vh]">
             <div className="px-6 py-4 border-b border-surface-100 flex items-center justify-between">
-              <h3 className="text-lg font-bold text-surface-900">Tambah Produk Baru</h3>
+              <div className="flex items-center gap-2">
+                <Box className="w-5 h-5 text-brand-600" />
+                <h3 className="text-base font-bold text-surface-900">Tambah Produk Baru</h3>
+              </div>
               <button
                 className="text-surface-400 hover:text-surface-600 transition-colors cursor-pointer"
                 onClick={() => setIsInlineProductModalOpen(false)}
@@ -455,40 +533,150 @@ export default function QuotationEdit({ quotation, onBack, onSaved }) {
                 <X className="w-5 h-5" />
               </button>
             </div>
-            <div className="p-6 flex flex-col gap-4">
-              <div>
-                <label className="text-xs font-semibold text-surface-600 mb-1 block">SKU (Opsional)</label>
-                <input type="text" value={newProdForm.sku} onChange={e => setNewProdForm(p => ({ ...p, sku: e.target.value }))} className="w-full bg-surface-50 border border-surface-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-brand-500" placeholder="Kode SKU otomatis jika kosong" />
+            
+            <div className="p-6 overflow-y-auto flex flex-col gap-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-xs font-semibold text-surface-600 mb-1 block">SKU Produk <span className="text-red-500">*</span></label>
+                  <input
+                    type="text"
+                    value={newProdForm.sku}
+                    onChange={e => setNewProdForm(p => ({ ...p, sku: e.target.value }))}
+                    className="w-full bg-surface-50 border border-surface-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-brand-500 font-mono"
+                    placeholder="Contoh: 960-001681"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-surface-600 mb-1 block">Brand <span className="text-red-500">*</span></label>
+                  <select
+                    value={newProdForm.brand}
+                    onChange={e => setNewProdForm(p => ({ ...p, brand: e.target.value }))}
+                    className="w-full bg-surface-50 border border-surface-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-brand-500 cursor-pointer"
+                  >
+                    <option value="">-- Pilih Brand --</option>
+                    {brands.map(b => (
+                      <option key={b.id} value={b.name}>{b.name}</option>
+                    ))}
+                  </select>
+                </div>
               </div>
+
               <div>
                 <label className="text-xs font-semibold text-surface-600 mb-1 block">Nama Produk <span className="text-red-500">*</span></label>
-                <input type="text" value={newProdForm.name} onChange={e => setNewProdForm(p => ({ ...p, name: e.target.value }))} className="w-full bg-surface-50 border border-surface-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-brand-500" placeholder="Contoh: Poly Studio X50" />
+                <input
+                  type="text"
+                  value={newProdForm.name}
+                  onChange={e => setNewProdForm(p => ({ ...p, name: e.target.value }))}
+                  className="w-full bg-surface-50 border border-surface-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-brand-500"
+                  placeholder="Contoh: Meetup 2"
+                />
               </div>
+
               <div>
-                <label className="text-xs font-semibold text-surface-600 mb-1 block">Brand <span className="text-red-500">*</span></label>
-                <input type="text" value={newProdForm.brand} onChange={e => setNewProdForm(p => ({ ...p, brand: e.target.value }))} className="w-full bg-surface-50 border border-surface-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-brand-500" placeholder="Contoh: Poly" />
+                <label className="text-xs font-semibold text-surface-600 mb-1 block">Harga Jual (IDR) <span className="text-red-500">*</span></label>
+                <input
+                  type="number"
+                  value={newProdForm.price || ''}
+                  onChange={e => setNewProdForm(p => ({ ...p, price: Number(e.target.value) }))}
+                  className="w-full bg-surface-50 border border-surface-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-brand-500 font-mono"
+                  placeholder="Rp 0"
+                  min="0"
+                />
               </div>
+
+              {/* Upload Gambar Produk */}
               <div>
-                <label className="text-xs font-semibold text-surface-600 mb-1 block">Harga Satuan (Rp) <span className="text-red-500">*</span></label>
-                <input type="number" value={newProdForm.price} onChange={e => setNewProdForm(p => ({ ...p, price: Number(e.target.value) }))} className="w-full bg-surface-50 border border-surface-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-brand-500" placeholder="0" min="0" />
+                <label className="text-xs font-semibold text-surface-600 mb-1 block">Gambar Produk</label>
+                <input
+                  type="file"
+                  ref={inlineFileInputRef}
+                  accept="image/*"
+                  className="hidden"
+                  onChange={async (e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    if (!file.type.startsWith('image/')) { toast.error('File harus berupa gambar (PNG, JPG, WebP)'); return; }
+                    if (file.size > 2 * 1024 * 1024) { toast.error('Ukuran gambar maksimal 2MB'); return; }
+                    setIsUploading(true);
+                    try {
+                      const url = await api.uploadProductImage(file);
+                      setNewProdForm(p => ({ ...p, image_url: url }));
+                      toast.success('Gambar produk berhasil diunggah!');
+                    } catch (err) {
+                      console.error(err);
+                      toast.error('Gagal mengunggah gambar.');
+                    } finally {
+                      setIsUploading(false);
+                    }
+                  }}
+                />
+                <div
+                  onClick={() => inlineFileInputRef.current?.click()}
+                  className="border-2 border-dashed border-emerald-300 rounded-xl p-4 bg-emerald-50/20 text-center hover:bg-emerald-50/40 transition-colors cursor-pointer flex flex-col items-center justify-center gap-2"
+                >
+                  {isUploading ? (
+                    <div className="flex items-center gap-2 text-xs text-brand-600 font-semibold py-2">
+                      <Loader2 className="w-5 h-5 animate-spin" />
+                      <span>Mengunggah gambar...</span>
+                    </div>
+                  ) : newProdForm.image_url ? (
+                    <div className="flex items-center gap-3 w-full">
+                      <img src={newProdForm.image_url} alt="Preview" className="w-14 h-14 object-contain rounded-lg border border-surface-200 bg-white p-1" />
+                      <div className="text-left flex-1 min-w-0">
+                        <div className="text-xs font-bold text-surface-800 truncate">Gambar Siap Digunakan</div>
+                        <div className="text-[11px] text-surface-400">Klik untuk mengganti gambar</div>
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      <UploadCloud className="w-6 h-6 text-brand-500" />
+                      <div className="text-xs text-surface-500 font-medium">Klik untuk unggah gambar produk (PNG, JPG max 2MB)</div>
+                    </>
+                  )}
+                </div>
               </div>
+
               <div>
-                <label className="text-xs font-semibold text-surface-600 mb-1 block">Deskripsi (Opsional)</label>
-                <textarea value={newProdForm.description} onChange={e => setNewProdForm(p => ({ ...p, description: e.target.value }))} rows={2} className="w-full bg-surface-50 border border-surface-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-brand-500" />
+                <label className="text-xs font-semibold text-surface-600 mb-1 block">Deskripsi Singkat (Opsional)</label>
+                <textarea
+                  value={newProdForm.description}
+                  onChange={e => setNewProdForm(p => ({ ...p, description: e.target.value }))}
+                  rows={2}
+                  className="w-full bg-surface-50 border border-surface-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-brand-500"
+                  placeholder="Tuliskan spesifikasi utama..."
+                />
               </div>
             </div>
+
             <div className="px-6 py-4 border-t border-surface-100 flex items-center justify-end gap-3 bg-surface-50">
-              <button className="px-4 py-2 text-sm font-semibold text-surface-600 hover:text-surface-900 cursor-pointer" onClick={() => setIsInlineProductModalOpen(false)}>Batal</button>
+              <button
+                className="px-4 py-2 text-sm font-semibold text-surface-600 hover:text-surface-900 cursor-pointer"
+                onClick={() => setIsInlineProductModalOpen(false)}
+              >
+                Batal
+              </button>
               <button
                 className="px-5 py-2 text-sm font-bold bg-brand-500 text-white rounded-lg hover:bg-brand-600 transition-all shadow-sm cursor-pointer"
                 onClick={() => {
                   if (!newProdForm.name) { toast.error('Nama produk wajib diisi'); return; }
-                  // Add as a new inline item row
+                  // Add as a new inline item row with description and image_url included!
                   setItems(prev => [
                     ...prev,
-                    { id: null, sku: newProdForm.sku || '', name: newProdForm.name, brand: newProdForm.brand, qty: 1, hpp: 0, margin: 0, margin_value: 0, price: newProdForm.price || 0 }
+                    {
+                      id: null,
+                      sku: newProdForm.sku || '',
+                      name: newProdForm.name,
+                      brand: newProdForm.brand || '',
+                      qty: 1,
+                      hpp: 0,
+                      margin: 0,
+                      margin_value: 0,
+                      price: newProdForm.price || 0,
+                      description: newProdForm.description || '',
+                      image_url: newProdForm.image_url || '',
+                    }
                   ]);
-                  setNewProdForm({ sku: '', name: '', brand: '', price: 0, description: '' });
+                  setNewProdForm({ sku: '', name: '', brand: '', price: 0, description: '', image_url: '' });
                   setIsInlineProductModalOpen(false);
                   toast.success(`Produk "${newProdForm.name}" ditambahkan ke item.`);
                 }}
@@ -737,7 +925,7 @@ export default function QuotationEdit({ quotation, onBack, onSaved }) {
           Batal
         </button>
         <button
-          onClick={handleSave}
+          onClick={handleSaveClick}
           disabled={isSaving}
           className="flex items-center gap-2 px-6 py-2.5 text-xs font-bold bg-brand-500 text-white rounded-lg hover:bg-brand-600 transition-all shadow-sm cursor-pointer disabled:opacity-60"
         >
@@ -745,6 +933,44 @@ export default function QuotationEdit({ quotation, onBack, onSaved }) {
           Simpan Perubahan
         </button>
       </div>
+
+      {/* Draft Status Confirmation Modal */}
+      {showDraftModal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl border border-surface-200 animate-scale-in">
+            <div className="w-12 h-12 rounded-full bg-amber-100 text-amber-600 flex items-center justify-center mb-4">
+              <Info className="w-6 h-6" />
+            </div>
+            <h3 className="text-lg font-bold text-surface-900 mb-1.5">Ubah Status ke Terkirim (Sent)?</h3>
+            <p className="text-xs text-surface-600 leading-relaxed mb-6">
+              Status quotation <span className="font-mono font-bold text-surface-800">{quotation.id}</span> saat ini masih berstatus <span className="font-bold text-amber-600">Draft</span>. Apakah Anda ingin mengubah statusnya secara otomatis menjadi <span className="font-bold text-emerald-600">Sent (Terkirim)</span> saat menyimpan perubahan?
+            </p>
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-end gap-2.5">
+              <button
+                type="button"
+                onClick={() => setShowDraftModal(false)}
+                className="px-4 py-2 text-xs font-semibold text-surface-600 hover:bg-surface-100 rounded-lg transition-colors cursor-pointer"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                onClick={() => executeSave('draft')}
+                className="px-4 py-2 text-xs font-semibold text-surface-700 bg-surface-100 hover:bg-surface-200 rounded-lg transition-colors cursor-pointer"
+              >
+                Tetap Simpan sebagai Draft
+              </button>
+              <button
+                type="button"
+                onClick={() => executeSave('sent')}
+                className="px-4 py-2 text-xs font-bold text-white bg-brand-500 hover:bg-brand-600 rounded-lg shadow-sm transition-all cursor-pointer"
+              >
+                Ubah ke Sent & Simpan
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

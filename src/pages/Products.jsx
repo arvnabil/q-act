@@ -56,14 +56,19 @@ export default function Products() {
     setSelectedSkus([]);
   }, [search, brandFilter, viewMode]);
 
+  const [isDragging, setIsDragging] = useState(false);
+
   const getBrandStyles = (colorHex) => {
     const color = colorHex || '#6B7280';
     return { backgroundColor: `${color}12`, color: color, border: `1px solid ${color}40` };
   };
 
-  const handleImageSelect = (e) => {
-    const file = e.target.files[0];
+  const processFile = (file) => {
     if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      toast.error('Format file tidak didukung, harus berupa gambar (PNG/JPG/WEBP)');
+      return;
+    }
     if (file.size > 2 * 1024 * 1024) {
       toast.error('Ukuran gambar maksimal 2MB');
       return;
@@ -71,6 +76,28 @@ export default function Products() {
     const reader = new FileReader();
     reader.onload = (ev) => setImagePreview(ev.target.result);
     reader.readAsDataURL(file);
+  };
+
+  const handleImageSelect = (e) => {
+    processFile(e.target.files[0]);
+  };
+
+  const handleDragOver = (e) => {
+    e.preventDefault();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (e) => {
+    e.preventDefault();
+    setIsDragging(false);
+  };
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    setIsDragging(false);
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      processFile(e.dataTransfer.files[0]);
+    }
   };
 
   const handleSave = async (e) => {
@@ -600,8 +627,11 @@ export default function Products() {
                 <div>
                   <label className="text-xs font-bold text-surface-600 uppercase tracking-wider mb-2 block">Gambar Produk</label>
                   <div 
-                    className={`w-full border-2 border-dashed ${imagePreview ? 'border-brand-300 bg-brand-50/30' : 'border-surface-200 bg-surface-50'} rounded-xl p-4 flex flex-col items-center justify-center cursor-pointer hover:border-brand-400 hover:bg-brand-50 transition-colors relative overflow-hidden h-32`}
+                    className={`w-full border-2 border-dashed ${isDragging ? 'border-brand-500 bg-brand-100' : imagePreview ? 'border-brand-300 bg-brand-50/30' : 'border-surface-200 bg-surface-50'} rounded-xl p-4 flex flex-col items-center justify-center cursor-pointer hover:border-brand-400 hover:bg-brand-50 transition-colors relative overflow-hidden h-32`}
                     onClick={() => fileInputRef.current?.click()}
+                    onDragOver={handleDragOver}
+                    onDragLeave={handleDragLeave}
+                    onDrop={handleDrop}
                   >
                     <input 
                       type="file"
@@ -612,16 +642,16 @@ export default function Products() {
                     />
                     
                     {imagePreview ? (
-                      <div className="absolute inset-0 p-2 flex items-center justify-center">
+                      <div className="absolute inset-0 p-2 flex items-center justify-center pointer-events-none">
                         <img src={imagePreview} alt="Preview" className="w-full h-full object-contain" />
-                        <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity">
+                        <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity pointer-events-auto">
                           <span className="text-white text-xs font-bold flex items-center gap-1"><UploadCloud className="w-4 h-4" /> Ganti Gambar</span>
                         </div>
                       </div>
                     ) : (
                       <div className="text-center text-surface-400 pointer-events-none flex flex-col items-center">
-                        <UploadCloud className="w-6 h-6 mb-2 opacity-60" />
-                        <span className="text-xs font-medium">Klik untuk upload gambar</span>
+                        <UploadCloud className={`w-6 h-6 mb-2 ${isDragging ? 'text-brand-500 opacity-100' : 'opacity-60'}`} />
+                        <span className="text-xs font-medium">{isDragging ? 'Lepaskan gambar di sini' : 'Klik atau seret gambar ke sini'}</span>
                         <span className="text-[10px] text-surface-400 mt-1">PNG, JPG up to 2MB</span>
                       </div>
                     )}

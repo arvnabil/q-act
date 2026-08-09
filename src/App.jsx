@@ -11,22 +11,27 @@ import Profile from './pages/Profile.jsx';
 import Settings from './pages/Settings.jsx';
 import Dashboard from './pages/Dashboard.jsx';
 import Manager from './pages/Manager.jsx';
+import Users from './pages/Users.jsx';
+import Roles from './pages/Roles.jsx';
+import Analytics from './pages/Analytics.jsx';
+import Guide from './pages/Guide.jsx';
+import Support from './pages/Support.jsx';
+import usePermissionsStore from './store/permissionsStore.js';
 
 function App() {
   const { user, isLoading, initialize } = useAuthStore();
+  const { initialize: initPermissions, isLoading: isPermsLoading } = usePermissionsStore();
 
   useEffect(() => {
     initialize();
-  }, [initialize]);
+    initPermissions();
+  }, [initialize, initPermissions]);
 
-  if (isLoading) {
+  if (isLoading || isPermsLoading) {
     return (
       <div className="min-h-screen bg-surface-50 flex flex-col items-center justify-center gap-3">
-        <div className="w-10 h-10 rounded-xl bg-brand-50 flex items-center justify-center">
-          <svg width="22" height="22" viewBox="0 0 32 32" fill="none">
-            <path d="M6 24L16 4L26 24" stroke="#00A88F" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"/>
-            <path d="M10 18H22" stroke="#009680" strokeWidth="3" strokeLinecap="round"/>
-          </svg>
+        <div className="w-10 h-10 rounded-xl bg-brand-50 p-1 flex items-center justify-center border border-brand-100 overflow-hidden">
+          <img src="/logo.png" alt="ACTiV" className="w-full h-full object-contain" />
         </div>
         <span className="text-sm font-semibold text-brand-600">Memuat ACTiV Portal...</span>
       </div>
@@ -37,6 +42,8 @@ function App() {
     <Router>
       <Routes>
         <Route path="/login" element={!user ? <Login /> : <Navigate to="/" replace />} />
+        <Route path="/guide" element={<Guide />} />
+        <Route path="/support" element={<Support />} />
         
         <Route path="/" element={user ? <Layout /> : <Navigate to="/login" replace />}>
           <Route index element={<Dashboard />} />
@@ -44,10 +51,12 @@ function App() {
           <Route path="customers" element={<Customers />} />
           <Route path="products" element={<Products />} />
           <Route path="brands" element={<Brands />} />
-          <Route path="analytics" element={<AnalyticsPlaceholder />} />
+          <Route path="analytics" element={<Analytics />} />
           <Route path="manager" element={<Manager />} />
           <Route path="settings" element={<Settings />} />
           <Route path="profile" element={<Profile />} />
+          <Route path="users" element={<Users />} />
+          <Route path="roles" element={<Roles />} />
         </Route>
         
         <Route path="*" element={<Navigate to="/" replace />} />

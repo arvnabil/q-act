@@ -67,7 +67,7 @@ export default function Quotations() {
 
   const { user } = useAuthStore();
   const queryClient = useQueryClient();
-  const isManager = user?.role === 'admin' || user?.role === 'Sales Manager';
+  const isManager = ['admin', 'Administrator', 'Sales Manager', 'Manager'].includes(user?.role);
 
   // Fetch quotations from Supabase
   const allQuery  = useQuotations();
@@ -110,7 +110,13 @@ export default function Quotations() {
   const getBrands = (q) => {
     const brands = new Set();
     q.items?.forEach(item => {
-      const brandName = item.product?.brands?.name || item.product?.brand_id;
+      const brandName = 
+        item.product?.brand?.name || 
+        item.product?.brands?.name || 
+        item.brand_name || 
+        item.brand?.name || 
+        (typeof item.brand === 'string' ? item.brand : null) ||
+        item.product?.brand_id;
       if (brandName) brands.add(brandName);
     });
     return [...brands];
@@ -136,25 +142,30 @@ export default function Quotations() {
     setViewState('edit');
   };
 
-  // Handle delete execution
+  // Handle delete execution (Soft Delete via is_deleted=true)
   const handleExecuteDelete = async () => {
     if (!deleteTarget) return;
     setIsDeleting(true);
     try {
-      if (deleteTarget.type === 'bulk') {
-        await supabase.from('quotation_items').delete().in('quotation_id', selectedIds);
-        const { error } = await supabase.from('quotations').delete().in('id', selectedIds);
-        if (error) throw error;
-        toast.success(`${selectedIds.length} quotation berhasil dihapus.`);
-        setSelectedIds([]);
-      } else if (deleteTarget.type === 'single' && deleteTarget.item) {
-        const quoId = deleteTarget.item.id;
-        await supabase.from('quotation_items').delete().eq('quotation_id', quoId);
-        const { error } = await supabase.from('quotations').delete().eq('id', quoId);
-        if (error) throw error;
-        toast.success(`Quotation ${quoId} berhasil dihapus.`);
-      }
+      const targetIds = deleteTarget.type === 'bulk' ? selectedIds : [deleteTarget.item?.id];
+      if (!targetIds || targetIds.length === 0) return;
+
+      // Set is_deleted = true in Supabase
+      const { error: softErr } = await supabase
+        .from('quotations')
+        .update({ is_deleted: true, deleted_at: new Date().toISOString() })
+        .in('id', targetIds);
+
+      if (softErr) throw softErr;
+
+      const msg = deleteTarget.type === 'bulk'
+        ? `${targetIds.length} quotation berhasil dipindahkan ke Sampah (Trash).`
+        : `Quotation ${targetIds[0]} berhasil dipindahkan ke Sampah (Trash).`;
+      
+      toast.success(msg);
+      if (deleteTarget.type === 'bulk') setSelectedIds([]);
       queryClient.invalidateQueries({ queryKey: ['quotations'] });
+      queryClient.invalidateQueries({ queryKey: ['trash_quotations'] });
       setDeleteTarget(null);
     } catch (err) {
       console.error(err);
@@ -347,7 +358,7 @@ export default function Quotations() {
                                 printQuotation(enrichedQuotation, true);
                               }}
                               className="w-7 h-7 rounded-md flex items-center justify-center text-surface-400 hover:bg-emerald-50 hover:text-emerald-600 transition-colors cursor-pointer"
-                              title="Download PDF"
+                              title="Cetak / Download PDF"
                             >
                               <Download className="w-4 h-4" />
                             </button>

@@ -127,8 +127,12 @@ export function emptyState(title, desc) {
   `;
 }
 
+import { printQuotation as mainPrintQuotation } from './utils/printQuotation.js';
+
 // Print Quotation view
 export function printQuotation(q, withImage = true) {
+  return mainPrintQuotation(q, withImage);
+}
   const calcTax = q.calcTax !== false; // defaults to true
   const showTax = q.showTax !== false; // defaults to true
   const ppnRate = q.ppnRate || 0.11;

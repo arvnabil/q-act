@@ -12,10 +12,12 @@ import CustomerModal from '../components/CustomerModal.jsx';
 
 import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../services/supabase.js';
+import useAuthStore from '../store/authStore.js';
 
 const PAGE_SIZE = 8;
 
 export default function Customers() {
+  const { user } = useAuthStore();
   const queryClient = useQueryClient();
   const [search, setSearch]           = useState('');
   const [viewMode, setViewMode]       = useState('list');
@@ -114,7 +116,22 @@ export default function Customers() {
     new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(val || 0);
 
   // Filter
+  const isManagerOrAdmin = 
+    !user || 
+    ['admin', 'Administrator', 'Sales Manager', 'Manager'].includes(user.role);
+
   const filtered = customers?.filter(c => {
+    // Role filtering: non-manager/admin only sees customers associated with them (creator, PIC sales, or quotation sales)
+    if (!isManagerOrAdmin && user?.id) {
+      const isCreator = c.created_by === user.id || c.sales_id === user.id;
+      const isPicSales = c.pics?.some(p => p.sales_id === user.id || p.created_by === user.id || p.sales?.id === user.id);
+      const isQuotationSales = c.quotations?.some(q => q.sales_id === user.id || q.created_by === user.id);
+      
+      if (!isCreator && !isPicSales && !isQuotationSales) {
+        return false;
+      }
+    }
+
     if (!search) return true;
     const s = search.toLowerCase();
     const primaryPic = c.pics?.[0];

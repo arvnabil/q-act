@@ -1,12 +1,28 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { NavLink, Link } from 'react-router-dom';
 import useAuthStore from '../store/authStore';
-import { LayoutDashboard, FileText, Users, Box, Settings, LogOut, ChevronRight, BarChart2, ShieldCheck } from 'lucide-react';
+import usePermissionsStore from '../store/permissionsStore';
+import { LayoutDashboard, FileText, Users, Box, Settings, LogOut, ChevronRight, ChevronDown, BarChart2, ShieldCheck, UserCog } from 'lucide-react';
 import { useQuotations, useQuotationsByUser } from '../hooks/useSupabase.js';
 
 export default function Sidebar({ mobileOpen, setMobileOpen }) {
   const { user, signOut } = useAuthStore();
-  const isManager = user?.role === 'admin' || user?.role === 'Sales Manager';
+  const { hasPermission } = usePermissionsStore();
+
+  const isManager = ['admin', 'Administrator', 'Sales Manager', 'Manager'].includes(user?.role);
+  const isAdmin = ['admin', 'Administrator'].includes(user?.role);
+
+  const canAnalytics = user && hasPermission(user.role, 'analytics');
+  const canManager = user && (isManager || hasPermission(user.role, 'manager_view'));
+
+  const [expandedMenus, setExpandedMenus] = useState({});
+
+  const toggleMenu = (menuName) => {
+    setExpandedMenus(prev => ({
+      ...prev,
+      [menuName]: !prev[menuName]
+    }));
+  };
 
   const allQuotations  = useQuotations();
   const mineQuotations = useQuotationsByUser(user?.id);
@@ -45,11 +61,8 @@ export default function Sidebar({ mobileOpen, setMobileOpen }) {
         
         <div className="px-5 py-5 border-b border-surface-100">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-lg bg-brand-50 flex items-center justify-center">
-              <svg width="22" height="22" viewBox="0 0 32 32" fill="none">
-                <path d="M6 24L16 4L26 24" stroke="#00A88F" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"/>
-                <path d="M10 18H22" stroke="#009680" strokeWidth="3" strokeLinecap="round"/>
-              </svg>
+            <div className="w-9 h-9 rounded-lg bg-brand-50/50 p-1 flex items-center justify-center border border-brand-100 overflow-hidden shrink-0">
+              <img src="/logo.png" alt="ACTiV" className="w-full h-full object-contain" />
             </div>
             <div className="flex flex-col">
               <span className="text-base font-extrabold tracking-wide text-brand-700">ACTiV</span>
@@ -66,28 +79,37 @@ export default function Sidebar({ mobileOpen, setMobileOpen }) {
                 <div key={n.label} className="flex flex-col">
                   {n.submenu ? (
                     <>
-                      <div className="nav-link flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all relative text-surface-500 hover:bg-surface-100 hover:text-surface-700">
+                      <div 
+                        onClick={() => toggleMenu(n.label)}
+                        className="nav-link flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all relative text-surface-500 hover:bg-surface-100 hover:text-surface-700 cursor-pointer"
+                      >
                         <n.icon className="w-5 h-5" />
                         <span>{n.label}</span>
-                        <ChevronRight className="w-4 h-4 ml-auto" />
+                        {expandedMenus[n.label] ? (
+                          <ChevronDown className="w-4 h-4 ml-auto" />
+                        ) : (
+                          <ChevronRight className="w-4 h-4 ml-auto" />
+                        )}
                       </div>
-                      <div className="flex flex-col gap-0.5 mt-1 ml-4 border-l border-surface-200 pl-2">
-                        {n.submenu.map(sub => (
-                          <NavLink
-                            key={sub.path}
-                            to={sub.path}
-                            className={({ isActive }) => `flex items-center gap-2 pl-3 pr-3 py-2 rounded-lg text-xs font-semibold transition-all ${isActive ? 'text-brand-700 bg-brand-50/50' : 'text-surface-400 hover:bg-surface-50 hover:text-surface-700'}`}
-                            onClick={() => setMobileOpen(false)}
-                          >
-                            {({ isActive }) => (
-                              <>
-                                <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${isActive ? 'bg-brand-500' : 'bg-surface-300'}`}></span>
-                                <span>{sub.label}</span>
-                              </>
-                            )}
-                          </NavLink>
-                        ))}
-                      </div>
+                      {expandedMenus[n.label] && (
+                        <div className="flex flex-col gap-0.5 mt-1 ml-4 border-l border-surface-200 pl-2">
+                          {n.submenu.map(sub => (
+                            <NavLink
+                              key={sub.path}
+                              to={sub.path}
+                              className={({ isActive }) => `flex items-center gap-2 pl-3 pr-3 py-2 rounded-lg text-xs font-semibold transition-all ${isActive ? 'text-brand-700 bg-brand-50/50' : 'text-surface-400 hover:bg-surface-50 hover:text-surface-700'}`}
+                              onClick={() => setMobileOpen(false)}
+                            >
+                              {({ isActive }) => (
+                                <>
+                                  <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${isActive ? 'bg-brand-500' : 'bg-surface-300'}`}></span>
+                                  <span>{sub.label}</span>
+                                </>
+                              )}
+                            </NavLink>
+                          ))}
+                        </div>
+                      )}
                     </>
                   ) : (
                     <NavLink
@@ -110,37 +132,86 @@ export default function Sidebar({ mobileOpen, setMobileOpen }) {
             </div>
           </div>
           
-          <div className="mb-5">
-            <span className="text-[10px] font-bold text-surface-400 tracking-widest uppercase px-3 mb-2 block">REPORTS</span>
-            <div className="flex flex-col gap-0.5">
-              <NavLink to="/analytics" className={({ isActive }) => `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors relative ${isActive ? 'bg-brand-50 text-brand-700' : 'text-surface-500 hover:bg-surface-100 hover:text-surface-700'}`} onClick={() => setMobileOpen(false)}>
-                {({ isActive }) => (
-                  <>
-                    {isActive && <div className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-5 bg-brand-500 rounded-r"></div>}
-                    <BarChart2 className="w-5 h-5" />
-                    <span>Analytics</span>
-                  </>
+          {(canAnalytics || canManager) && (
+            <div className="mb-5">
+              <span className="text-[10px] font-bold text-surface-400 tracking-widest uppercase px-3 mb-2 block">REPORTS</span>
+              <div className="flex flex-col gap-0.5">
+                {canAnalytics && (
+                  <NavLink to="/analytics" className={({ isActive }) => `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors relative ${isActive ? 'bg-brand-50 text-brand-700 font-semibold' : 'text-surface-500 hover:bg-surface-100 hover:text-surface-700'}`} onClick={() => setMobileOpen(false)}>
+                    {({ isActive }) => (
+                      <>
+                        {isActive && <div className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-5 bg-brand-500 rounded-r"></div>}
+                        <BarChart2 className="w-5 h-5" />
+                        <span>Analytics</span>
+                      </>
+                    )}
+                  </NavLink>
                 )}
-              </NavLink>
-              {(user?.role === 'admin' || user?.role === 'Sales Manager') && (
-                <NavLink to="/manager" className={({ isActive }) => `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors relative ${isActive ? 'bg-brand-50 text-brand-700 font-semibold' : 'text-surface-500 hover:bg-surface-100 hover:text-surface-700'}`} onClick={() => setMobileOpen(false)}>
-                  {({ isActive }) => (
-                    <>
-                      {isActive && <div className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-5 bg-brand-500 rounded-r"></div>}
-                      <ShieldCheck className="w-5 h-5" />
-                      <span>Manager View</span>
-                    </>
-                  )}
-                </NavLink>
-              )}
+                {canManager && (
+                  <NavLink to="/manager" className={({ isActive }) => `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors relative ${isActive ? 'bg-brand-50 text-brand-700 font-semibold' : 'text-surface-500 hover:bg-surface-100 hover:text-surface-700'}`} onClick={() => setMobileOpen(false)}>
+                    {({ isActive }) => (
+                      <>
+                        {isActive && <div className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-5 bg-brand-500 rounded-r"></div>}
+                        <ShieldCheck className="w-5 h-5" />
+                        <span>Manager View</span>
+                      </>
+                    )}
+                  </NavLink>
+                )}
+              </div>
             </div>
-          </div>
+          )}
 
-          {/* Settings — only admin sees this */}
-          {user?.role === 'admin' && (
+          {/* Settings — only admin/administrator sees this */}
+          {isAdmin && (
           <div className="mb-5">
             <span className="text-[10px] font-bold text-surface-400 tracking-widest uppercase px-3 mb-2 block">SYSTEM</span>
             <div className="flex flex-col gap-0.5">
+              
+              {/* User Management Submenu */}
+              <div className="flex flex-col">
+                <div 
+                  onClick={() => toggleMenu('User Management')}
+                  className="nav-link flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all relative text-surface-500 hover:bg-surface-100 hover:text-surface-700 cursor-pointer"
+                >
+                  <UserCog className="w-5 h-5" />
+                  <span>User Management</span>
+                  {expandedMenus['User Management'] ? (
+                    <ChevronDown className="w-4 h-4 ml-auto" />
+                  ) : (
+                    <ChevronRight className="w-4 h-4 ml-auto" />
+                  )}
+                </div>
+                {expandedMenus['User Management'] && (
+                  <div className="flex flex-col gap-0.5 mt-1 ml-4 border-l border-surface-200 pl-2">
+                    <NavLink
+                      to="/users"
+                      className={({ isActive }) => `flex items-center gap-2 pl-3 pr-3 py-2 rounded-lg text-xs font-semibold transition-all ${isActive ? 'text-brand-700 bg-brand-50/50' : 'text-surface-400 hover:bg-surface-50 hover:text-surface-700'}`}
+                      onClick={() => setMobileOpen(false)}
+                    >
+                      {({ isActive }) => (
+                        <>
+                          <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${isActive ? 'bg-brand-500' : 'bg-surface-300'}`}></span>
+                          <span>Users</span>
+                        </>
+                      )}
+                    </NavLink>
+                    <NavLink
+                      to="/roles"
+                      className={({ isActive }) => `flex items-center gap-2 pl-3 pr-3 py-2 rounded-lg text-xs font-semibold transition-all ${isActive ? 'text-brand-700 bg-brand-50/50' : 'text-surface-400 hover:bg-surface-50 hover:text-surface-700'}`}
+                      onClick={() => setMobileOpen(false)}
+                    >
+                      {({ isActive }) => (
+                        <>
+                          <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${isActive ? 'bg-brand-500' : 'bg-surface-300'}`}></span>
+                          <span>Roles</span>
+                        </>
+                      )}
+                    </NavLink>
+                  </div>
+                )}
+              </div>
+
               <NavLink to="/settings" className={({ isActive }) => `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors relative ${isActive ? 'bg-brand-50 text-brand-700' : 'text-surface-500 hover:bg-surface-100 hover:text-surface-700'}`} onClick={() => setMobileOpen(false)}>
                 {({ isActive }) => (
                   <>

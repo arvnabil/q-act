@@ -15,10 +15,29 @@ let custDetailId = null;
 let custLayout = 'list'; // Default to list layout to immediately showcase the new checklist table
 let selectedCustIds = new Set();
 
+function getCurrentUser() {
+  const userJson = localStorage.getItem('activ_user');
+  if (!userJson) return null;
+  try { return JSON.parse(userJson); } catch (e) { return null; }
+}
+
 function getFilteredCustomers() {
-  if (!custSearch) return CUSTOMERS;
+  const user = getCurrentUser();
+  const isManagerOrAdmin = !user || ['admin', 'Administrator', 'Sales Manager', 'Manager'].includes(user.role);
+
+  let list = CUSTOMERS;
+  if (!isManagerOrAdmin && user) {
+    list = CUSTOMERS.filter(c => {
+      const quos = customerQuotations(c.name);
+      const isSalesQuo = quos.some(q => q.sales === user.name || q.creator?.name === user.name);
+      const isSalesPic = c.pic === user.name || c.sales === user.name;
+      return isSalesQuo || isSalesPic;
+    });
+  }
+
+  if (!custSearch) return list;
   const s = custSearch.toLowerCase();
-  return CUSTOMERS.filter(c => c.name.toLowerCase().includes(s) || c.pic.toLowerCase().includes(s) || c.email.toLowerCase().includes(s));
+  return list.filter(c => c.name.toLowerCase().includes(s) || (c.pic && c.pic.toLowerCase().includes(s)) || (c.email && c.email.toLowerCase().includes(s)));
 }
 
 function customerQuotations(name) {

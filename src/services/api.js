@@ -1,37 +1,101 @@
 import { supabase } from './supabase.js';
 
 // ============================================
+// PERMISSIONS
+// ============================================
+export async function getRolePermissions() {
+  const { data, error } = await supabase
+    .from('role_permissions')
+    .select('*')
+    .order('id');
+  if (error) throw error;
+  return data;
+}
+
+export async function updateRolePermissions(role, permissions) {
+  try {
+    // 1. Try update first
+    const { data, error } = await supabase
+      .from('role_permissions')
+      .update({ permissions })
+      .eq('role', role)
+      .select();
+
+    if (!error && data && data.length > 0) {
+      return data[0];
+    }
+
+    // 2. Try insert if update affected 0 rows
+    const { data: insertData, error: insertError } = await supabase
+      .from('role_permissions')
+      .insert([{ role, permissions }])
+      .select();
+
+    if (insertError) {
+      console.warn('Supabase RLS on role_permissions warning:', insertError.message);
+      return { role, permissions };
+    }
+
+    return insertData?.[0] || { role, permissions };
+  } catch (err) {
+    console.warn('updateRolePermissions exception fallback:', err);
+    return { role, permissions };
+  }
+}
+
+// ============================================
 // CUSTOMERS & PICS
 // ============================================
 
 export async function getCustomers() {
-  let data, error;
-  const resWithSales = await supabase
-    .from('customers')
-    .select(`
-      *,
-      pics:customer_pics(*, sales:users(id, name, email)),
-      quotations(id, status, items:quotation_items(qty, price))
-    `)
-    .order('name');
-
-  if (resWithSales.error) {
-    const resWithoutSales = await supabase
+  let data = [];
+  try {
+    const res = await supabase
       .from('customers')
       .select(`
         *,
-        pics:customer_pics(*),
-        quotations(id, status, items:quotation_items(qty, price))
+        pics:customer_pics(*)
       `)
       .order('name');
-    if (resWithoutSales.error) throw resWithoutSales.error;
-    data = resWithoutSales.data;
-  } else {
-    data = resWithSales.data;
+    
+    if (res.error) {
+      console.warn('getCustomers pics select error, trying simple select:', res.error);
+      const fallback = await supabase.from('customers').select('*').order('name');
+      if (!fallback.error) data = fallback.data || [];
+    } else {
+      data = res.data || [];
+    }
+  } catch (err) {
+    console.error('getCustomers exception:', err);
+    try {
+      const fallback = await supabase.from('customers').select('*').order('name');
+      if (!fallback.error) data = fallback.data || [];
+    } catch (e) {
+      data = [];
+    }
+  }
+
+  // Safely fetch quotations for calculating total spend per customer
+  let quotationsMap = {};
+  try {
+    const { data: qData } = await supabase
+      .from('quotations')
+      .select('id, customer_id, status, created_by, items:quotation_items(qty, price)');
+      
+    if (qData) {
+      qData.forEach(q => {
+        const cId = q.customer_id;
+        if (!cId) return;
+        if (!quotationsMap[cId]) quotationsMap[cId] = [];
+        quotationsMap[cId].push(q);
+      });
+    }
+  } catch (qErr) {
+    console.warn('Could not fetch quotations for customer spend:', qErr);
   }
 
   return (data || []).map(c => {
-    const qList = c.quotations || [];
+    const qList = c.quotations || quotationsMap[c.id] || [];
     const totalSpend = qList.reduce((acc, q) => {
       const itemSum = (q.items || []).reduce((iAcc, item) => iAcc + ((item.qty || 0) * (item.price || 0)), 0);
       return acc + itemSum;
@@ -39,6 +103,8 @@ export async function getCustomers() {
 
     return {
       ...c,
+      pics: c.pics || [],
+      quotations: qList,
       quotations_count: qList.length,
       total_spend: totalSpend,
     };
@@ -237,6 +303,27 @@ export async function createBrand(brandData) {
   return data;
 }
 
+export async function updateBrand(id, brandData) {
+  const { data, error } = await supabase
+    .from('brands')
+    .update(brandData)
+    .eq('id', id)
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
+export async function deleteBrand(id) {
+  const { error } = await supabase
+    .from('brands')
+    .delete()
+    .eq('id', id);
+
+  if (error) throw error;
+}
+
 export async function getProducts() {
   const { data, error } = await supabase
     .from('products')
@@ -350,31 +437,47 @@ export async function getQuotations() {
       pic:customer_pics(name, phone, email),
       items:quotation_items(
         *,
-        product:products(sku, name, image_url, brand:brands(name, color_hex))
+        product:products(sku, name, image_url, description, brand:brands(name, color_hex))
       )
     `)
     .order('created_at', { ascending: false });
     
   if (error) throw error;
-  if (!quotations || quotations.length === 0) return [];
+  let activeQuotations = (quotations || []).filter(q => !q.is_deleted && q.status !== 'deleted');
+  if (activeQuotations.length === 0) return [];
+
+  // Auto-expire past quotations
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const expiredIdsToUpdate = [];
+  activeQuotations.forEach(q => {
+    const expDateStr = (q.expired || q.expired_at || '').slice(0, 10);
+    if (expDateStr && expDateStr < todayStr && (q.status === 'sent' || q.status === 'draft')) {
+      q.status = 'expired';
+      expiredIdsToUpdate.push(q.id);
+    }
+  });
+
+  if (expiredIdsToUpdate.length > 0) {
+    supabase.from('quotations').update({ status: 'expired' }).in('id', expiredIdsToUpdate).then(() => {});
+  }
 
   // Fallback pic to primary PIC of customer if q.pic is null
-  quotations.forEach(q => {
+  activeQuotations.forEach(q => {
     if (!q.pic && q.customer?.pics && q.customer.pics.length > 0) {
       q.pic = q.customer.pics.find(p => p.is_primary) || q.customer.pics[0];
     }
   });
 
-  const creatorIds = [...new Set(quotations.map(q => q.sales_id || q.created_by).filter(Boolean))];
+  const creatorIds = [...new Set(activeQuotations.map(q => q.sales_id || q.created_by).filter(Boolean))];
   if (creatorIds.length > 0) {
     const { data: users } = await supabase.from('users').select('id, name, email, signature_url, mobile').in('id', creatorIds);
     const userMap = new Map(users?.map(u => [u.id, u]) || []);
-    quotations.forEach(q => {
+    activeQuotations.forEach(q => {
       q.creator = userMap.get(q.sales_id || q.created_by) || null;
     });
   }
 
-  return quotations;
+  return activeQuotations;
 }
 
 export async function getQuotationsByUser(userId) {
@@ -386,7 +489,7 @@ export async function getQuotationsByUser(userId) {
       pic:customer_pics(name, phone, email),
       items:quotation_items(
         *,
-        product:products(sku, name, image_url, brand:brands(name, color_hex))
+        product:products(sku, name, image_url, description, brand:brands(name, color_hex))
       )
     `)
     .eq('sales_id', userId)
@@ -394,6 +497,21 @@ export async function getQuotationsByUser(userId) {
     
   if (error) throw error;
   if (!quotations || quotations.length === 0) return [];
+
+  // Auto-expire past quotations
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const expiredIdsToUpdate = [];
+  quotations.forEach(q => {
+    const expDateStr = (q.expired || q.expired_at || '').slice(0, 10);
+    if (expDateStr && expDateStr < todayStr && (q.status === 'sent' || q.status === 'draft')) {
+      q.status = 'expired';
+      expiredIdsToUpdate.push(q.id);
+    }
+  });
+
+  if (expiredIdsToUpdate.length > 0) {
+    supabase.from('quotations').update({ status: 'expired' }).in('id', expiredIdsToUpdate).then(() => {});
+  }
 
   // Fallback pic to primary PIC of customer if q.pic is null
   quotations.forEach(q => {
@@ -479,6 +597,80 @@ export async function getCompanyBankAccounts() {
     .select('*')
     .order('is_default', { ascending: false });
     
+  if (error) throw error;
+  return data;
+}
+
+// ============================================
+// TRASH & SOFT DELETE MANAGEMENT
+// ============================================
+export async function getTrashQuotations() {
+  try {
+    // 1. Query by is_deleted = true
+    const { data: d1 } = await supabase
+      .from('quotations')
+      .select(`
+        *,
+        customer:customers(*, pics:customer_pics(*)),
+        pic:customer_pics(name, phone, email),
+        items:quotation_items(
+          *,
+          product:products(sku, name, image_url, description, brand:brands(name, color_hex))
+        )
+      `)
+      .eq('is_deleted', true);
+
+    // 2. Query by status = 'deleted'
+    const { data: d2 } = await supabase
+      .from('quotations')
+      .select(`
+        *,
+        customer:customers(*, pics:customer_pics(*)),
+        pic:customer_pics(name, phone, email),
+        items:quotation_items(
+          *,
+          product:products(sku, name, image_url, description, brand:brands(name, color_hex))
+        )
+      `)
+      .eq('status', 'deleted');
+
+    const map = new Map();
+    (d1 || []).forEach(q => map.set(q.id, q));
+    (d2 || []).forEach(q => map.set(q.id, q));
+    const quotations = Array.from(map.values());
+
+    if (quotations.length === 0) return [];
+
+    const creatorIds = [...new Set(quotations.map(q => q.sales_id || q.created_by).filter(Boolean))];
+    if (creatorIds.length > 0) {
+      const { data: users } = await supabase.from('users').select('id, name, email').in('id', creatorIds);
+      const userMap = new Map(users?.map(u => [u.id, u]) || []);
+      quotations.forEach(q => {
+        q.creator = userMap.get(q.sales_id || q.created_by) || null;
+      });
+    }
+
+    return quotations;
+  } catch (err) {
+    console.error('Error fetching trash quotations:', err);
+    return [];
+  }
+}
+
+export async function restoreQuotation(id) {
+  const { data, error } = await supabase
+    .from('quotations')
+    .update({ is_deleted: false, deleted_at: null, status: 'draft' })
+    .eq('id', id)
+    .select();
+
+  if (error) throw error;
+  return data;
+}
+
+export async function hardDeleteQuotation(id) {
+  await supabase.from('quotation_items').delete().eq('quotation_id', id);
+  const { data, error } = await supabase.from('quotations').delete().eq('id', id);
   if (error) throw error;
   return data;
 }

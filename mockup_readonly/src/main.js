@@ -12,6 +12,11 @@ import { renderAnalytics, bindAnalyticsEvents } from './pages/analytics.js';
 import { renderSettings, bindSettingsEvents } from './pages/settings.js';
 import { renderLogin, bindLoginEvents } from './pages/login.js';
 import { renderProfile, bindProfileEvents } from './pages/profile.js';
+import { renderUsers, bindUsersEvents } from './pages/users.js';
+import { renderRoles, bindRolesEvents } from './pages/roles.js';
+import { renderManager, bindManagerEvents } from './pages/manager.js';
+import { renderGuide, bindGuideEvents } from './pages/guide.js';
+import { renderSupport, bindSupportEvents } from './pages/support.js';
 
 // ---- State ----
 let activePage = 'dashboard';
@@ -26,7 +31,6 @@ function getCurrentUser() {
   }
 }
 
-
 const PAGE_CONFIG = {
   dashboard:  { title: 'Dashboard', subtitle: 'Overview kinerja quotation bulan ini' },
   quotations: { title: 'Quotations', subtitle: 'Kelola semua penawaran harga' },
@@ -35,8 +39,13 @@ const PAGE_CONFIG = {
   'products-catalog': { title: 'Products', subtitle: 'Katalog produk per brand' },
   'products-brands':  { title: 'Products', subtitle: 'Manajemen brand produk' },
   analytics:  { title: 'Analytics', subtitle: 'Laporan dan analisis mendalam' },
+  manager:    { title: 'Manager Dashboard', subtitle: 'Semua quotation dari seluruh tim sales' },
+  users:      { title: 'Manajemen User', subtitle: 'Kelola daftar tim dan akses masuk' },
+  roles:      { title: 'Roles & Hak Akses', subtitle: 'Pengaturan matriks hak akses fitur' },
   settings:   { title: 'Settings', subtitle: 'Pengaturan sistem quotation' },
   profile:    { title: 'Profil Pengguna', subtitle: 'Kelola informasi akun dan pengaturan profil' },
+  guide:      { title: 'Pusat Panduan', subtitle: 'Dokumentasi penggunaan portal' },
+  support:    { title: 'Pusat Bantuan', subtitle: 'Layanan dukungan pelanggan & kendala teknis' },
 };
 
 // ---- Navigation ----
@@ -135,9 +144,29 @@ function renderPage() {
       container.innerHTML = renderAnalytics();
       bindAnalyticsEvents();
       break;
+    case 'manager':
+      container.innerHTML = renderManager();
+      bindManagerEvents();
+      break;
+    case 'users':
+      container.innerHTML = renderUsers();
+      bindUsersEvents();
+      break;
+    case 'roles':
+      container.innerHTML = renderRoles();
+      bindRolesEvents();
+      break;
     case 'settings':
       container.innerHTML = renderSettings();
       bindSettingsEvents();
+      break;
+    case 'guide':
+      container.innerHTML = renderGuide();
+      bindGuideEvents();
+      break;
+    case 'support':
+      container.innerHTML = renderSupport();
+      bindSupportEvents();
       break;
     case 'profile':
       container.innerHTML = renderProfile();
@@ -459,12 +488,53 @@ function renderModal() {
 function mount() {
   const user = getCurrentUser();
   const app = document.getElementById('app');
+
+  const currentHash = window.location.hash;
+  if (currentHash === '#guide' || activePage === 'guide') {
+    activePage = 'guide';
+    app.className = 'min-h-screen w-full bg-surface-50 flex flex-col';
+    app.innerHTML = renderGuide();
+    bindGuideEvents(() => {
+      window.location.hash = '';
+      activePage = user ? 'dashboard' : 'login';
+      mount();
+    });
+    return;
+  }
+
+  if (currentHash === '#support' || activePage === 'support') {
+    activePage = 'support';
+    app.className = 'min-h-screen w-full bg-surface-50 flex flex-col';
+    app.innerHTML = renderSupport();
+    bindSupportEvents(() => {
+      window.location.hash = '';
+      activePage = user ? 'dashboard' : 'login';
+      mount();
+    });
+    return;
+  }
+
   if (!user) {
     app.className = 'min-h-screen w-full bg-surface-50 flex flex-col';
     app.innerHTML = renderLogin();
     bindLoginEvents(() => {
       activePage = 'dashboard';
       mount();
+    });
+    document.querySelectorAll('.nav-footer-link').forEach(link => {
+      link.addEventListener('click', (e) => {
+        e.preventDefault();
+        const href = link.getAttribute('href');
+        if (href === '#guide') {
+          window.location.hash = 'guide';
+          activePage = 'guide';
+          mount();
+        } else if (href === '#support') {
+          window.location.hash = 'support';
+          activePage = 'support';
+          mount();
+        }
+      });
     });
     return;
   }
@@ -868,5 +938,6 @@ function bindGlobalEvents() {
 }
 
 // ---- Init ----
+window.addEventListener('hashchange', mount);
 document.addEventListener('DOMContentLoaded', mount);
 mount();

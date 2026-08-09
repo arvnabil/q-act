@@ -36,6 +36,7 @@ const formatBrandName = (brand) => {
 
 export default function QuotationDetail({ quotation, onBack, onEdit }) {
   const [withImage, setWithImage] = useState(true);
+  const [pdfLanguage, setPdfLanguage] = useState('id');
   const { data: bankAccounts = [] } = useBankAccounts();
   const { user: currentUser } = useAuthStore();
 
@@ -145,21 +146,19 @@ export default function QuotationDetail({ quotation, onBack, onEdit }) {
 
             <button
               onClick={() => {
-                // Merge current user's latest signature into quotation.creator
                 const enrichedQuotation = {
                   ...quotation,
                   creator: {
                     ...(quotation.creator || {}),
-                    // Override with live data from auth store (always latest)
                     ...(currentUser?.id === (quotation.sales_id || quotation.created_by) ? {
                       name: currentUser.name,
                       email: currentUser.email,
                       mobile: currentUser.mobile,
                       signature_url: currentUser.signature_url,
                     } : {}),
-                  },
+                  }
                 };
-                printQuotation(enrichedQuotation, withImage, bankAccount);
+                printQuotation(enrichedQuotation, withImage, bankAccount, pdfLanguage);
               }}
               className="flex items-center gap-2 px-5 py-2 text-xs font-bold bg-brand-500 text-white rounded-lg hover:bg-brand-600 transition-all shadow-sm cursor-pointer"
             >
@@ -181,9 +180,21 @@ export default function QuotationDetail({ quotation, onBack, onEdit }) {
               />
               <span>Tampilkan Gambar Produk</span>
             </label>
+
+            <div className="flex items-center gap-2 font-medium text-surface-700 select-none">
+              <span className="text-surface-500">Bahasa PDF:</span>
+              <select
+                value={pdfLanguage}
+                onChange={e => setPdfLanguage(e.target.value)}
+                className="bg-white border border-surface-200 text-surface-800 text-xs rounded-lg px-2.5 py-1 outline-none focus:border-brand-500 cursor-pointer font-medium"
+              >
+                <option value="id">Bahasa Indonesia</option>
+                <option value="en">English</option>
+              </select>
+            </div>
           </div>
 
-          <span className="text-[11px] text-surface-400 italic hidden md:inline">Pengaturan tampilan cetak PDF</span>
+          <span className="text-[11px] text-surface-400 italic hidden md:inline">Pengaturan cetak PDF</span>
         </div>
 
         {/* 4 Column Info Grid matching mockup */}

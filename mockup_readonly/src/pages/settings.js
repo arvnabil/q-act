@@ -140,33 +140,6 @@ export function renderSettings() {
             </select>
           </div>
         </div>
-        <div class="px-6 py-4 border-t border-surface-100 flex justify-end">
-          <button class="px-4 py-2 text-sm font-semibold bg-brand-500 text-white rounded-lg hover:bg-brand-600 shadow-sm transition-all">Simpan Pengaturan</button>
-        </div>
-      </div>
-
-      <!-- Sales Team -->
-      <div class="bg-white rounded-xl border border-surface-200">
-        <div class="px-6 py-4 border-b border-surface-100 flex items-center justify-between">
-          <h2 class="text-sm font-bold text-surface-800">Tim Sales</h2>
-          <button id="addSalesBtn" class="flex items-center gap-2 px-3 py-1.5 text-xs font-semibold bg-brand-500 text-white rounded-lg hover:bg-brand-600 transition-all">
-            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-            Tambah Sales
-          </button>
-        </div>
-        <div class="overflow-x-auto">
-          <table class="w-full">
-            <thead>
-              <tr class="bg-surface-50 border-b border-surface-200">
-                <th class="py-3 px-4 text-left text-xs font-bold text-surface-400 uppercase tracking-wider">Nama</th>
-                <th class="py-3 px-4 text-left text-xs font-bold text-surface-400 uppercase tracking-wider">Email</th>
-                <th class="py-3 px-4 text-left text-xs font-bold text-surface-400 uppercase tracking-wider">Mobile</th>
-                <th class="py-3 px-4 text-left text-xs font-bold text-surface-400 uppercase tracking-wider">ID</th>
-                <th class="py-3 px-4 text-left text-xs font-bold text-surface-400 uppercase tracking-wider">Status</th>
-              </tr>
-            </thead>
-            <tbody>${salesRows}</tbody>
-          </table>
         </div>
       </div>
     </div>

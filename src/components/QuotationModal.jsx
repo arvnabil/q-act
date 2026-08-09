@@ -13,6 +13,29 @@ export default function QuotationModal({ isOpen, onClose, onCreated }) {
   const { data: customers } = useCustomers();
   const queryClient = useQueryClient();
 
+  const isManagerOrAdmin = !user || ['admin', 'Administrator', 'Sales Manager', 'Manager'].includes(user.role);
+
+  // Filter customers for Sales / Presales role to only show customers where PIC belongs to that sales
+  const availableCustomers = (customers || []).filter(c => {
+    if (isManagerOrAdmin) return true;
+    if (!user?.id) return true;
+
+    const isCreator = c.created_by === user.id || c.sales_id === user.id;
+    const isPicSales = c.pics?.some(p => 
+      p.sales_id === user.id || 
+      p.created_by === user.id || 
+      p.sales?.id === user.id ||
+      (user.name && p.name?.toLowerCase().includes(user.name.toLowerCase()))
+    );
+    const isQuotationSales = c.quotations?.some(q => 
+      q.sales_id === user.id || 
+      q.created_by === user.id || 
+      q.creator?.email === user.email
+    );
+
+    return isCreator || isPicSales || isQuotationSales;
+  });
+
   const [mode, setMode] = useState('existing'); // 'existing' | 'new'
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -254,7 +277,7 @@ export default function QuotationModal({ isOpen, onClose, onCreated }) {
                     className="bg-surface-50 border border-surface-200 rounded-lg px-3 py-2.5 text-sm text-surface-700 outline-none focus:border-brand-500 cursor-pointer"
                   >
                     <option value="">-- Pilih Customer --</option>
-                    {customers?.map(c => (
+                    {availableCustomers?.map(c => (
                       <option key={c.id} value={c.id}>{c.name}</option>
                     ))}
                   </select>

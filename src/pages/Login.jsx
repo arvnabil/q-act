@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { supabase } from '../services/supabase.js';
 import { Eye, EyeOff, Loader2 } from 'lucide-react';
 import { SALES_TEAM } from '../data.js'; // Using mock data for Quick Select avatars
@@ -51,11 +52,8 @@ export default function Login() {
         
         <div className="relative z-10 max-w-lg w-full flex flex-col justify-between h-full py-8">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-white/10 backdrop-blur-md border border-white/20 flex items-center justify-center shadow-lg">
-              <svg width="24" height="24" viewBox="0 0 32 32" fill="none">
-                <path d="M6 24L16 4L26 24" stroke="#ffffff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"/>
-                <path d="M10 18H22" stroke="#ffffff" strokeWidth="3" strokeLinecap="round"/>
-              </svg>
+            <div className="w-10 h-10 rounded-xl bg-white p-1 flex items-center justify-center shadow-lg overflow-hidden shrink-0">
+              <img src="/logo.png" alt="ACTiV" className="w-full h-full object-contain" />
             </div>
             <div className="flex flex-col">
               <span className="text-lg font-extrabold tracking-wide text-white">ACTiV</span>
@@ -107,11 +105,11 @@ export default function Login() {
             </p>
           </div>
 
-          <div className="flex justify-between items-center text-xs text-brand-300">
+          <div className="flex justify-between items-center text-xs text-white/90 font-medium pt-4 border-t border-white/10">
             <span>© PT. Alfa Cipta Teknologi Virtual</span>
             <div className="flex gap-4">
-              <span className="hover:text-white transition-colors cursor-pointer">Panduan</span>
-              <span className="hover:text-white transition-colors cursor-pointer">Bantuan</span>
+              <Link to="/guide" className="text-white/80 hover:text-white transition-colors cursor-pointer">Panduan</Link>
+              <Link to="/support" className="text-white/80 hover:text-white transition-colors cursor-pointer">Bantuan</Link>
             </div>
           </div>
         </div>

@@ -2,15 +2,18 @@ import React, { useState } from 'react';
 import ReactDOM from 'react-dom';
 import { Search, Plus, Edit, Trash2, X, Loader2 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
-import { useBrands, useCreateBrand } from '../hooks/useSupabase.js';
+import { useBrands, useCreateBrand, useUpdateBrand, useDeleteBrand } from '../hooks/useSupabase.js';
 
 export default function Brands() {
   const [search, setSearch] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [newBrand, setNewBrand] = useState({ name: '', color_hex: '#00B894' });
+  const [editBrandId, setEditBrandId] = useState(null);
 
   const { data: brands, isLoading, isError } = useBrands();
   const createBrand = useCreateBrand();
+  const updateBrand = useUpdateBrand();
+  const deleteBrand = useDeleteBrand();
 
   const getBrandStyles = (color) => {
     const validColor = color || '#000000';
@@ -21,18 +24,51 @@ export default function Brands() {
     };
   };
 
-  const handleCreate = (e) => {
+  const handleSave = (e) => {
     e.preventDefault();
-    createBrand.mutate(newBrand, {
-      onSuccess: () => {
-        setIsModalOpen(false);
-        setNewBrand({ name: '', color_hex: '#00B894' });
-        toast.success('Brand berhasil ditambahkan!');
-      },
-      onError: (err) => {
-        toast.error('Gagal menambahkan brand: ' + err.message);
-      }
-    });
+    if (editBrandId) {
+      updateBrand.mutate({ id: editBrandId, brandData: newBrand }, {
+        onSuccess: () => {
+          setIsModalOpen(false);
+          setNewBrand({ name: '', color_hex: '#00B894' });
+          setEditBrandId(null);
+          toast.success('Brand berhasil diperbarui!');
+        },
+        onError: (err) => {
+          toast.error('Gagal memperbarui brand: ' + err.message);
+        }
+      });
+    } else {
+      createBrand.mutate(newBrand, {
+        onSuccess: () => {
+          setIsModalOpen(false);
+          setNewBrand({ name: '', color_hex: '#00B894' });
+          toast.success('Brand berhasil ditambahkan!');
+        },
+        onError: (err) => {
+          toast.error('Gagal menambahkan brand: ' + err.message);
+        }
+      });
+    }
+  };
+
+  const handleEditClick = (b) => {
+    setNewBrand({ name: b.name, color_hex: b.color_hex });
+    setEditBrandId(b.id);
+    setIsModalOpen(true);
+  };
+
+  const handleDeleteClick = (id) => {
+    if (window.confirm('Apakah Anda yakin ingin menghapus brand ini? Tindakan ini tidak dapat dibatalkan.')) {
+      deleteBrand.mutate(id, {
+        onSuccess: () => {
+          toast.success('Brand berhasil dihapus!');
+        },
+        onError: (err) => {
+          toast.error('Gagal menghapus brand: ' + err.message);
+        }
+      });
+    }
   };
 
   const filteredBrands = brands?.filter(b => 
@@ -55,7 +91,11 @@ export default function Brands() {
             />
           </div>
           <button 
-            onClick={() => setIsModalOpen(true)}
+            onClick={() => {
+              setEditBrandId(null);
+              setNewBrand({ name: '', color_hex: '#00B894' });
+              setIsModalOpen(true);
+            }}
             className="flex items-center gap-2 bg-brand-500 hover:bg-brand-600 text-white text-sm font-semibold px-4 py-2 rounded-lg shadow-sm hover:shadow transition-all shrink-0"
           >
             <Plus className="w-4 h-4" />
@@ -114,10 +154,19 @@ export default function Brands() {
                   </td>
                   <td className="py-3 px-4 text-center">
                     <div className="flex items-center justify-center gap-1.5">
-                      <button className="text-brand-600 hover:text-brand-700 hover:bg-brand-50 p-1.5 rounded-lg transition-colors cursor-pointer" title="Edit Brand">
+                      <button 
+                        onClick={() => handleEditClick(b)}
+                        className="text-brand-600 hover:text-brand-700 hover:bg-brand-50 p-1.5 rounded-lg transition-colors cursor-pointer" 
+                        title="Edit Brand"
+                      >
                         <Edit className="w-4 h-4" />
                       </button>
-                      <button className="text-red-500 hover:bg-red-50 p-1.5 rounded-lg transition-colors cursor-pointer" title="Hapus Brand">
+                      <button 
+                        onClick={() => handleDeleteClick(b.id)}
+                        disabled={deleteBrand.isPending}
+                        className="text-red-500 hover:bg-red-50 p-1.5 rounded-lg transition-colors cursor-pointer disabled:opacity-50" 
+                        title="Hapus Brand"
+                      >
                         <Trash2 className="w-4 h-4" />
                       </button>
                     </div>
@@ -129,12 +178,12 @@ export default function Brands() {
         </div>
       </div>
 
-      {/* Create Modal */}
+      {/* Create/Edit Modal */}
       {isModalOpen && ReactDOM.createPortal(
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-surface-900/40 backdrop-blur-sm animate-fade-in">
           <div className="bg-white rounded-2xl w-full max-w-md overflow-hidden shadow-2xl animate-scale-in">
             <div className="flex items-center justify-between px-6 py-4 border-b border-surface-100">
-              <h2 className="text-lg font-bold text-surface-800">Tambah Brand Baru</h2>
+              <h2 className="text-lg font-bold text-surface-800">{editBrandId ? 'Edit Brand' : 'Tambah Brand Baru'}</h2>
               <button 
                 onClick={() => setIsModalOpen(false)}
                 className="text-surface-400 hover:text-surface-600 hover:bg-surface-100 p-2 rounded-xl transition-colors"
@@ -143,7 +192,7 @@ export default function Brands() {
               </button>
             </div>
             
-            <form onSubmit={handleCreate}>
+            <form onSubmit={handleSave}>
               <div className="p-6 flex flex-col gap-5">
                 <div>
                   <label className="text-xs font-bold text-surface-600 uppercase tracking-wider mb-2 block">Nama Brand</label>
@@ -199,11 +248,11 @@ export default function Brands() {
                 </button>
                 <button 
                   type="submit"
-                  disabled={createBrand.isPending}
+                  disabled={createBrand.isPending || updateBrand.isPending}
                   className="flex items-center gap-2 bg-brand-500 hover:bg-brand-600 text-white text-sm font-bold px-6 py-2 rounded-xl shadow-sm hover:shadow-md transition-all disabled:opacity-70"
                 >
-                  {createBrand.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
-                  Simpan Brand
+                  {(createBrand.isPending || updateBrand.isPending) && <Loader2 className="w-4 h-4 animate-spin" />}
+                  {editBrandId ? 'Simpan Perubahan' : 'Simpan Brand'}
                 </button>
               </div>
             </form>

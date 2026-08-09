@@ -2,6 +2,27 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import * as api from '../services/api.js';
 
 // ============================================
+// PERMISSIONS
+// ============================================
+
+export function useRolePermissions() {
+  return useQuery({
+    queryKey: ['role_permissions'],
+    queryFn: api.getRolePermissions,
+  });
+}
+
+export function useUpdateRolePermissions() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ role, permissions }) => api.updateRolePermissions(role, permissions),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['role_permissions'] });
+    },
+  });
+}
+
+// ============================================
 // CUSTOMERS
 // ============================================
 
@@ -37,6 +58,26 @@ export function useCreateBrand() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (brandData) => api.createBrand(brandData),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['brands'] });
+    },
+  });
+}
+
+export function useUpdateBrand() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, brandData }) => api.updateBrand(id, brandData),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['brands'] });
+    },
+  });
+}
+
+export function useDeleteBrand() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id) => api.deleteBrand(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['brands'] });
     },
@@ -147,5 +188,12 @@ export function useBankAccounts() {
   return useQuery({
     queryKey: ['bank_accounts'],
     queryFn: api.getCompanyBankAccounts,
+  });
+}
+
+export function useTrashQuotations() {
+  return useQuery({
+    queryKey: ['trash_quotations'],
+    queryFn: api.getTrashQuotations,
   });
 }
