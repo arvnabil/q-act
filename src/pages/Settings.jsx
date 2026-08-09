@@ -309,9 +309,9 @@ export default function Settings() {
       </div>
 
       {/* Bank Account Modal */}
-      {showBankModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-surface-900/50 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden">
+      {showBankModal && ReactDOM.createPortal(
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden animate-scale-in">
             <div className="px-6 py-4 border-b border-surface-100 flex items-center justify-between">
               <h3 className="text-base font-bold text-surface-900">{editingBank ? 'Edit Rekening Bank' : 'Tambah Rekening Bank'}</h3>
               <button onClick={() => setShowBankModal(false)} className="text-surface-400 hover:text-surface-600 cursor-pointer"><X className="w-5 h-5" /></button>
@@ -360,7 +360,8 @@ export default function Settings() {
               </div>
             </form>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Master Terms Templates Card (Admin Only) */}
@@ -423,9 +424,9 @@ export default function Settings() {
       )}
 
       {/* Master Template Modal */}
-      {showMasterModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-surface-900/50 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden">
+      {showMasterModal && ReactDOM.createPortal(
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden animate-scale-in">
             <div className="px-6 py-4 border-b border-surface-100 flex items-center justify-between">
               <h3 className="text-base font-bold text-surface-900">
                 {editingMasterId ? 'Edit Master Template' : 'Tambah Master Template Baru'}
@@ -464,12 +465,13 @@ export default function Settings() {
               </div>
             </form>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Modal Hapus Master Template */}
-      {deleteTargetMaster && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-surface-900/50 backdrop-blur-sm">
+      {deleteTargetMaster && ReactDOM.createPortal(
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6 animate-scale-in border border-surface-200">
             <div className="w-12 h-12 rounded-full bg-red-100 text-red-600 flex items-center justify-center mb-4">
               <Trash2 className="w-6 h-6" />
@@ -495,9 +497,9 @@ export default function Settings() {
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );
 }
-

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import ReactDOM from 'react-dom';
 import { ArrowLeft, Plus, Trash2, Save, Loader2, Info, ChevronDown, Check, Search, X, UploadCloud, Image as ImageIcon, Box, FileText, BookmarkPlus } from 'lucide-react';
 import { useProducts, useCustomers, useBankAccounts, useBrands } from '../hooks/useSupabase.js';
 import * as api from '../services/api.js';
@@ -1031,7 +1032,7 @@ export default function QuotationEdit({ quotation, onBack, onSaved }) {
       </div>
 
       {/* Draft Status Confirmation Modal */}
-      {showDraftModal && (
+      {showDraftModal && ReactDOM.createPortal(
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl border border-surface-200 animate-scale-in">
             <div className="w-12 h-12 rounded-full bg-amber-100 text-amber-600 flex items-center justify-center mb-4">
@@ -1065,11 +1066,12 @@ export default function QuotationEdit({ quotation, onBack, onSaved }) {
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Modal Simpan Template Baru */}
-      {showSaveTplModal && (
+      {showSaveTplModal && ReactDOM.createPortal(
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl border border-surface-200 animate-scale-in">
             <div className="flex justify-between items-center mb-3">
@@ -1113,11 +1115,12 @@ export default function QuotationEdit({ quotation, onBack, onSaved }) {
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Modal Hapus Template Personal */}
-      {deleteTargetTemplate && (
+      {deleteTargetTemplate && ReactDOM.createPortal(
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl max-w-sm w-full p-6 shadow-xl border border-surface-200 animate-scale-in">
             <div className="w-12 h-12 rounded-full bg-red-100 text-red-600 flex items-center justify-center mb-4">
@@ -1144,7 +1147,8 @@ export default function QuotationEdit({ quotation, onBack, onSaved }) {
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );
