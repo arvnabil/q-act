@@ -53,39 +53,87 @@ const translateTerm = (term, lang) => {
     return null;
   }
 
-  // Strip hardcoded list numbers like "2. ", "3. " so standard ordered list `<ol>` formats correctly
+  // Strip hardcoded list numbers like "2. ", "3. " so standard ordered list formats correctly
   t = t.replace(/^\d+\.\s*/, '');
 
-  const map = [
-    { from: /Harga sudah termasuk PPN 11%/gi, to: 'Prices include 11% VAT' },
-    { from: /Harga belum termasuk PPN 11%/gi, to: 'Prices exclude 11% VAT' },
-    { from: /Harga belum termasuk PPN 12%/gi, to: 'Prices exclude 12% VAT' },
-    { from: /Harga sudah termasuk PPN (\d+)%/gi, to: 'Prices include $1% VAT' },
-    { from: /Harga belum termasuk PPN (\d+)%/gi, to: 'Prices exclude $1% VAT' },
-    { from: /Harga belum termasuk biaya instalasi by remote & onsite/gi, to: 'Prices exclude remote & onsite installation fees' },
-    { from: /Harga belum termasuk biaya instalasi/gi, to: 'Prices exclude installation fees' },
-    { from: /Pembayaran CBO \(Cash before delivery\)/gi, to: 'Payment terms: CBO (Cash before delivery)' },
-    { from: /Pembayaran (\d+)%\s*DP,\s*pelunasan (\d+)%\s*setelah pengiriman\s*\(?([^)]*)\)?/gi, to: 'Payment $1% Down Payment, $2% balance after delivery ($3)' },
-    { from: /Pembayaran (\d+)%\s*DP,\s*pelunasan (\d+)%\s*setelah pengiriman/gi, to: 'Payment $1% Down Payment, $2% balance after delivery' },
-    { from: /Pembayaran (\d+)%\s*DP/gi, to: 'Payment $1% Down Payment' },
-    { from: /pelunasan (\d+)%\s*setelah pengiriman/gi, to: '$1% balance payment after delivery' },
-    { from: /Dikenakan biaya pembatalan (\d+)% dari nilai PO jika pembeli membatalkan PO/gi, to: 'A cancellation fee of $1% of the PO value applies if buyer cancels PO' },
-    { from: /Dikenakan biaya pembatalan/gi, to: 'Cancellation fee applies' },
-    { from: /Indent (\d+)-(\d+) minggu setelah PO/gi, to: 'Lead time $1-$2 weeks after PO' },
-    { from: /Indent (\d+) hingga (\d+) minggu setelah PO/gi, to: 'Lead time $1-$2 weeks after PO' },
-    { from: /Indent (\d+)-(\d+) minggu/gi, to: 'Lead time $1-$2 weeks' },
-    { from: /Indent (\d+) minggu/gi, to: 'Lead time $1 weeks' },
-    { from: /Garansi (\d+) tahun untuk (.*) produk/gi, to: '$1-year warranty for $2 products' },
-    { from: /Garansi (\d+) tahun/gi, to: '$1-year warranty' },
-    { from: /Garansi (\d+) bulan/gi, to: '$1-month warranty' },
-    { from: /Harga FOB Jakarta Delivery/gi, to: 'FOB Jakarta Delivery Price' },
-    { from: /Harga FOB Jakarta/gi, to: 'FOB Jakarta Price' },
-    { from: /Ready stock \(limited stock\)/gi, to: 'Ready stock (limited stock)' },
+  const rules = [
+    // 1. PPN / VAT
+    { from: /Harga\s*(?:sudah|termasuk)\s*PPN\s*(\d+)%/gi, to: 'Prices include $1% VAT' },
+    { from: /Harga\s*(?:belum|tidak)\s*termasuk\s*PPN\s*(\d+)%/gi, to: 'Prices exclude $1% VAT' },
+    { from: /(?:sudah|termasuk)\s*PPN\s*(\d+)%/gi, to: 'Includes $1% VAT' },
+    { from: /(?:belum|tidak)\s*termasuk\s*PPN\s*(\d+)%/gi, to: 'Excludes $1% VAT' },
+
+    // 2. PPH 23 / Income Tax
+    { from: /Harga\s*(?:belum|tidak)\s*termasuk\s*PPH\s*23/gi, to: 'Prices exclude Income Tax Art 23 (PPh 23)' },
+    { from: /(?:belum|tidak)\s*termasuk\s*PPH\s*23/gi, to: 'Excludes Income Tax Art 23 (PPh 23)' },
+    { from: /Harga\s*belum\s*termasuk\s*PPH/gi, to: 'Prices exclude Income Tax (PPh)' },
+    { from: /PPH\s*23/gi, to: 'Income Tax Art 23 (PPh 23)' },
+
+    // 3. Installation fees
+    { from: /Harga\s*(?:belum|tidak)\s*termasuk\s*biaya\s*instalasi\s*(?:by\s*)?(remote\s*&\s*onsite)?/gi, to: 'Prices exclude remote & onsite installation fees' },
+    { from: /Harga\s*(?:belum|tidak)\s*termasuk\s*biaya\s*instalasi/gi, to: 'Prices exclude installation fees' },
+    { from: /(?:belum|tidak)\s*termasuk\s*biaya\s*instalasi/gi, to: 'Excludes installation fees' },
+
+    // 4. Payment terms
+    { from: /Pembayaran\s*CBO\s*\(Cash before delivery\)/gi, to: 'Payment terms: CBO (Cash before delivery)' },
+    { from: /Pembayaran\s*CBO/gi, to: 'Payment terms: CBO (Cash before delivery)' },
+    { 
+      from: /Pembayaran\s*(\d+)%\s*DP,?\s*pelunasan\s*(\d+)%\s*setelah\s*pengiriman\s*\(?([^)]*)\)?/gi, 
+      to: (m, dp, balance, note) => {
+        let noteStr = '';
+        if (note) {
+          noteStr = note
+            .replace(/(\d+)\s*hari/gi, '$1 days')
+            .replace(/setelah pengiriman|setelah delivery|after delivery/gi, 'after delivery')
+            .trim();
+        }
+        return `Payment ${dp}% Down Payment, ${balance}% balance payment after delivery${noteStr ? ` (${noteStr})` : ''}`;
+      } 
+    },
+    { from: /Pembayaran\s*(\d+)%\s*DP,?\s*pelunasan\s*(\d+)%\s*setelah\s*pengiriman/gi, to: 'Payment $1% Down Payment, $2% balance payment after delivery' },
+    { from: /Pembayaran\s*(\d+)%\s*DP/gi, to: 'Payment $1% Down Payment' },
+    { from: /pelunasan\s*(\d+)%\s*setelah\s*pengiriman/gi, to: '$1% balance payment after delivery' },
+
+    // 5. Cancellation fee
+    { from: /(?:Dikenakan\s+)?biaya\s+pembatalan\s+(\d+)%(?:\s+dari\s+nilai\s+PO)?\s+jika\s+pembeli\s+membatalkan\s+PO/gi, to: 'A cancellation fee of $1% of the PO value applies if buyer cancels PO' },
+    { from: /Cancellation fee applies\s+(\d+)%\s*jika pembeli membatalkan PO/gi, to: 'Cancellation fee of $1% applies if buyer cancels PO' },
+    { from: /(?:Dikenakan\s+)?biaya\s+pembatalan\s+(\d+)%/gi, to: 'Cancellation fee of $1% applies' },
+    { from: /jika pembeli membatalkan PO/gi, to: 'if buyer cancels PO' },
+
+    // 6. Lead time
+    { from: /(?:Indent|Lead time)\s*(\d+)-(\d+)\s*minggu\s*(?:setelah\s*PO)?/gi, to: 'Lead time $1-$2 weeks after PO' },
+    { from: /(?:Indent|Lead time)\s*(\d+)\s*hingga\s*(\d+)\s*minggu\s*(?:setelah\s*PO)?/gi, to: 'Lead time $1-$2 weeks after PO' },
+    { from: /(?:Indent|Lead time)\s*(\d+)\s*minggu\s*(?:setelah\s*PO)?/gi, to: 'Lead time $1 weeks after PO' },
+    { from: /(\d+)-(\d+)\s*minggu\s*setelah\s*PO/gi, to: '$1-$2 weeks after PO' },
+    { from: /(\d+)\s*minggu\s*setelah\s*PO/gi, to: '$1 weeks after PO' },
+
+    // 7. Warranty & Delivery
+    { from: /Garansi\s*(\d+)\s*tahun\s*untuk\s*(.*?)\s*produk/gi, to: '$1-year warranty for $2 products' },
+    { from: /Garansi\s*(\d+)\s*tahun/gi, to: '$1-year warranty' },
+    { from: /Garansi\s*(\d+)\s*bulan/gi, to: '$1-month warranty' },
+    { from: /Harga\s*FOB\s*Jakarta\s*Delivery/gi, to: 'FOB Jakarta Delivery Price' },
+    { from: /Harga\s*FOB\s*Jakarta/gi, to: 'FOB Jakarta Price' },
+
+    // Fallbacks for lingering words
+    { from: /(\d+)\s*hari\s*after\s*delivery/gi, to: '$1 days after delivery' },
+    { from: /(\d+)\s*hari/gi, to: '$1 days' },
+    { from: /\bsetelah pengiriman\b/gi, to: 'after delivery' },
+    { from: /\bsetelah PO\b/gi, to: 'after PO' },
+    { from: /\bminggu\b/gi, to: 'weeks' },
+    { from: /\bbulan\b/gi, to: 'months' },
+    { from: /\btahun\b/gi, to: 'years' },
   ];
 
-  for (const r of map) {
-    t = t.replace(r.from, r.to);
+  for (const r of rules) {
+    if (typeof r.to === 'function') {
+      t = t.replace(r.from, r.to);
+    } else {
+      t = t.replace(r.from, r.to);
+    }
   }
+
+  // Clean up formatting irregularities
+  t = t.replace(/\s+/g, ' ').replace(/\s+,/g, ',').trim();
 
   return t;
 };
@@ -94,6 +142,9 @@ const translateDynamicText = (text, lang) => {
   if (!text || typeof text !== 'string' || lang !== 'en') return text;
   let s = text;
   const replacements = [
+    { from: /Kantor Cabang Utama Alam Sutera\s*\(?\s*Tangerang Selatan\s*\)?/gi, to: 'Alam Sutera Main Branch (South Tangerang)' },
+    { from: /Kantor Cabang Utama/gi, to: 'Main Branch' },
+    { from: /Tangerang Selatan/gi, to: 'South Tangerang' },
     { from: /\bGaransi Resmi\b/gi, to: 'Official Warranty' },
     { from: /\bGaransi\b/gi, to: 'Warranty' },
     { from: /\bTahun\b/gi, to: 'Years' },
@@ -102,6 +153,8 @@ const translateDynamicText = (text, lang) => {
     { from: /\bSudah Termasuk\b/gi, to: 'Includes' },
     { from: /\bBelum Termasuk\b/gi, to: 'Excludes' },
     { from: /\bTermasuk\b/gi, to: 'Includes' },
+    { from: /\bOpsi Tipe Baru\b/gi, to: 'New Model Option' },
+    { from: /\bTipe Baru\b/gi, to: 'New Model' },
   ];
   for (const r of replacements) {
     s = s.replace(r.from, r.to);
@@ -304,6 +357,8 @@ export function generateQuotationHTML(q, withImage = true, bankAccount = null, l
   const bankName = bankAccount?.bank_name || 'BCA';
   const bankNum = bankAccount?.account_number || '6044447899';
   const bankHolder = bankAccount?.account_name || 'PT ALFA CIPTA TEKNOLOGI VIRTUAL';
+  const rawBranch = bankAccount?.branch || t.branchOffice;
+  const branchText = translateDynamicText(rawBranch, lang);
 
   const html = `
     <!DOCTYPE html>
@@ -488,7 +543,7 @@ export function generateQuotationHTML(q, withImage = true, bankAccount = null, l
               `).join('')}
               <div style="display: flex; gap: 4px; align-items: flex-start; margin-bottom: 1.5px;">
                 <span style="font-weight: bold; min-width: 14px;">${termsList.length + 1}.</span>
-                <div style="flex: 1;">${t.bankAcc}<br/><strong>${bankName} : ${bankNum} - ${bankHolder}<br/>${t.branchOffice}</strong></div>
+                <div style="flex: 1;">${t.bankAcc}<br/><strong>${bankName} : ${bankNum} - ${bankHolder}<br/>${branchText}</strong></div>
               </div>
             </div>
           </div>
