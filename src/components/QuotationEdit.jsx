@@ -1,11 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { ArrowLeft, Plus, Trash2, Save, Loader2, Info, ChevronDown, Check, Search, X, UploadCloud, Image as ImageIcon, Box } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2, Save, Loader2, Info, ChevronDown, Check, Search, X, UploadCloud, Image as ImageIcon, Box, FileText, BookmarkPlus } from 'lucide-react';
 import { useProducts, useCustomers, useBankAccounts, useBrands } from '../hooks/useSupabase.js';
 import * as api from '../services/api.js';
 import { PRODUCTS as DUMMY_PRODUCTS } from '../data.js';
 import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../services/supabase.js';
 import { toast } from 'react-hot-toast';
+import useAuthStore from '../store/authStore.js';
+import { getCustomTemplates, saveCustomTemplate, deleteCustomTemplate } from '../utils/termsTemplates.js';
 
 
 const brandClasses = (brand) => {
@@ -55,6 +57,42 @@ export default function QuotationEdit({ quotation, onBack, onSaved }) {
       ? quotation.terms.join('\n')
       : DEFAULT_TERMS.join('\n')
   );
+
+  // Custom Terms & Conditions Template State
+  const { user } = useAuthStore();
+  const userId = user?.id || 'guest';
+  const [termsTemplates, setTermsTemplates] = useState(() => getCustomTemplates(userId));
+  const [showSaveTplModal, setShowSaveTplModal] = useState(false);
+  const [newTplName, setNewTplName] = useState('');
+
+  const handleSelectTemplate = (tplId) => {
+    const found = termsTemplates.find(t => t.id === tplId);
+    if (found) {
+      const text = Array.isArray(found.terms) ? found.terms.join('\n') : String(found.terms || '');
+      setTermsText(text);
+      toast.success(`Template "${found.name}" diterapkan!`);
+    }
+  };
+
+  const handleSaveTemplate = () => {
+    if (!newTplName.trim()) {
+      toast.error('Masukkan nama template!');
+      return;
+    }
+    const updated = saveCustomTemplate(userId, newTplName.trim(), termsText);
+    setTermsTemplates(updated);
+    setShowSaveTplModal(false);
+    setNewTplName('');
+    toast.success('Template Syarat & Ketentuan berhasil disimpan!');
+  };
+
+  const handleDeleteTemplate = (tplId, name) => {
+    if (confirm(`Hapus template "${name}"?`)) {
+      const updated = deleteCustomTemplate(userId, tplId);
+      setTermsTemplates(updated);
+      toast.success('Template berhasil dihapus.');
+    }
+  };
 
   // Inline New Product Modal State
   const [isInlineProductModalOpen, setIsInlineProductModalOpen] = useState(false);
@@ -903,14 +941,59 @@ export default function QuotationEdit({ quotation, onBack, onSaved }) {
         </div>
       </div>
 
-      {/* Syarat & Ketentuan Card */}
+      {/* Syarat & Ketentuan Card with Template Selector */}
       <div className="bg-white rounded-2xl border border-surface-200 shadow-sm p-6 mb-6">
-        <h3 className="text-sm font-bold text-surface-800 mb-1">Syarat & Ketentuan (Satu baris per poin)</h3>
-        <p className="text-xs text-surface-400 mb-3">Tuliskan tiap poin syarat & ketentuan pada baris terpisah.</p>
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
+          <div>
+            <h3 className="text-sm font-bold text-surface-800 flex items-center gap-2">
+              <FileText className="w-4 h-4 text-brand-500" />
+              Syarat & Ketentuan
+            </h3>
+            <p className="text-xs text-surface-400">Pilih template preset sales atau tulis poin khusus (satu baris per poin).</p>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setShowSaveTplModal(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-brand-600 bg-brand-50 border border-brand-200 rounded-lg hover:bg-brand-100 transition-colors cursor-pointer"
+          >
+            <BookmarkPlus className="w-4 h-4" />
+            Simpan sebagai Template Baru
+          </button>
+        </div>
+
+        {/* Template Presets Bar */}
+        <div className="mb-3 p-3 bg-surface-50 rounded-xl border border-surface-200 flex flex-wrap items-center gap-2">
+          <span className="text-xs font-bold text-surface-600 mr-1">Template Preset:</span>
+          {termsTemplates.map(tpl => (
+            <div key={tpl.id} className="inline-flex items-center gap-1 bg-white border border-surface-200 hover:border-brand-300 rounded-lg px-2.5 py-1 text-xs shadow-2xs transition-all">
+              <button
+                type="button"
+                onClick={() => handleSelectTemplate(tpl.id)}
+                className="font-medium text-surface-700 hover:text-brand-600 text-xs cursor-pointer"
+                title="Klik untuk menerapkan template ini"
+              >
+                📋 {tpl.name}
+              </button>
+              {tpl.id.startsWith('tpl-user-') && (
+                <button
+                  type="button"
+                  onClick={() => handleDeleteTemplate(tpl.id, tpl.name)}
+                  className="text-surface-400 hover:text-red-500 ml-1 text-xs cursor-pointer"
+                  title="Hapus template ini"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+
         <textarea
-          rows={5}
+          rows={6}
           value={termsText}
           onChange={e => setTermsText(e.target.value)}
+          placeholder="1. Harga belum termasuk PPN 11%&#10;2. Pembayaran CBO..."
           className="w-full bg-surface-50 border border-surface-200 rounded-xl p-3 text-xs text-surface-700 outline-none focus:border-brand-500 font-sans leading-relaxed"
         />
       </div>
@@ -966,6 +1049,54 @@ export default function QuotationEdit({ quotation, onBack, onSaved }) {
                 className="px-4 py-2 text-xs font-bold text-white bg-brand-500 hover:bg-brand-600 rounded-lg shadow-sm transition-all cursor-pointer"
               >
                 Ubah ke Sent & Simpan
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Simpan Template Baru */}
+      {showSaveTplModal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl border border-surface-200 animate-scale-in">
+            <div className="flex justify-between items-center mb-3">
+              <h3 className="text-base font-bold text-surface-900 flex items-center gap-2">
+                <BookmarkPlus className="w-5 h-5 text-brand-500" />
+                Simpan Template Syarat & Ketentuan
+              </h3>
+              <button onClick={() => setShowSaveTplModal(false)} className="text-surface-400 hover:text-surface-600 cursor-pointer">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <p className="text-xs text-surface-600 mb-4 leading-relaxed">
+              Simpan poin Syarat & Ketentuan saat ini agar bisa diterapkan dengan cepat di quotation lain.
+            </p>
+            <div className="mb-5">
+              <label className="block text-xs font-semibold text-surface-700 mb-1">Nama Template</label>
+              <input
+                type="text"
+                placeholder="Contoh: Project Pertamina (Net 14 Days)"
+                value={newTplName}
+                onChange={e => setNewTplName(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') handleSaveTemplate(); }}
+                className="w-full bg-surface-50 border border-surface-200 rounded-xl px-3 py-2 text-xs text-surface-800 outline-none focus:border-brand-500"
+                autoFocus
+              />
+            </div>
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setShowSaveTplModal(false)}
+                className="px-4 py-2 text-xs font-semibold text-surface-600 border border-surface-200 rounded-lg hover:bg-surface-50 transition-colors cursor-pointer"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveTemplate}
+                className="px-4 py-2 text-xs font-bold bg-brand-500 text-white rounded-lg hover:bg-brand-600 transition-all shadow-sm cursor-pointer"
+              >
+                Simpan Template
               </button>
             </div>
           </div>
