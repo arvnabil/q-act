@@ -1,16 +1,21 @@
 import React, { useState } from 'react';
 import ReactDOM from 'react-dom';
-import { Plus, Edit, Trash2, Star, Building2, CreditCard, Users, Loader2, X, Eye, EyeOff, AlertTriangle } from 'lucide-react';
+import { Plus, Edit, Trash2, Star, Building2, CreditCard, Users, Loader2, X, Eye, EyeOff, AlertTriangle, FileText } from 'lucide-react';
 import { useSalesUsers, useBankAccounts } from '../hooks/useSupabase.js';
 import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../services/supabase.js';
 import { toast } from 'react-hot-toast';
+import useAuthStore from '../store/authStore.js';
 
 import { getCompanyInfo, saveCompanyInfo } from '../utils/companyInfo.js';
+import { getMasterTemplates, saveMasterTemplate, deleteMasterTemplate } from '../utils/termsTemplates.js';
 
 
 
 export default function Settings() {
+  const { user } = useAuthStore();
+  const isAdmin = !user || ['admin', 'Administrator', 'Sales Manager', 'Manager'].includes(user.role);
+
   const [company, setCompany]         = useState(getCompanyInfo());
   const [isEditing, setIsEditing]     = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
@@ -22,6 +27,47 @@ export default function Settings() {
   const [bankForm, setBankForm]             = useState({ bank_name: '', account_number: '', account_name: '' });
   const [isSavingBank, setIsSavingBank]     = useState(false);
   const [deletingBankId, setDeletingBankId] = useState(null);
+
+  // Master Terms State
+  const [masterTemplates, setMasterTemplates] = useState(() => getMasterTemplates());
+  const [showMasterModal, setShowMasterModal] = useState(false);
+  const [editingMasterId, setEditingMasterId] = useState(null);
+  const [masterForm, setMasterForm] = useState({ name: '', termsText: '' });
+
+  const handleOpenAddMaster = () => {
+    setEditingMasterId(null);
+    setMasterForm({ name: '', termsText: '' });
+    setShowMasterModal(true);
+  };
+
+  const handleOpenEditMaster = (tpl) => {
+    setEditingMasterId(tpl.id);
+    setMasterForm({
+      name: tpl.name || '',
+      termsText: Array.isArray(tpl.terms) ? tpl.terms.join('\n') : String(tpl.terms || '')
+    });
+    setShowMasterModal(true);
+  };
+
+  const handleSaveMaster = (e) => {
+    e.preventDefault();
+    if (!masterForm.name.trim() || !masterForm.termsText.trim()) {
+      toast.error('Nama dan isi syarat & ketentuan wajib diisi!');
+      return;
+    }
+    const updated = saveMasterTemplate(masterForm.name.trim(), masterForm.termsText, editingMasterId);
+    setMasterTemplates(updated);
+    setShowMasterModal(false);
+    toast.success(editingMasterId ? 'Master Template diperbarui!' : 'Master Template baru berhasil ditambahkan!');
+  };
+
+  const handleDeleteMaster = (id, name) => {
+    if (window.confirm(`Hapus Master Template "${name}"?`)) {
+      const updated = deleteMasterTemplate(id);
+      setMasterTemplates(updated);
+      toast.success('Master Template dihapus.');
+    }
+  };
 
   const { data: bankAccounts = [], isLoading: isBankLoading } = useBankAccounts();
   const queryClient = useQueryClient();
@@ -311,8 +357,109 @@ export default function Settings() {
         </div>
       )}
 
+      {/* Master Terms Templates Card (Admin Only) */}
+      {isAdmin && (
+        <div className="bg-white rounded-2xl border border-surface-200 shadow-sm p-6 mb-8">
+          <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+            <div>
+              <h3 className="text-base font-bold text-surface-900 flex items-center gap-2">
+                <FileText className="w-5 h-5 text-brand-500" />
+                Master Template Syarat & Ketentuan (Khusus Admin)
+              </h3>
+              <p className="text-xs text-surface-500 mt-0.5">
+                Kelola template standar perusahaan yang tampil secara otomatis di pilihan semua sales.
+              </p>
+            </div>
+            <button
+              onClick={handleOpenAddMaster}
+              className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold bg-brand-500 text-white rounded-lg hover:bg-brand-600 transition-all shadow-sm cursor-pointer"
+            >
+              <Plus className="w-4 h-4" />
+              Tambah Master Template
+            </button>
+          </div>
 
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {masterTemplates.map(tpl => (
+              <div key={tpl.id} className="border border-surface-200 rounded-xl p-4 bg-surface-50/50 hover:border-surface-300 transition-all flex flex-col justify-between">
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="font-bold text-sm text-surface-900 flex items-center gap-1.5">
+                      🏢 {tpl.name}
+                    </span>
+                    <span className="text-[10px] bg-brand-50 text-brand-700 px-2 py-0.5 rounded-full font-bold">Master</span>
+                  </div>
+                  <div className="bg-white border border-surface-100 rounded-lg p-3 text-xs text-surface-700 space-y-1 font-mono text-[11px] max-h-36 overflow-y-auto">
+                    {Array.isArray(tpl.terms) ? tpl.terms.map((t, i) => (
+                      <div key={i} className="leading-tight">• {t}</div>
+                    )) : tpl.terms}
+                  </div>
+                </div>
 
+                <div className="flex items-center justify-end gap-2 mt-3 pt-3 border-t border-surface-200">
+                  <button
+                    onClick={() => handleOpenEditMaster(tpl)}
+                    className="flex items-center gap-1 text-xs font-semibold text-surface-600 hover:text-brand-600 transition-colors cursor-pointer"
+                  >
+                    <Edit className="w-3.5 h-3.5" /> Edit
+                  </button>
+                  <button
+                    onClick={() => handleDeleteMaster(tpl.id, tpl.name)}
+                    className="flex items-center gap-1 text-xs font-semibold text-surface-400 hover:text-red-600 transition-colors cursor-pointer ml-2"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" /> Hapus
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Master Template Modal */}
+      {showMasterModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-surface-900/50 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden">
+            <div className="px-6 py-4 border-b border-surface-100 flex items-center justify-between">
+              <h3 className="text-base font-bold text-surface-900">
+                {editingMasterId ? 'Edit Master Template' : 'Tambah Master Template Baru'}
+              </h3>
+              <button onClick={() => setShowMasterModal(false)} className="text-surface-400 hover:text-surface-600 cursor-pointer"><X className="w-5 h-5" /></button>
+            </div>
+            <form onSubmit={handleSaveMaster} className="p-6 flex flex-col gap-4">
+              <div>
+                <label className="text-xs font-semibold text-surface-600 mb-1 block">Nama Master Template <span className="text-red-500">*</span></label>
+                <input
+                  type="text"
+                  value={masterForm.name}
+                  onChange={e => setMasterForm(f => ({ ...f, name: e.target.value }))}
+                  className="w-full bg-surface-50 border border-surface-200 rounded-lg px-3 py-2.5 text-sm outline-none focus:border-brand-500"
+                  placeholder="Contoh: Project Standard PPN 11%"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-surface-600 mb-1 block">Poin Syarat & Ketentuan (Satu baris per poin) <span className="text-red-500">*</span></label>
+                <textarea
+                  rows={6}
+                  value={masterForm.termsText}
+                  onChange={e => setMasterForm(f => ({ ...f, termsText: e.target.value }))}
+                  className="w-full bg-surface-50 border border-surface-200 rounded-lg p-3 text-xs outline-none focus:border-brand-500 font-sans leading-relaxed"
+                  placeholder="1. Harga belum termasuk PPN 11%&#10;2. Pembayaran CBO..."
+                />
+              </div>
+              <div className="flex items-center justify-end gap-3 pt-2">
+                <button type="button" onClick={() => setShowMasterModal(false)} className="px-4 py-2 text-sm font-semibold text-surface-600 hover:text-surface-900 cursor-pointer">Batal</button>
+                <button
+                  type="submit"
+                  className="flex items-center gap-2 px-5 py-2 text-sm font-bold bg-brand-500 text-white rounded-lg hover:bg-brand-600 transition-all shadow-sm cursor-pointer"
+                >
+                  {editingMasterId ? 'Simpan Perubahan' : 'Tambah Master Template'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

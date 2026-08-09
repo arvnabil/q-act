@@ -7,7 +7,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../services/supabase.js';
 import { toast } from 'react-hot-toast';
 import useAuthStore from '../store/authStore.js';
-import { getCustomTemplates, saveCustomTemplate, deleteCustomTemplate } from '../utils/termsTemplates.js';
+import { getAllTemplatesForUser, savePersonalTemplate, deletePersonalTemplate } from '../utils/termsTemplates.js';
 
 
 const brandClasses = (brand) => {
@@ -61,7 +61,7 @@ export default function QuotationEdit({ quotation, onBack, onSaved }) {
   // Custom Terms & Conditions Template State
   const { user } = useAuthStore();
   const userId = user?.id || 'guest';
-  const [termsTemplates, setTermsTemplates] = useState(() => getCustomTemplates(userId));
+  const [termsTemplates, setTermsTemplates] = useState(() => getAllTemplatesForUser(userId));
   const [showSaveTplModal, setShowSaveTplModal] = useState(false);
   const [newTplName, setNewTplName] = useState('');
 
@@ -79,18 +79,18 @@ export default function QuotationEdit({ quotation, onBack, onSaved }) {
       toast.error('Masukkan nama template!');
       return;
     }
-    const updated = saveCustomTemplate(userId, newTplName.trim(), termsText);
-    setTermsTemplates(updated);
+    savePersonalTemplate(userId, newTplName.trim(), termsText);
+    setTermsTemplates(getAllTemplatesForUser(userId));
     setShowSaveTplModal(false);
     setNewTplName('');
-    toast.success('Template Syarat & Ketentuan berhasil disimpan!');
+    toast.success('Template personal berhasil disimpan!');
   };
 
-  const handleDeleteTemplate = (tplId, name) => {
-    if (confirm(`Hapus template "${name}"?`)) {
-      const updated = deleteCustomTemplate(userId, tplId);
-      setTermsTemplates(updated);
-      toast.success('Template berhasil dihapus.');
+  const handleDeletePersonalTemplate = (tplId, name) => {
+    if (confirm(`Hapus template buatan Anda "${name}"?`)) {
+      deletePersonalTemplate(userId, tplId);
+      setTermsTemplates(getAllTemplatesForUser(userId));
+      toast.success('Template personal berhasil dihapus.');
     }
   };
 
@@ -965,28 +965,35 @@ export default function QuotationEdit({ quotation, onBack, onSaved }) {
         {/* Template Presets Bar */}
         <div className="mb-3 p-3 bg-surface-50 rounded-xl border border-surface-200 flex flex-wrap items-center gap-2">
           <span className="text-xs font-bold text-surface-600 mr-1">Template Preset:</span>
-          {termsTemplates.map(tpl => (
-            <div key={tpl.id} className="inline-flex items-center gap-1 bg-white border border-surface-200 hover:border-brand-300 rounded-lg px-2.5 py-1 text-xs shadow-2xs transition-all">
-              <button
-                type="button"
-                onClick={() => handleSelectTemplate(tpl.id)}
-                className="font-medium text-surface-700 hover:text-brand-600 text-xs cursor-pointer"
-                title="Klik untuk menerapkan template ini"
-              >
-                📋 {tpl.name}
-              </button>
-              {tpl.id.startsWith('tpl-user-') && (
+          {termsTemplates.map(tpl => {
+            const isPersonal = tpl.type === 'personal' || tpl.id.startsWith('personal-') || tpl.id.startsWith('tpl-user-');
+            return (
+              <div key={tpl.id} className={`inline-flex items-center gap-1.5 bg-white border ${isPersonal ? 'border-purple-200 hover:border-purple-400' : 'border-surface-200 hover:border-brand-400'} rounded-lg px-2.5 py-1 text-xs shadow-2xs transition-all`}>
                 <button
                   type="button"
-                  onClick={() => handleDeleteTemplate(tpl.id, tpl.name)}
-                  className="text-surface-400 hover:text-red-500 ml-1 text-xs cursor-pointer"
-                  title="Hapus template ini"
+                  onClick={() => handleSelectTemplate(tpl.id)}
+                  className="font-medium text-surface-700 hover:text-brand-600 text-xs cursor-pointer flex items-center gap-1"
+                  title={isPersonal ? 'Template Personal Anda' : 'Template Master Perusahaan (Admin)'}
                 >
-                  <X className="w-3 h-3" />
+                  <span>{isPersonal ? '👤' : '🏢'}</span>
+                  <span>{tpl.name}</span>
+                  <span className={`text-[10px] px-1 rounded ${isPersonal ? 'bg-purple-50 text-purple-600' : 'bg-surface-100 text-surface-500'}`}>
+                    {isPersonal ? 'Personal' : 'Master'}
+                  </span>
                 </button>
-              )}
-            </div>
-          ))}
+                {isPersonal && (
+                  <button
+                    type="button"
+                    onClick={() => handleDeletePersonalTemplate(tpl.id, tpl.name)}
+                    className="text-surface-400 hover:text-red-500 ml-0.5 text-xs cursor-pointer p-0.5"
+                    title="Hapus template buatan saya ini"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                )}
+              </div>
+            );
+          })}
         </div>
 
         <textarea
