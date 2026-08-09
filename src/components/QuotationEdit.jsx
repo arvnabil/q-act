@@ -86,12 +86,18 @@ export default function QuotationEdit({ quotation, onBack, onSaved }) {
     toast.success('Template personal berhasil disimpan!');
   };
 
+  const [deleteTargetTemplate, setDeleteTargetTemplate] = useState(null);
+
   const handleDeletePersonalTemplate = (tplId, name) => {
-    if (confirm(`Hapus template buatan Anda "${name}"?`)) {
-      deletePersonalTemplate(userId, tplId);
-      setTermsTemplates(getAllTemplatesForUser(userId));
-      toast.success('Template personal berhasil dihapus.');
-    }
+    setDeleteTargetTemplate({ id: tplId, name });
+  };
+
+  const executeDeletePersonalTemplate = () => {
+    if (!deleteTargetTemplate) return;
+    deletePersonalTemplate(userId, deleteTargetTemplate.id);
+    setTermsTemplates(getAllTemplatesForUser(userId));
+    toast.success(`Template "${deleteTargetTemplate.name}" berhasil dihapus.`);
+    setDeleteTargetTemplate(null);
   };
 
   // Inline New Product Modal State
@@ -1104,6 +1110,37 @@ export default function QuotationEdit({ quotation, onBack, onSaved }) {
                 className="px-4 py-2 text-xs font-bold bg-brand-500 text-white rounded-lg hover:bg-brand-600 transition-all shadow-sm cursor-pointer"
               >
                 Simpan Template
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Hapus Template Personal */}
+      {deleteTargetTemplate && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-sm w-full p-6 shadow-xl border border-surface-200 animate-scale-in">
+            <div className="w-12 h-12 rounded-full bg-red-100 text-red-600 flex items-center justify-center mb-4">
+              <Trash2 className="w-6 h-6" />
+            </div>
+            <h3 className="text-base font-bold text-surface-900 mb-1.5">Hapus Template Personal?</h3>
+            <p className="text-xs text-surface-600 leading-relaxed mb-6">
+              Apakah Anda yakin ingin menghapus template personal <span className="font-bold text-surface-800">"{deleteTargetTemplate.name}"</span>? Poin syarat & ketentuan ini tidak dapat dikembalikan.
+            </p>
+            <div className="flex items-center justify-end gap-2.5">
+              <button
+                type="button"
+                onClick={() => setDeleteTargetTemplate(null)}
+                className="px-4 py-2 text-xs font-semibold text-surface-600 border border-surface-200 rounded-lg hover:bg-surface-50 transition-colors cursor-pointer"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                onClick={executeDeletePersonalTemplate}
+                className="px-4 py-2 text-xs font-bold text-white bg-red-600 hover:bg-red-700 rounded-lg shadow-sm transition-all cursor-pointer"
+              >
+                Ya, Hapus Template
               </button>
             </div>
           </div>

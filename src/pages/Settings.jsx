@@ -61,12 +61,18 @@ export default function Settings() {
     toast.success(editingMasterId ? 'Master Template diperbarui!' : 'Master Template baru berhasil ditambahkan!');
   };
 
+  const [deleteTargetMaster, setDeleteTargetMaster] = useState(null);
+
   const handleDeleteMaster = (id, name) => {
-    if (window.confirm(`Hapus Master Template "${name}"?`)) {
-      const updated = deleteMasterTemplate(id);
-      setMasterTemplates(updated);
-      toast.success('Master Template dihapus.');
-    }
+    setDeleteTargetMaster({ id, name });
+  };
+
+  const executeDeleteMaster = () => {
+    if (!deleteTargetMaster) return;
+    const updated = deleteMasterTemplate(deleteTargetMaster.id);
+    setMasterTemplates(updated);
+    toast.success(`Master Template "${deleteTargetMaster.name}" berhasil dihapus.`);
+    setDeleteTargetMaster(null);
   };
 
   const { data: bankAccounts = [], isLoading: isBankLoading } = useBankAccounts();
@@ -457,6 +463,37 @@ export default function Settings() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Hapus Master Template */}
+      {deleteTargetMaster && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-surface-900/50 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6 animate-scale-in border border-surface-200">
+            <div className="w-12 h-12 rounded-full bg-red-100 text-red-600 flex items-center justify-center mb-4">
+              <Trash2 className="w-6 h-6" />
+            </div>
+            <h3 className="text-base font-bold text-surface-900 mb-1.5">Hapus Master Template?</h3>
+            <p className="text-xs text-surface-600 leading-relaxed mb-6">
+              Apakah Anda yakin ingin menghapus Master Template <span className="font-bold text-surface-800">"{deleteTargetMaster.name}"</span>? Template ini tidak akan tampil lagi di preset sales.
+            </p>
+            <div className="flex items-center justify-end gap-2.5">
+              <button
+                type="button"
+                onClick={() => setDeleteTargetMaster(null)}
+                className="px-4 py-2 text-xs font-semibold text-surface-600 border border-surface-200 rounded-lg hover:bg-surface-50 transition-colors cursor-pointer"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                onClick={executeDeleteMaster}
+                className="px-4 py-2 text-xs font-bold text-white bg-red-600 hover:bg-red-700 rounded-lg shadow-sm transition-all cursor-pointer"
+              >
+                Ya, Hapus Master Template
+              </button>
+            </div>
           </div>
         </div>
       )}
