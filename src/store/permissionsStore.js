@@ -40,14 +40,21 @@ const usePermissionsStore = create((set, get) => ({
                            role === 'Sales Manager' ? 'Manager' : 
                            role;
 
-    // Default fallback logic if data hasn't loaded or role is missing
-    if (!permissions || !permissions[normalizedRole]) {
-      // Temporary fallback based on role name for safety until loaded
-      if (normalizedRole === 'Administrator') return true;
-      return false;
+    // If permissions loaded from DB, use them
+    if (permissions && permissions[normalizedRole]) {
+      return !!permissions[normalizedRole][feature];
     }
     
-    return !!permissions[normalizedRole][feature];
+    // Default fallback by role when DB permissions not yet loaded or missing
+    const defaultPermissions = {
+      'Administrator': true,
+      'Manager': ['analytics', 'manager_view', 'dashboard', 'quotations', 'customers', 'products', 'brands'].includes(feature),
+      'Account Executive': ['dashboard', 'quotations', 'customers', 'products'].includes(feature),
+      'Sales Representative': ['dashboard', 'quotations', 'customers', 'products'].includes(feature),
+    };
+    
+    if (normalizedRole === 'Administrator') return true;
+    return defaultPermissions[normalizedRole] ?? false;
   },
 
   updatePermissionsLocal: (role, newPermissions) => {

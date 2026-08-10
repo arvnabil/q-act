@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import ReactDOM from 'react-dom';
-import { Plus, Edit, Trash2, Star, Building2, CreditCard, Users, Loader2, X, Eye, EyeOff, AlertTriangle, FileText } from 'lucide-react';
-import { useSalesUsers, useBankAccounts } from '../hooks/useSupabase.js';
+import { Plus, Edit, Trash2, Star, Building2, CreditCard, Users, Loader2, X, Eye, EyeOff, AlertTriangle, FileText, Wrench } from 'lucide-react';
+import { useSalesUsers, useBankAccounts, useMaintenanceMode, useUpdateMaintenanceMode } from '../hooks/useSupabase.js';
 import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../services/supabase.js';
 import { toast } from 'react-hot-toast';
@@ -154,7 +154,54 @@ export default function Settings() {
     }
   };
 
+  // ============ MAINTENANCE MODE ============
+  const { data: maintenanceSettings, isLoading: isMaintenanceLoading } = useMaintenanceMode();
+  const updateMaintenance = useUpdateMaintenanceMode();
+  const [mtDomains, setMtDomains] = useState('');
+  const [isMtEditing, setIsMtEditing] = useState(false);
+  const [isUpdatingMt, setIsUpdatingMt] = useState(false);
 
+  React.useEffect(() => {
+    if (maintenanceSettings) {
+      setMtDomains(maintenanceSettings.domains?.join(', ') || '');
+    }
+  }, [maintenanceSettings]);
+
+  const handleToggleMaintenance = async () => {
+    setIsUpdatingMt(true);
+    try {
+      const currentStatus = maintenanceSettings?.enabled || false;
+      const domainsArray = mtDomains.split(',').map(d => d.trim().toLowerCase()).filter(Boolean);
+      await updateMaintenance.mutateAsync({ enabled: !currentStatus, domains: domainsArray });
+      toast.success(`Mode perawatan berhasil ${!currentStatus ? 'diaktifkan' : 'dinonaktifkan'}!`);
+    } catch (err) {
+      if (err.message?.includes('system_settings')) {
+        toast.error("Tabel 'system_settings' belum dibuat di Supabase.");
+      } else {
+        toast.error(err.message || 'Gagal mengubah status mode perawatan.');
+      }
+    } finally {
+      setIsUpdatingMt(false);
+    }
+  };
+
+  const handleSaveDomains = async () => {
+    setIsUpdatingMt(true);
+    try {
+      const domainsArray = mtDomains.split(',').map(d => d.trim().toLowerCase()).filter(Boolean);
+      await updateMaintenance.mutateAsync({ enabled: maintenanceSettings?.enabled || false, domains: domainsArray });
+      toast.success('Daftar domain berhasil diperbarui!');
+      setIsMtEditing(false);
+    } catch (err) {
+      if (err.message?.includes('system_settings')) {
+        toast.error("Tabel 'system_settings' belum dibuat di Supabase.");
+      } else {
+        toast.error(err.message || 'Gagal memperbarui daftar domain.');
+      }
+    } finally {
+      setIsUpdatingMt(false);
+    }
+  };
 
 
   return (
@@ -419,6 +466,115 @@ export default function Settings() {
                 </div>
               </div>
             ))}
+          </div>
+        </div>
+      )}
+
+      {/* Pengaturan Sistem - Maintenance Mode */}
+      {isAdmin && (
+        <div className="bg-white rounded-xl border border-surface-200 mb-5">
+          <div className="px-6 py-4 border-b border-surface-100 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Wrench className="w-4 h-4 text-surface-400" />
+              <h2 className="text-sm font-bold text-surface-800">Pengaturan Sistem (Maintenance Mode)</h2>
+            </div>
+          </div>
+          <div className="p-6 flex flex-col gap-6">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-surface-50 border border-surface-200 rounded-xl p-4">
+              <div className="flex-1">
+                <h3 className="text-sm font-bold text-surface-800 flex items-center gap-2">
+                  Status Mode Perawatan
+                  {maintenanceSettings?.enabled ? (
+                    <span className="inline-flex px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">Aktif</span>
+                  ) : (
+                    <span className="inline-flex px-2 py-0.5 rounded-full text-[10px] font-bold bg-brand-50 text-brand-700 border border-brand-200">Nonaktif</span>
+                  )}
+                </h3>
+                <p className="text-xs text-surface-500 mt-1 leading-relaxed">
+                  Saat diaktifkan, pengguna non-admin yang mengakses portal melalui domain terdampak akan dialihkan ke halaman pemeliharaan sistem.
+                </p>
+              </div>
+              <div className="flex items-center">
+                {isMaintenanceLoading ? (
+                  <Loader2 className="w-5 h-5 animate-spin text-brand-500" />
+                ) : (
+                  <button
+                    type="button"
+                    onClick={handleToggleMaintenance}
+                    disabled={isUpdatingMt}
+                    className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                      maintenanceSettings?.enabled ? 'bg-amber-500' : 'bg-surface-200'
+                    } disabled:opacity-60`}
+                  >
+                    <span className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                      maintenanceSettings?.enabled ? 'translate-x-5' : 'translate-x-0'
+                    }`} />
+                  </button>
+                )}
+              </div>
+            </div>
+
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <label className="text-xs font-semibold text-surface-600 block">Domain Terdampak</label>
+                {!isMtEditing ? (
+                  <button type="button" onClick={() => setIsMtEditing(true)} className="text-xs font-semibold text-brand-600 hover:text-brand-700 cursor-pointer">Ubah Domain</button>
+                ) : (
+                  <div className="flex gap-2">
+                    <button type="button" onClick={() => { setIsMtEditing(false); setMtDomains(maintenanceSettings?.domains?.join(', ') || ''); }} className="text-xs font-semibold text-surface-400 hover:text-surface-600 cursor-pointer">Batal</button>
+                    <button type="button" onClick={handleSaveDomains} disabled={isUpdatingMt} className="text-xs font-bold text-brand-600 hover:text-brand-700 flex items-center gap-1 cursor-pointer">
+                      {isUpdatingMt && <Loader2 className="w-3 h-3 animate-spin" />}Simpan
+                    </button>
+                  </div>
+                )}
+              </div>
+              {isMtEditing ? (
+                <div>
+                  <textarea
+                    value={mtDomains}
+                    onChange={(e) => setMtDomains(e.target.value)}
+                    placeholder="Contoh: activ.co.id, qsales.activ.co.id"
+                    className="w-full bg-surface-50 border border-surface-200 rounded-lg px-3 py-2.5 text-xs text-surface-700 font-mono outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-100 transition-all min-h-[60px]"
+                  />
+                  <p className="text-[10px] text-surface-400 mt-1">Pisahkan dengan koma. Kosongkan jika berlaku di semua domain.</p>
+                </div>
+              ) : (
+                <div className="bg-surface-50 border border-surface-200 rounded-lg p-3">
+                  {maintenanceSettings?.domains && maintenanceSettings.domains.length > 0 ? (
+                    <div className="flex flex-wrap gap-1.5">
+                      {maintenanceSettings.domains.map(d => (
+                        <span key={d} className="inline-flex font-mono bg-white border border-surface-200 px-2 py-0.5 rounded text-xs text-surface-600">{d}</span>
+                      ))}
+                    </div>
+                  ) : (
+                    <span className="text-xs text-surface-400 italic">Berlaku untuk semua domain (All Domains).</span>
+                  )}
+                </div>
+              )}
+            </div>
+
+            <div className="border-t border-surface-100 pt-4 flex flex-col gap-2">
+              <span className="text-xs font-semibold text-surface-600">Deteksi Domain Saat Ini:</span>
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-2 text-xs">
+                <div className="flex items-center gap-2 text-surface-500">
+                  <span>Domain Browser:</span>
+                  <span className="font-mono bg-surface-100 border border-surface-200 px-1.5 py-0.5 rounded font-semibold text-surface-700">{window.location.hostname}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span>Status domain ini:</span>
+                  {maintenanceSettings?.enabled ? (() => {
+                    const domains = maintenanceSettings?.domains || [];
+                    const current = window.location.hostname.toLowerCase();
+                    const affected = domains.length === 0 || domains.some(d => { const clean = d.trim().toLowerCase(); return current === clean || current.endsWith('.' + clean); });
+                    return affected ? (
+                      <span className="font-bold text-amber-600 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">Akan Terdampak Maintenance</span>
+                    ) : (
+                      <span className="font-bold text-brand-600 bg-brand-50 px-2 py-0.5 rounded border border-brand-200">Akan Normal (Bypass)</span>
+                    );
+                  })() : <span className="text-surface-400">Normal (Maintenance Nonaktif)</span>}
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       )}

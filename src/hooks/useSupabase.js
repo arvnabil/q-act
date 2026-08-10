@@ -197,3 +197,22 @@ export function useTrashQuotations() {
     queryFn: api.getTrashQuotations,
   });
 }
+
+export function useMaintenanceMode() {
+  return useQuery({
+    queryKey: ['maintenance_mode'],
+    queryFn: api.getMaintenanceMode,
+    refetchInterval: 15000, // Refetch every 15 seconds to sync state
+  });
+}
+
+export function useUpdateMaintenanceMode() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (settings) => api.setMaintenanceMode(settings),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['maintenance_mode'] });
+    },
+  });
+}
+

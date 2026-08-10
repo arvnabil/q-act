@@ -674,3 +674,55 @@ export async function hardDeleteQuotation(id) {
   if (error) throw error;
   return data;
 }
+
+// ============================================
+// SYSTEM SETTINGS / MAINTENANCE MODE
+// ============================================
+
+export async function getMaintenanceMode() {
+  try {
+    const { data, error } = await supabase
+      .from('system_settings')
+      .select('value')
+      .eq('key', 'maintenance_mode')
+      .maybeSingle();
+
+    if (error) {
+      console.warn('Error fetching maintenance mode settings:', error);
+      return { enabled: false, domains: [] };
+    }
+
+    if (!data || !data.value) {
+      return { enabled: false, domains: [] };
+    }
+
+    return {
+      enabled: !!data.value.enabled,
+      domains: Array.isArray(data.value.domains) ? data.value.domains : []
+    };
+  } catch (err) {
+    console.error('Failed to get maintenance mode:', err);
+    return { enabled: false, domains: [] };
+  }
+}
+
+export async function setMaintenanceMode(settings) {
+  const payload = {
+    key: 'maintenance_mode',
+    value: {
+      enabled: !!settings.enabled,
+      domains: Array.isArray(settings.domains) ? settings.domains.map(d => d.trim().toLowerCase()).filter(Boolean) : []
+    },
+    updated_at: new Date().toISOString()
+  };
+
+  const { data, error } = await supabase
+    .from('system_settings')
+    .upsert(payload, { onConflict: 'key' })
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data.value;
+}
+
