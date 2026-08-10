@@ -124,8 +124,17 @@ export default function Customers() {
     // Role filtering: non-manager/admin only sees customers associated with them (creator, PIC sales, or quotation sales)
     if (!isManagerOrAdmin && user?.id) {
       const isCreator = c.created_by === user.id || c.sales_id === user.id;
-      const isPicSales = c.pics?.some(p => p.sales_id === user.id || p.created_by === user.id || p.sales?.id === user.id);
-      const isQuotationSales = c.quotations?.some(q => q.sales_id === user.id || q.created_by === user.id);
+      const isPicSales = c.pics?.some(p => 
+        p.sales_id === user.id || 
+        p.created_by === user.id || 
+        p.sales?.id === user.id ||
+        (user.name && p.name?.toLowerCase().includes(user.name.toLowerCase()))
+      );
+      const isQuotationSales = c.quotations?.some(q => 
+        q.sales_id === user.id || 
+        q.created_by === user.id || 
+        (user.email && q.creator?.email === user.email)
+      );
       
       if (!isCreator && !isPicSales && !isQuotationSales) {
         return false;

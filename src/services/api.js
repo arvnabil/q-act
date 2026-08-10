@@ -80,7 +80,7 @@ export async function getCustomers() {
   try {
     const { data: qData } = await supabase
       .from('quotations')
-      .select('id, customer_id, status, created_by, items:quotation_items(qty, price)');
+      .select('id, customer_id, status, sales_id, created_by, items:quotation_items(qty, price)');
       
     if (qData) {
       qData.forEach(q => {
