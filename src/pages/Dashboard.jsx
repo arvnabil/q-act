@@ -86,7 +86,7 @@ export default function Dashboard() {
   };
 
   const statusConfigs = [
-    { key: 'approved', label: 'Approved', color: '#059669', bg: 'bg-emerald-500' },
+    { key: 'approved', label: 'PO', color: '#059669', bg: 'bg-emerald-500' },
     { key: 'sent', label: 'Sent', color: '#2563EB', bg: 'bg-blue-500' },
     { key: 'draft', label: 'Draft', color: '#9CA3AF', bg: 'bg-gray-400' },
     { key: 'rejected', label: 'Rejected', color: '#DC2626', bg: 'bg-red-500' },
@@ -206,7 +206,7 @@ export default function Dashboard() {
           <div className="text-xs font-medium text-emerald-600">Terbuka di portal</div>
         </div>
 
-        {/* Card 2: Total Revenue (Approved) */}
+        {/* Card 2: Total Revenue (PO) */}
         <div className="bg-white rounded-xl border border-surface-200 p-5 hover:shadow-md hover:border-surface-300 transition-all duration-200">
           <div className="flex items-start justify-between mb-4">
             <div className="w-10 h-10 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center">
@@ -214,7 +214,7 @@ export default function Dashboard() {
             </div>
           </div>
           <div className="text-2xl font-extrabold text-surface-900 mb-1">{formatCurrencyShort(totalRevenue)}</div>
-          <div className="text-sm text-surface-500 mb-2">Total Revenue (Approved)</div>
+          <div className="text-sm text-surface-500 mb-2">Total Revenue (PO)</div>
           <div className="text-xs font-medium text-emerald-600">Nilai deal disetujui</div>
         </div>
 
@@ -253,7 +253,7 @@ export default function Dashboard() {
             <h2 className="text-sm font-bold text-surface-800">Revenue Quotation (6 Bulan Terakhir)</h2>
             <div className="flex items-center gap-4 text-xs text-surface-500">
               <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-brand-500/20"></span>Total Revenue</span>
-              <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-brand-500"></span>Approved</span>
+              <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-brand-500"></span>PO</span>
             </div>
           </div>
 
@@ -274,7 +274,7 @@ export default function Dashboard() {
                       <div
                         className="w-5 rounded-t-md bg-brand-500 transition-all duration-500 hover:bg-brand-600 cursor-pointer"
                         style={{ height: `${approvedH}px` }}
-                        title={`Approved: ${m.approved} Penawaran`}
+                        title={`PO: ${m.approved} Penawaran`}
                       ></div>
                     </div>
                     <div className="text-xs text-surface-500 font-medium">{m.month}</div>

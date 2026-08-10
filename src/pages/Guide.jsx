@@ -30,7 +30,7 @@ export default function Guide() {
         'Tambahkan item produk, tentukan kuantitas (QTY) dan diskon jika ada.',
         'Tentukan Term of Payment (TOP), Garansi, dan tanggal berlaku (Expired Date).',
         'Pilih Rekening Bank pembayar yang akan dicantumkan di penawaran.',
-        'Simpan sebagai Draft atau langsung ubah ke status Sent/Approved.',
+        'Simpan sebagai Draft atau langsung ubah ke status Sent/PO.',
         'Klik ikon Print/PDF untuk mengunduh penawaran resmi berformat PDF.'
       ]
     },
@@ -92,7 +92,7 @@ export default function Guide() {
       steps: [
         'Akses menu Reports -> Manager View di Sidebar.',
         'Gunakan filter Sales di pojok kanan atas untuk melihat penawaran dari sales tertentu.',
-        'Gunakan tab status (Draft, Sent, Approved, Rejected, Expired) untuk memfilter progres penawaran.',
+        'Gunakan tab status (Draft, Sent, PO, Rejected, Expired) untuk memfilter progres penawaran.',
         'Pantau total potensi revenue dan quotation yang membutuhkan persetujuan.'
       ]
     }

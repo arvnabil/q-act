@@ -16,7 +16,7 @@ const STATUS_TABS = [
   { key: 'all',      label: 'Semua'    },
   { key: 'draft',    label: 'Draft'    },
   { key: 'sent',     label: 'Sent'     },
-  { key: 'approved', label: 'Approved' },
+  { key: 'approved', label: 'PO'       },
   { key: 'rejected', label: 'Rejected' },
   { key: 'expired',  label: 'Expired'  },
   { key: 'trash',    label: '🗑️ Trash / Terhapus' },
@@ -164,12 +164,12 @@ export default function Manager() {
         </div>
 
         <div className="bg-white rounded-xl border border-surface-200 p-4 shadow-sm">
-          <span className="text-[11px] font-bold text-surface-400 uppercase tracking-wider block mb-1">Total Revenue Approved</span>
+          <span className="text-[11px] font-bold text-surface-400 uppercase tracking-wider block mb-1">Total Revenue PO</span>
           <div className="text-2xl font-extrabold text-emerald-600">{formatCurrency(stats.revenue)}</div>
         </div>
 
         <div className="bg-white rounded-xl border border-surface-200 p-4 shadow-sm">
-          <span className="text-[11px] font-bold text-surface-400 uppercase tracking-wider block mb-1">Quotation Approved</span>
+          <span className="text-[11px] font-bold text-surface-400 uppercase tracking-wider block mb-1">Quotation PO</span>
           <div className="text-2xl font-extrabold text-blue-600">{stats.approved}</div>
         </div>
 

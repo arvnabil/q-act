@@ -9,7 +9,7 @@ import {
 export { QUOTATIONS, CUSTOMERS, SALES_TEAM, BRANDS, PRODUCTS, COMPANY, MONTHLY_REVENUE, formatCurrency, formatCurrencyShort, formatDate, calcQuotationTotal, calcGrandTotal, daysUntil };
 
 export function statusLabel(s) {
-  const map = { draft: 'Draft', sent: 'Sent', approved: 'Approved', rejected: 'Rejected', expired: 'Expired', pending: 'Pending' };
+  const map = { draft: 'Draft', sent: 'Sent', approved: 'PO', rejected: 'Rejected', expired: 'Expired', pending: 'Pending' };
   return map[s] || s;
 }
 

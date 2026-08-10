@@ -476,7 +476,7 @@ export default function QuotationEdit({ quotation, onBack, onSaved }) {
             >
               <option value="draft">Draft</option>
               <option value="sent">Sent</option>
-              <option value="approved">Approved</option>
+              <option value="approved">PO</option>
               <option value="rejected">Rejected</option>
               <option value="expired">Expired</option>
             </select>

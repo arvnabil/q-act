@@ -88,7 +88,7 @@ export default function Login() {
                     <span className="text-sm">📊</span>
                     <span className="text-xs font-semibold text-brand-100">Monitoring Status Real-Time</span>
                   </div>
-                  <span className="text-[11px] font-bold bg-white/10 px-2.5 py-1 rounded text-white">Sent / Approved / Expired</span>
+                  <span className="text-[11px] font-bold bg-white/10 px-2.5 py-1 rounded text-white">Sent / PO / Expired</span>
                 </div>
                 <div className="flex justify-between items-center bg-white/5 px-4 py-2.5 rounded-xl border border-white/5 hover:bg-white/10 transition-colors">
                   <div className="flex items-center gap-2">

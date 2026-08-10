@@ -86,7 +86,7 @@ export default function Analytics() {
   const funnel = [
     { label: 'Total Dibuat', count: totalQ, pct: 100, color: 'bg-blue-600' },
     { label: 'Dikirim ke Customer', count: totalSentOrApproved, pct: sentPct, color: 'bg-purple-600' },
-    { label: 'Approved', count: approved.length, pct: convRate, color: 'bg-emerald-500' },
+    { label: 'PO', count: approved.length, pct: convRate, color: 'bg-emerald-500' },
   ];
 
   // 4. Dynamic Brand Performance
@@ -209,7 +209,7 @@ export default function Analytics() {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
         
         <div className="bg-white rounded-xl border border-surface-200 p-4 shadow-sm">
-          <span className="text-[11px] font-bold text-surface-400 uppercase tracking-wider block mb-1">Total Approved</span>
+          <span className="text-[11px] font-bold text-surface-400 uppercase tracking-wider block mb-1">Total PO</span>
           <div className="text-xl font-extrabold text-emerald-600 mb-1">{formatCurrencyShort(totalRevenue)}</div>
           <span className="text-[10px] text-surface-400 font-medium">Disetujui pelanggan</span>
         </div>
@@ -329,7 +329,7 @@ export default function Analytics() {
                   </div>
                   <div className="col-span-2 pt-2 border-t border-surface-100 mt-1">
                     <div className="text-sm font-bold text-surface-900">{formatCurrencyShort(b.revenue)}</div>
-                    <div className="text-[10px] text-surface-400">Revenue (Approved)</div>
+                    <div className="text-[10px] text-surface-400">Revenue (PO)</div>
                   </div>
                 </div>
               </div>
@@ -351,7 +351,7 @@ export default function Analytics() {
                 <th className="py-3 px-4 text-center w-12">#</th>
                 <th className="py-3 px-4">Sales</th>
                 <th className="py-3 px-4 text-center">Quotation</th>
-                <th className="py-3 px-4 text-center">Approved</th>
+                <th className="py-3 px-4 text-center">PO</th>
                 <th className="py-3 px-4 text-center">Conv. Rate</th>
                 <th className="py-3 px-4 text-right">Revenue</th>
                 <th className="py-3 px-4 min-w-[160px]">Target</th>

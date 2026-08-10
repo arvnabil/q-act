@@ -20,7 +20,7 @@ const STATUS_TABS = [
   { key: 'all',      label: 'Semua'    },
   { key: 'draft',    label: 'Draft'    },
   { key: 'sent',     label: 'Sent'     },
-  { key: 'approved', label: 'Approved' },
+  { key: 'approved', label: 'PO'       },
   { key: 'rejected', label: 'Rejected' },
   { key: 'expired',  label: 'Expired'  },
 ];
@@ -36,7 +36,10 @@ const statusClasses = (status) => {
   }
 };
 
-const statusLabel = (s) => s ? s.charAt(0).toUpperCase() + s.slice(1) : '-';
+const statusLabel = (s) => {
+  if (s === 'approved') return 'PO';
+  return s ? s.charAt(0).toUpperCase() + s.slice(1) : '-';
+};
 
 const formatCurrency = (val) =>
   new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(val || 0);
