@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { NavLink, Link } from 'react-router-dom';
 import useAuthStore from '../store/authStore';
 import usePermissionsStore from '../store/permissionsStore';
-import { LayoutDashboard, FileText, Users, Box, Settings, LogOut, ChevronRight, ChevronDown, BarChart2, ShieldCheck, UserCog } from 'lucide-react';
+import { LayoutDashboard, FileText, Users, Box, Settings, LogOut, ChevronRight, ChevronDown, BarChart2, ShieldCheck, UserCog, Building2 } from 'lucide-react';
 import { useQuotations, useQuotationsByUser } from '../hooks/useSupabase.js';
 
 export default function Sidebar({ mobileOpen, setMobileOpen }) {
@@ -205,6 +205,18 @@ export default function Sidebar({ mobileOpen, setMobileOpen }) {
                         <>
                           <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${isActive ? 'bg-brand-500' : 'bg-surface-300'}`}></span>
                           <span>Roles</span>
+                        </>
+                      )}
+                    </NavLink>
+                    <NavLink
+                      to="/business-units"
+                      className={({ isActive }) => `flex items-center gap-2 pl-3 pr-3 py-2 rounded-lg text-xs font-semibold transition-all ${isActive ? 'text-brand-700 bg-brand-50/50' : 'text-surface-400 hover:bg-surface-50 hover:text-surface-700'}`}
+                      onClick={() => setMobileOpen(false)}
+                    >
+                      {({ isActive }) => (
+                        <>
+                          <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${isActive ? 'bg-brand-500' : 'bg-surface-300'}`}></span>
+                          <span>Business Units</span>
                         </>
                       )}
                     </NavLink>

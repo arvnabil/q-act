@@ -216,3 +216,90 @@ export function useUpdateMaintenanceMode() {
   });
 }
 
+// ============================================
+// BUSINESS UNITS
+// ============================================
+
+export function useBusinessUnits() {
+  return useQuery({
+    queryKey: ['business_units'],
+    queryFn: api.getBusinessUnits,
+  });
+}
+
+export function useUserBU(userId) {
+  return useQuery({
+    queryKey: ['user_bu', userId],
+    queryFn: () => api.getUserBU(userId),
+    enabled: !!userId,
+  });
+}
+
+export function useCreateBusinessUnit() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (buData) => api.createBusinessUnit(buData),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['business_units'] });
+    },
+  });
+}
+
+export function useUpdateBusinessUnit() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, data }) => api.updateBusinessUnit(id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['business_units'] });
+    },
+  });
+}
+
+export function useDeleteBusinessUnit() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id) => api.deleteBusinessUnit(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['business_units'] });
+    },
+  });
+}
+
+export function useAddBUMember() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ buId, userId, roleInBu }) => api.addBUMember(buId, userId, roleInBu),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['business_units'] });
+      queryClient.invalidateQueries({ queryKey: ['user_bu'] });
+      queryClient.invalidateQueries({ queryKey: ['sales_users'] });
+    },
+  });
+}
+
+export function useRemoveBUMember() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ buId, userId }) => api.removeBUMember(buId, userId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['business_units'] });
+      queryClient.invalidateQueries({ queryKey: ['user_bu'] });
+      queryClient.invalidateQueries({ queryKey: ['sales_users'] });
+    },
+  });
+}
+
+export function useUsersWithoutBU() {
+  return useQuery({
+    queryKey: ['users_without_bu'],
+    queryFn: api.getUsersWithoutBU,
+  });
+}
+
+export function useQuotationsByBU(buId) {
+  return useQuery({
+    queryKey: ['quotations_by_bu', buId],
+    queryFn: () => api.getQuotationsByBU(buId),
+    enabled: !!buId,
+  });
+}

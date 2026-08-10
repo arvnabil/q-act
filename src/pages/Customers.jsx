@@ -121,7 +121,7 @@ export default function Customers() {
     ['admin', 'Administrator', 'Sales Manager', 'Manager'].includes(user.role);
 
   const filtered = customers?.filter(c => {
-    // Role filtering: non-manager/admin only sees customers associated with them (creator, PIC sales, or quotation sales)
+    // Role filtering: non-manager/admin only sees customers associated with them (creator, PIC sales, quotation sales, or same BU)
     if (!isManagerOrAdmin && user?.id) {
       const isCreator = c.created_by === user.id || c.sales_id === user.id;
       const isPicSales = c.pics?.some(p => 
@@ -135,8 +135,9 @@ export default function Customers() {
         q.created_by === user.id || 
         (user.email && q.creator?.email === user.email)
       );
+      const isSameBU = user?.bu?.id && (c.bu_id === user.bu.id || c.quotations?.some(q => q.bu_id === user.bu.id));
       
-      if (!isCreator && !isPicSales && !isQuotationSales) {
+      if (!isCreator && !isPicSales && !isQuotationSales && !isSameBU) {
         return false;
       }
     }

@@ -51,11 +51,17 @@ export default function QuotationModal({ isOpen, onClose, onCreated }) {
   // Quotation info state
   const [salesName, setSalesName]   = useState('');
   const [expiryDays, setExpiryDays] = useState(7);
+  const [prefixType, setPrefixType] = useState('bu'); // 'bu' | 'personal'
 
   // Sync salesName with logged in user when modal opens or user loads
   useEffect(() => {
     if (user) {
       setSalesName(user.name || user.email || '');
+      if (user.bu?.code) {
+        setPrefixType('bu');
+      } else {
+        setPrefixType('personal');
+      }
     }
   }, [user, isOpen]);
 
@@ -157,15 +163,33 @@ export default function QuotationModal({ isOpen, onClose, onCreated }) {
 
       // 2. If mode === 'new', create customer and pics in Supabase
       if (mode === 'new') {
-        const customerData = { name: newCompanyName.trim() };
-        const picData = newPics
-          .filter(p => p.name.trim())
-          .map((p, idx) => ({
-            name: p.name.trim(),
-            phone: p.phone.trim() || null,
-            email: p.email.trim() || null,
-            is_primary: idx === 0,
-          }));
+        if (!newCompanyName.trim()) {
+          toast.error('Nama PT / Perusahaan wajib diisi.');
+          setIsSubmitting(false);
+          return;
+        }
+        const validPics = newPics.filter(p => p.name.trim());
+        if (validPics.length === 0) {
+          toast.error('Minimal 1 data PIC wajib diisi (nama tidak boleh kosong).');
+          setIsSubmitting(false);
+          return;
+        }
+
+        const customerData = {
+          name: newCompanyName.trim(),
+          sales_id: user?.id || null,
+          created_by: user?.id || null,
+          bu_id: user?.bu?.id || null,
+        };
+
+        const picData = validPics.map((p, idx) => ({
+          name: p.name.trim(),
+          phone: p.phone.trim() || null,
+          email: p.email.trim() || null,
+          is_primary: idx === 0,
+          sales_id: user?.id || null,
+          created_by: user?.id || null,
+        }));
 
         const newCustomer = await api.createCustomer(customerData, picData);
         customerId = newCustomer.id;
@@ -184,12 +208,18 @@ export default function QuotationModal({ isOpen, onClose, onCreated }) {
       const dateStr = now.toISOString().slice(0, 10);
       const expiredStr = expiredDate.toISOString().slice(0, 10);
 
+      // Determine quotation prefix: BU code (default if available) or personal sales code
+      const chosenPrefixCode = (prefixType === 'bu' && user?.bu?.code)
+        ? user.bu.code
+        : (user?.sales_code || user?.bu?.code || 'QO5');
+
       // 3. Create Quotation in Supabase
       const quotationData = {
         customer_id: customerId,
         pic_id: picId ? Number(picId) : null,
         sales_id: user?.id || null,
-        sales_code: user?.sales_code || null,
+        sales_code: chosenPrefixCode,
+        bu_id: user?.bu?.id || null,
         status: 'draft',
         date: dateStr,
         expired: expiredStr,
@@ -466,6 +496,39 @@ export default function QuotationModal({ isOpen, onClose, onCreated }) {
                 />
               </div>
             </div>
+
+            {/* Prefix Selection if user has BU */}
+            {user?.bu?.code && (
+              <div className="mt-3 bg-brand-50/60 rounded-xl p-3 border border-brand-100 flex flex-col gap-1.5">
+                <label className="text-xs font-bold text-brand-800 uppercase tracking-wider">Prefix Nomor Quotation</label>
+                <div className="flex items-center gap-4">
+                  <label className="flex items-center gap-2 text-xs font-medium text-surface-700 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="prefixType"
+                      value="bu"
+                      checked={prefixType === 'bu'}
+                      onChange={() => setPrefixType('bu')}
+                      className="accent-brand-500"
+                    />
+                    <span>Kode BU: <strong className="font-mono text-brand-700">{user.bu.code}</strong> ({user.bu.name})</span>
+                  </label>
+                  {user.sales_code && (
+                    <label className="flex items-center gap-2 text-xs font-medium text-surface-700 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="prefixType"
+                        value="personal"
+                        checked={prefixType === 'personal'}
+                        onChange={() => setPrefixType('personal')}
+                        className="accent-brand-500"
+                      />
+                      <span>Kode Sales: <strong className="font-mono text-surface-800">{user.sales_code}</strong></span>
+                    </label>
+                  )}
+                </div>
+              </div>
+            )}
             <p className="text-xs text-surface-400 mt-3 flex items-center gap-1">
               <Info className="w-3.5 h-3.5 text-brand-500 shrink-0" />
               Produk, harga, dan syarat & ketentuan diisi di halaman berikutnya.

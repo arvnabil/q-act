@@ -735,3 +735,224 @@ export async function setMaintenanceMode(settings) {
   return data.value;
 }
 
+
+// ============================================
+// BUSINESS UNITS (BU)
+// ============================================
+
+/** Ambil semua Business Units beserta jumlah anggota */
+export async function getBusinessUnits() {
+  try {
+    const { data, error } = await supabase
+      .from('business_units')
+      .select(`
+        *,
+        members:business_unit_members(
+          id,
+          user_id,
+          role_in_bu,
+          joined_at,
+          user:users(id, name, email, role, sales_code)
+        )
+      `)
+      .order('name');
+
+    if (error) throw error;
+    return data || [];
+  } catch (err) {
+    console.error('getBusinessUnits error:', err);
+    return [];
+  }
+}
+
+/** Ambil satu BU berdasarkan ID */
+export async function getBusinessUnitById(buId) {
+  const { data, error } = await supabase
+    .from('business_units')
+    .select(`
+      *,
+      members:business_unit_members(
+        id,
+        user_id,
+        role_in_bu,
+        joined_at,
+        user:users(id, name, email, role, sales_code)
+      )
+    `)
+    .eq('id', buId)
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
+/** Ambil BU dari user yang sedang login (1 user = 1 BU) */
+export async function getUserBU(userId) {
+  try {
+    const { data, error } = await supabase
+      .from('business_unit_members')
+      .select(`
+        role_in_bu,
+        joined_at,
+        business_unit:business_units(*)
+      `)
+      .eq('user_id', userId)
+      .maybeSingle();
+
+    if (error) {
+      console.warn('getUserBU error:', error);
+      return null;
+    }
+    if (!data) return null;
+
+    return {
+      ...data.business_unit,
+      role_in_bu: data.role_in_bu,
+    };
+  } catch (err) {
+    console.error('getUserBU exception:', err);
+    return null;
+  }
+}
+
+/** Buat Business Unit baru */
+export async function createBusinessUnit({ name, code, color, description }) {
+  const { data, error } = await supabase
+    .from('business_units')
+    .insert([{
+      name: name.trim(),
+      code: code.trim().toUpperCase(),
+      color: color || '#6366f1',
+      description: description?.trim() || null,
+      is_active: true,
+    }])
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
+/** Update Business Unit */
+export async function updateBusinessUnit(buId, { name, code, color, description, is_active }) {
+  const updatePayload = {};
+  if (name !== undefined)        updatePayload.name        = name.trim();
+  if (code !== undefined)        updatePayload.code        = code.trim().toUpperCase();
+  if (color !== undefined)       updatePayload.color       = color;
+  if (description !== undefined) updatePayload.description = description?.trim() || null;
+  if (is_active !== undefined)   updatePayload.is_active   = is_active;
+  updatePayload.updated_at = new Date().toISOString();
+
+  const { data, error } = await supabase
+    .from('business_units')
+    .update(updatePayload)
+    .eq('id', buId)
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
+/** Hapus Business Unit */
+export async function deleteBusinessUnit(buId) {
+  const { error } = await supabase
+    .from('business_units')
+    .delete()
+    .eq('id', buId);
+
+  if (error) throw error;
+  return true;
+}
+
+/** Tambah anggota ke BU (hapus dari BU lama dulu karena 1 user = 1 BU) */
+export async function addBUMember(buId, userId, roleInBu = 'member') {
+  // Hapus dari BU lama dulu jika ada
+  await supabase
+    .from('business_unit_members')
+    .delete()
+    .eq('user_id', userId);
+
+  // Insert ke BU baru
+  const { data, error } = await supabase
+    .from('business_unit_members')
+    .insert([{ business_unit_id: buId, user_id: userId, role_in_bu: roleInBu }])
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
+/** Hapus anggota dari BU */
+export async function removeBUMember(buId, userId) {
+  const { error } = await supabase
+    .from('business_unit_members')
+    .delete()
+    .eq('business_unit_id', buId)
+    .eq('user_id', userId);
+
+  if (error) throw error;
+  return true;
+}
+
+/** Ambil semua user yang belum masuk BU manapun */
+export async function getUsersWithoutBU() {
+  try {
+    // Ambil semua user_id yang sudah punya BU
+    const { data: memberData } = await supabase
+      .from('business_unit_members')
+      .select('user_id');
+
+    const assignedUserIds = (memberData || []).map(m => m.user_id);
+
+    // Ambil users yang tidak ada di list tersebut
+    let query = supabase.from('users').select('id, name, email, role, sales_code').order('name');
+    if (assignedUserIds.length > 0) {
+      query = query.not('id', 'in', `(${assignedUserIds.join(',')})`);
+    }
+
+    const { data, error } = await query;
+    if (error) throw error;
+    return data || [];
+  } catch (err) {
+    console.error('getUsersWithoutBU error:', err);
+    return [];
+  }
+}
+
+/** Ambil quotations berdasarkan BU ID (untuk filter per BU di Manager/Admin) */
+export async function getQuotationsByBU(buId) {
+  try {
+    // Ambil semua user_id yang ada di BU ini
+    const { data: members } = await supabase
+      .from('business_unit_members')
+      .select('user_id')
+      .eq('business_unit_id', buId);
+
+    const memberIds = (members || []).map(m => m.user_id);
+    if (memberIds.length === 0) return [];
+
+    const { data: quotations, error } = await supabase
+      .from('quotations')
+      .select(`
+        *,
+        customer:customers(*, pics:customer_pics(*)),
+        pic:customer_pics(name, phone, email),
+        items:quotation_items(
+          *,
+          product:products(sku, name, image_url, description, brand:brands(name, color_hex))
+        )
+      `)
+      .in('sales_id', memberIds)
+      .eq('is_deleted', false)
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+    return quotations || [];
+  } catch (err) {
+    console.error('getQuotationsByBU error:', err);
+    return [];
+  }
+}
+

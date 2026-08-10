@@ -15,9 +15,14 @@ export default function Dashboard() {
 
   const isManagerOrAdmin = !user || ['admin', 'Administrator', 'Sales Manager', 'Manager'].includes(user.role);
 
-  // Filter personal quotations for logged in sales
+  // Filter personal & BU quotations for logged in sales/presales
   const quotations = !isManagerOrAdmin && user
-    ? allQuotations.filter(q => q.created_by === user.id || q.sales_id === user.id || q.creator?.email === user.email)
+    ? allQuotations.filter(q => 
+        q.created_by === user.id || 
+        q.sales_id === user.id || 
+        q.creator?.email === user.email ||
+        (user.bu?.id && (q.bu_id === user.bu.id || q.creator?.bu_id === user.bu.id))
+      )
     : allQuotations;
 
   const formatCurrencyShort = (val) => {

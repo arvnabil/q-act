@@ -72,10 +72,12 @@ export default function Quotations() {
   const queryClient = useQueryClient();
   const isManager = ['admin', 'Administrator', 'Sales Manager', 'Manager'].includes(user?.role);
 
-  // Fetch quotations from Supabase
+  // Fetch quotations from Supabase: Admin/Manager gets all, BU members get BU quotations, others get own quotations
   const allQuery  = useQuotations();
   const mineQuery = useQuotationsByUser(user?.id);
-  const { data: quotations, isLoading, isError } = isManager ? allQuery : mineQuery;
+  const buQuery   = useQuotationsByBU(user?.bu?.id);
+  const activeQuery = isManager ? allQuery : (user?.bu?.id ? buQuery : mineQuery);
+  const { data: quotations, isLoading, isError } = activeQuery;
 
   // Reset page & selection on filter change
   useEffect(() => { setPage(1); setSelectedIds([]); }, [search, filterStatus]);

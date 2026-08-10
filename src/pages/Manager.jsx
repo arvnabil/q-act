@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Search, Eye, Download, Trash2, Loader2, FileText, Users, ShieldCheck, RefreshCw, AlertTriangle } from 'lucide-react';
 import { format, parseISO, isValid } from 'date-fns';
 import { id as idLocale } from 'date-fns/locale';
-import { useQuotations, useSalesUsers, useTrashQuotations } from '../hooks/useSupabase.js';
+import { useQuotations, useSalesUsers, useTrashQuotations, useBusinessUnits } from '../hooks/useSupabase.js';
 import { restoreQuotation, hardDeleteQuotation } from '../services/api.js';
 import useAuthStore from '../store/authStore.js';
 import Pagination from '../components/Pagination.jsx';
@@ -56,6 +56,7 @@ export default function Manager() {
 
   const [filterStatus, setFilterStatus] = useState('all');
   const [filterSales, setFilterSales]   = useState('all');
+  const [filterBU, setFilterBU]         = useState('all');
   const [search, setSearch]             = useState('');
   const [page, setPage]                 = useState(1);
   const [actionLoadingId, setActionLoadingId] = useState(null);
@@ -63,12 +64,13 @@ export default function Manager() {
   const { data: activeQuotations = [], isLoading: loadingActive } = useQuotations();
   const { data: trashQuotations = [], isLoading: loadingTrash }   = useTrashQuotations();
   const { data: salesUsers } = useSalesUsers();
+  const { data: businessUnits = [] } = useBusinessUnits();
 
   const isTrashTab = filterStatus === 'trash';
   const quotations = isTrashTab ? trashQuotations : activeQuotations;
   const isLoading = isTrashTab ? loadingTrash : loadingActive;
 
-  useEffect(() => { setPage(1); }, [search, filterStatus, filterSales]);
+  useEffect(() => { setPage(1); }, [search, filterStatus, filterSales, filterBU]);
 
   const calcGrandTotal = (q) => {
     if (q.grand_total != null && q.grand_total > 0) return q.grand_total;
@@ -79,11 +81,14 @@ export default function Manager() {
     if (key === 'trash') return trashQuotations.length;
     let base = activeQuotations;
     if (filterSales !== 'all') base = base.filter(q => (q.sales_id || q.created_by) === filterSales);
+    if (filterBU !== 'all') base = base.filter(q => q.bu_id === filterBU || q.creator?.bu_id === filterBU);
     return key === 'all' ? base.length : base.filter(q => q.status === key).length;
   };
 
   const summaryStats = () => {
-    let base = filterSales !== 'all' ? activeQuotations.filter(q => (q.sales_id || q.created_by) === filterSales) : activeQuotations;
+    let base = activeQuotations;
+    if (filterSales !== 'all') base = base.filter(q => (q.sales_id || q.created_by) === filterSales);
+    if (filterBU !== 'all') base = base.filter(q => q.bu_id === filterBU || q.creator?.bu_id === filterBU);
     return {
       total:    base.length,
       approved: base.filter(q => q.status === 'approved').length,
@@ -97,6 +102,7 @@ export default function Manager() {
   const filtered = quotations?.filter(q => {
     if (!isTrashTab && filterStatus !== 'all' && q.status !== filterStatus) return false;
     if (filterSales !== 'all' && (q.sales_id || q.created_by) !== filterSales) return false;
+    if (filterBU !== 'all' && q.bu_id !== filterBU && q.creator?.bu_id !== filterBU) return false;
     if (!search) return true;
     const s = search.toLowerCase();
     return (
@@ -223,18 +229,36 @@ export default function Manager() {
             />
           </div>
 
-          <div className="flex items-center gap-2 w-full sm:w-auto">
-            <span className="text-xs text-surface-500 font-semibold whitespace-nowrap">Filter Sales:</span>
-            <select
-              value={filterSales}
-              onChange={e => setFilterSales(e.target.value)}
-              className="px-3 py-2 bg-surface-50 border border-surface-200 rounded-lg text-xs font-medium text-surface-700 focus:outline-none focus:border-brand-500 transition-colors"
-            >
-              <option value="all">Semua Sales</option>
-              {salesUsers?.map(s => (
-                <option key={s.id} value={s.id}>{s.name}</option>
-              ))}
-            </select>
+          <div className="flex items-center gap-3 flex-wrap sm:flex-nowrap w-full sm:w-auto">
+            {businessUnits.length > 0 && (
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs text-surface-500 font-semibold whitespace-nowrap">BU:</span>
+                <select
+                  value={filterBU}
+                  onChange={e => setFilterBU(e.target.value)}
+                  className="px-3 py-2 bg-surface-50 border border-surface-200 rounded-lg text-xs font-medium text-surface-700 focus:outline-none focus:border-brand-500 transition-colors"
+                >
+                  <option value="all">Semua BU</option>
+                  {businessUnits.map(b => (
+                    <option key={b.id} value={b.id}>{b.name} ({b.code})</option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs text-surface-500 font-semibold whitespace-nowrap">Sales:</span>
+              <select
+                value={filterSales}
+                onChange={e => setFilterSales(e.target.value)}
+                className="px-3 py-2 bg-surface-50 border border-surface-200 rounded-lg text-xs font-medium text-surface-700 focus:outline-none focus:border-brand-500 transition-colors"
+              >
+                <option value="all">Semua Sales</option>
+                {salesUsers?.map(s => (
+                  <option key={s.id} value={s.id}>{s.name}</option>
+                ))}
+              </select>
+            </div>
           </div>
         </div>
 

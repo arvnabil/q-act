@@ -1,5 +1,27 @@
 import { create } from 'zustand';
 import { supabase } from '../services/supabase';
+import { getUserBU } from '../services/api';
+
+// Helper: load profile + BU for a given session
+async function loadUserProfile(session) {
+  const { data: profile } = await supabase
+    .from('users')
+    .select('*')
+    .eq('id', session.user.id)
+    .single();
+
+  const userProfile = profile || session.user;
+
+  // Load BU if user is Sales/Presales (not Admin/Manager who see all)
+  let bu = null;
+  try {
+    bu = await getUserBU(userProfile.id);
+  } catch (_) {
+    bu = null;
+  }
+
+  return { ...userProfile, bu };
+}
 
 const useAuthStore = create((set) => ({
   user: null,
@@ -15,13 +37,8 @@ const useAuthStore = create((set) => ({
       }
       
       if (session) {
-        const { data: profile } = await supabase
-          .from('users')
-          .select('*')
-          .eq('id', session.user.id)
-          .single();
-          
-        set({ session, user: profile || session.user, isLoading: false });
+        const userWithBU = await loadUserProfile(session);
+        set({ session, user: userWithBU, isLoading: false });
       } else {
         set({ session: null, user: null, isLoading: false });
       }
@@ -29,12 +46,8 @@ const useAuthStore = create((set) => ({
       // Listen for auth changes
       supabase.auth.onAuthStateChange(async (event, currentSession) => {
         if (currentSession) {
-          const { data: profile } = await supabase
-            .from('users')
-            .select('*')
-            .eq('id', currentSession.user.id)
-            .single();
-          set({ session: currentSession, user: profile || currentSession.user, isLoading: false });
+          const userWithBU = await loadUserProfile(currentSession);
+          set({ session: currentSession, user: userWithBU, isLoading: false });
         } else {
           set({ session: null, user: null, isLoading: false });
         }
@@ -44,6 +57,16 @@ const useAuthStore = create((set) => ({
       console.error('Error initializing auth:', error);
       set({ session: null, user: null, isLoading: false });
     }
+  },
+
+  /** Refresh BU data for the current user (panggil setelah user ditambah/hapus dari BU) */
+  refreshBU: async () => {
+    const state = useAuthStore.getState();
+    if (!state.user?.id) return;
+    try {
+      const bu = await getUserBU(state.user.id);
+      set((s) => ({ user: { ...s.user, bu } }));
+    } catch (_) {}
   },
   
   signOut: async () => {

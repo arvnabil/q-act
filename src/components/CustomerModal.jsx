@@ -100,6 +100,8 @@ export default function CustomerModal({ isOpen, onClose, customerToEdit = null }
       const customerData = {
         name: form.name.trim(),
         address: form.address.trim() || null,
+        created_by: currentUser?.id || null,
+        bu_id: currentUser?.bu?.id || null,
       };
 
       const picData = validPics.map((p, idx) => ({

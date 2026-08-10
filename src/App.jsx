@@ -13,6 +13,7 @@ import Dashboard from './pages/Dashboard.jsx';
 import Manager from './pages/Manager.jsx';
 import Users from './pages/Users.jsx';
 import Roles from './pages/Roles.jsx';
+import BusinessUnits from './pages/BusinessUnits.jsx';
 import Analytics from './pages/Analytics.jsx';
 import Guide from './pages/Guide.jsx';
 import Support from './pages/Support.jsx';
@@ -57,6 +58,7 @@ function App() {
           <Route path="profile" element={<Profile />} />
           <Route path="users" element={<Users />} />
           <Route path="roles" element={<Roles />} />
+          <Route path="business-units" element={<BusinessUnits />} />
         </Route>
         
         <Route path="*" element={<Navigate to="/" replace />} />
