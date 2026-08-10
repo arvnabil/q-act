@@ -543,18 +543,24 @@ export async function getSalesUsers() {
 }
 
 export async function createQuotation(quotationData, itemsData) {
-  // Format nomor quotation sesuai mockup: QO5.MMYY.XXX (misal: QO5.0826.036)
+  // Format nomor quotation sesuai sales_code pengguna: [SALES_CODE].MMYY.XXX (misal: Q05.0826.036 atau Q01.0826.123)
   const generateMockupQuoId = () => {
     const now = new Date();
     const mm = String(now.getMonth() + 1).padStart(2, '0');
     const yy = String(now.getFullYear()).slice(-2);
     const seq = String(Math.floor(100 + Math.random() * 900));
-    return `QO5.${mm}${yy}.${seq}`;
+    
+    // Ambil sales_code dari quotationData jika ada, atau fallback ke QO5
+    const prefix = quotationData.sales_code ? quotationData.sales_code.trim().toUpperCase() : 'QO5';
+    return `${prefix}.${mm}${yy}.${seq}`;
   };
+
+  // Hapus sales_code dari payload insert ke database jika kolomnya tidak ada di tabel quotations
+  const { sales_code, ...cleanQuotationPayload } = quotationData;
 
   const quoDataWithId = {
     id: quotationData.id || generateMockupQuoId(),
-    ...quotationData,
+    ...cleanQuotationPayload,
   };
 
   // 1. Insert Quotation

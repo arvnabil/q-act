@@ -189,6 +189,7 @@ export default function QuotationModal({ isOpen, onClose, onCreated }) {
         customer_id: customerId,
         pic_id: picId ? Number(picId) : null,
         sales_id: user?.id || null,
+        sales_code: user?.sales_code || null,
         status: 'draft',
         date: dateStr,
         expired: expiredStr,
