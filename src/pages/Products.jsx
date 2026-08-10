@@ -63,6 +63,8 @@ export default function Products() {
     return { backgroundColor: `${color}12`, color: color, border: `1px solid ${color}40` };
   };
 
+  const [selectedFile, setSelectedFile] = useState(null);
+
   const processFile = (file) => {
     if (!file) return;
     if (!file.type.startsWith('image/')) {
@@ -73,6 +75,7 @@ export default function Products() {
       toast.error('Ukuran gambar maksimal 2MB');
       return;
     }
+    setSelectedFile(file);
     const reader = new FileReader();
     reader.onload = (ev) => setImagePreview(ev.target.result);
     reader.readAsDataURL(file);
@@ -126,24 +129,22 @@ export default function Products() {
     let finalImageUrl = newProduct.image_url;
 
     try {
-      // If we selected a new file (imagePreview is a base64 string and not a regular url)
-      if (imagePreview && imagePreview.startsWith('data:image')) {
-        if (!newProduct.sku) throw new Error('Harap isi SKU terlebih dahulu sebelum mengunggah gambar');
-        
-        toast.loading('Menyimpan gambar ke lokal...', { id: 'upload' });
-        const ext = imagePreview.substring(imagePreview.indexOf('/') + 1, imagePreview.indexOf(';base64'));
-        const filename = `${newProduct.sku.toLowerCase()}-${Date.now()}.${ext}`;
-        
-        const res = await fetch('/api/upload-local', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ base64: imagePreview, filename })
-        });
-        
-        if (!res.ok) throw new Error('Gagal menyimpan gambar di server lokal');
-        const data = await res.json();
-        finalImageUrl = data.url; // e.g. /images/poly-x50-123.png
-        toast.success('Gambar berhasil disimpan!', { id: 'upload' });
+      // If a new file was selected, upload it to Supabase Storage (cloud hosting compatible)
+      if (selectedFile) {
+        toast.loading('Mengunggah gambar ke cloud storage...', { id: 'upload' });
+        try {
+          finalImageUrl = await api.uploadProductImage(selectedFile, newProduct.sku);
+          toast.success('Gambar berhasil diunggah!', { id: 'upload' });
+        } catch (storageErr) {
+          console.warn('Supabase storage fallback to data url:', storageErr);
+          // If storage bucket isn't setup yet, fallback to base64 preview or report clear error
+          if (imagePreview) {
+            finalImageUrl = imagePreview;
+            toast.success('Gambar disimpan (preview mode)', { id: 'upload' });
+          } else {
+            throw new Error('Gagal mengunggah gambar: ' + (storageErr.message || 'Storage bucket error'));
+          }
+        }
       }
 
       const payload = {

@@ -384,21 +384,30 @@ export async function deleteProducts(skus) {
 }
 
 
-export async function uploadProductImage(file, sku) {
-  const fileExt = file.name.split('.').pop();
-  const fileName = `${sku}-${Math.random()}.${fileExt}`;
-  
-  const { error: uploadError } = await supabase.storage
-    .from('products')
-    .upload(fileName, file);
-
-  if (uploadError) throw uploadError;
-
-  const { data } = supabase.storage
-    .from('products')
-    .getPublicUrl(fileName);
+export async function uploadProductImage(file, sku = 'prod') {
+  try {
+    const fileExt = (file.name || 'image.png').split('.').pop();
+    const cleanSku = (sku || 'prod').toLowerCase().replace(/[^a-z0-9_-]/g, '');
+    const fileName = `${cleanSku}-${Date.now()}.${fileExt}`;
     
-  return data.publicUrl;
+    const { data: uploadData, error: uploadError } = await supabase.storage
+      .from('products')
+      .upload(fileName, file, { upsert: true, cacheControl: '3600' });
+
+    if (uploadError) {
+      console.warn('Supabase Storage upload warning:', uploadError.message);
+      throw uploadError;
+    }
+
+    const { data } = supabase.storage
+      .from('products')
+      .getPublicUrl(fileName);
+      
+    return data.publicUrl;
+  } catch (err) {
+    console.error('uploadProductImage exception:', err);
+    throw err;
+  }
 }
 
 // ============================================
