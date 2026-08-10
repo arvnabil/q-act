@@ -3,7 +3,7 @@ import ReactDOM from 'react-dom';
 import { Search, Eye, Download, Trash2, Loader2, FileText, Plus, AlertTriangle } from 'lucide-react';
 import { format, parseISO, isValid } from 'date-fns';
 import { id as idLocale } from 'date-fns/locale';
-import { useQuotations, useQuotationsByUser } from '../hooks/useSupabase.js';
+import { useQuotations, useQuotationsByUser, useQuotationsByBU } from '../hooks/useSupabase.js';
 import useAuthStore from '../store/authStore.js';
 import Pagination from '../components/Pagination.jsx';
 import QuotationModal from '../components/QuotationModal.jsx';
