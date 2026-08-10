@@ -78,12 +78,15 @@ export async function getCustomers() {
   // Safely fetch quotations for calculating total spend per customer
   let quotationsMap = {};
   try {
-    const { data: qData } = await supabase
+    const { data: qData, error: qErr } = await supabase
       .from('quotations')
-      .select('id, customer_id, status, sales_id, created_by, items:quotation_items(qty, price)');
+      .select('id, customer_id, status, sales_id, is_deleted, items:quotation_items(qty, price)');
       
-    if (qData) {
+    if (qErr) {
+      console.warn('Error fetching quotations for customer mapping:', qErr);
+    } else if (qData) {
       qData.forEach(q => {
+        if (q.is_deleted || q.status === 'deleted') return;
         const cId = q.customer_id;
         if (!cId) return;
         if (!quotationsMap[cId]) quotationsMap[cId] = [];
