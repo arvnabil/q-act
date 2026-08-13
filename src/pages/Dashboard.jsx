@@ -47,7 +47,7 @@ export default function Dashboard() {
   
   const totalRevenue = approvedQ.reduce((sum, q) => sum + calcQGrand(q), 0);
   const conversionRate = totalQ > 0 ? Math.round((approvedCount / totalQ) * 100) : 0;
-  const pendingCount = quotations.filter(q => q.status === 'sent' || q.status === 'draft').length;
+  const pendingCount = quotations.filter(q => q.status === 'sent' || q.status === 'created' || q.status === 'draft').length;
 
   // 2. Dynamic 6 Months Revenue Calculation
   const now = new Date();
@@ -85,7 +85,7 @@ export default function Dashboard() {
   const statusCounts = {
     approved: quotations.filter(q => q.status === 'approved').length,
     sent: quotations.filter(q => q.status === 'sent').length,
-    draft: quotations.filter(q => q.status === 'draft').length,
+    created: quotations.filter(q => q.status === 'created' || q.status === 'draft').length,
     rejected: quotations.filter(q => q.status === 'rejected').length,
     expired: quotations.filter(q => q.status === 'expired').length,
   };
@@ -93,7 +93,7 @@ export default function Dashboard() {
   const statusConfigs = [
     { key: 'approved', label: 'PO', color: '#059669', bg: 'bg-emerald-500' },
     { key: 'sent', label: 'Sent', color: '#2563EB', bg: 'bg-blue-500' },
-    { key: 'draft', label: 'Draft', color: '#9CA3AF', bg: 'bg-gray-400' },
+    { key: 'created', label: 'Created', color: '#9CA3AF', bg: 'bg-gray-400' },
     { key: 'rejected', label: 'Rejected', color: '#DC2626', bg: 'bg-red-500' },
     { key: 'expired', label: 'Expired', color: '#D97706', bg: 'bg-amber-500' },
   ];
@@ -243,7 +243,7 @@ export default function Dashboard() {
             </div>
           </div>
           <div className="text-2xl font-extrabold text-surface-900 mb-1">{pendingCount}</div>
-          <div className="text-sm text-surface-500 mb-2">Pending / Draft</div>
+          <div className="text-sm text-surface-500 mb-2">Pending / Created</div>
           <div className="text-xs font-medium text-surface-500">Dalam proses</div>
         </div>
 

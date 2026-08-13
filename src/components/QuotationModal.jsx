@@ -178,7 +178,6 @@ export default function QuotationModal({ isOpen, onClose, onCreated }) {
         const customerData = {
           name: newCompanyName.trim(),
           sales_id: user?.id || null,
-          created_by: user?.id || null,
           bu_id: user?.bu?.id || null,
         };
 
@@ -188,7 +187,6 @@ export default function QuotationModal({ isOpen, onClose, onCreated }) {
           email: p.email.trim() || null,
           is_primary: idx === 0,
           sales_id: user?.id || null,
-          created_by: user?.id || null,
         }));
 
         const newCustomer = await api.createCustomer(customerData, picData);
@@ -220,7 +218,7 @@ export default function QuotationModal({ isOpen, onClose, onCreated }) {
         sales_id: user?.id || null,
         sales_code: chosenPrefixCode,
         bu_id: user?.bu?.id || null,
-        status: 'draft',
+        status: 'created',
         date: dateStr,
         expired: expiredStr,
       };

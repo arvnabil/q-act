@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import ReactDOM from 'react-dom';
 import { Plus, Edit, Trash2, Users, Loader2, X, Building2, UserPlus, UserMinus, ChevronDown, ChevronUp, Shield, CheckCircle2 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import {
@@ -416,9 +417,9 @@ export default function BusinessUnitsPage() {
       )}
 
       {/* ===== MODAL: Create BU ===== */}
-      {showCreate && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
+      {showCreate && ReactDOM.createPortal(
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-surface-900/40 backdrop-blur-sm animate-fade-in overflow-y-auto">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md my-auto animate-scale-in">
             <div className="flex items-center justify-between p-5 border-b border-surface-100">
               <h2 className="text-base font-bold text-surface-900 flex items-center gap-2">
                 <Building2 className="w-5 h-5 text-brand-500" /> Buat Business Unit Baru
@@ -484,13 +485,14 @@ export default function BusinessUnitsPage() {
               </div>
             </form>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* ===== MODAL: Edit BU ===== */}
-      {editingBU && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
+      {editingBU && ReactDOM.createPortal(
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-surface-900/40 backdrop-blur-sm animate-fade-in overflow-y-auto">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md my-auto animate-scale-in">
             <div className="flex items-center justify-between p-5 border-b border-surface-100">
               <h2 className="text-base font-bold text-surface-900 flex items-center gap-2">
                 <Edit className="w-5 h-5 text-brand-500" /> Edit BU
@@ -557,13 +559,14 @@ export default function BusinessUnitsPage() {
               </div>
             </form>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* ===== MODAL: Delete Confirm ===== */}
-      {deletingBU && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 text-center">
+      {deletingBU && ReactDOM.createPortal(
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-surface-900/40 backdrop-blur-sm animate-fade-in overflow-y-auto">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 text-center my-auto animate-scale-in">
             <div className="w-12 h-12 rounded-2xl bg-red-100 flex items-center justify-center mx-auto mb-4">
               <Trash2 className="w-6 h-6 text-red-600" />
             </div>
@@ -583,7 +586,8 @@ export default function BusinessUnitsPage() {
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

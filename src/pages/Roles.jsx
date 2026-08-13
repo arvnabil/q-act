@@ -29,27 +29,31 @@ export default function RolesPage() {
   const [localState, setLocalState] = useState({});
   const [isSaving, setIsSaving] = useState(false);
 
+  const rolesList = ['Administrator', 'Manager', 'Sales', 'Presales', 'Finance'];
+
   useEffect(() => {
+    const state = {};
+    rolesList.forEach(r => { state[r] = {}; });
     if (rolePermissions) {
-      const state = {};
       rolePermissions.forEach(item => {
         state[item.role] = item.permissions || {};
       });
-      setLocalState(state);
     }
+    setLocalState(state);
   }, [rolePermissions]);
 
   const handleToggle = (role, featureId) => {
-    setLocalState(prev => ({
-      ...prev,
-      [role]: {
-        ...prev[role],
-        [featureId]: !prev[role][featureId]
-      }
-    }));
+    setLocalState(prev => {
+      const currentRolePerms = prev[role] || {};
+      return {
+        ...prev,
+        [role]: {
+          ...currentRolePerms,
+          [featureId]: !currentRolePerms[featureId]
+        }
+      };
+    });
   };
-
-  const rolesList = ['Administrator', 'Manager', 'Sales', 'Presales'];
 
   const handleSaveAll = async () => {
     setIsSaving(true);

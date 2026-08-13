@@ -1,48 +1,6 @@
 // Utility for Managing Syarat & Ketentuan Templates (Global Master & Sales Personal)
 
-export const DEFAULT_MASTER_TEMPLATES = [
-  {
-    id: 'master-std',
-    name: 'Standard PPN 11% + CBO',
-    type: 'master',
-    terms: [
-      'Harga belum termasuk PPN 11%',
-      'Harga belum termasuk biaya instalasi by remote & onsite',
-      'Pembayaran CBO (Cash before delivery)',
-      'Ready stock (limited stock)',
-      'Dikenakan biaya pembatalan 50% dari nilai PO jika pembeli membatalkan PO',
-      'Garansi 2 tahun untuk produk Logitech',
-      'Harga FOB Jakarta'
-    ]
-  },
-  {
-    id: 'master-indent',
-    name: 'Indent Project (DP 50% + Indent 8-10 Wks)',
-    type: 'master',
-    terms: [
-      'Harga belum termasuk PPN 11%',
-      'Harga belum termasuk biaya instalasi by remote & onsite',
-      'Pembayaran 50% DP, pelunasan 50% setelah pengiriman (14 hari)',
-      'Indent 8-10 minggu setelah PO',
-      'Dikenakan biaya pembatalan 50% jika pembeli membatalkan PO',
-      'Garansi Resmi 2 Tahun',
-      'Harga FOB Jakarta'
-    ]
-  },
-  {
-    id: 'master-corp',
-    name: 'Corporate (Net 14 Days + PPh 23)',
-    type: 'master',
-    terms: [
-      'Harga belum termasuk PPN 11%',
-      'Harga belum termasuk PPH 23',
-      'Harga belum termasuk biaya instalasi by remote & onsite',
-      'Pembayaran 100% setelah pengiriman (14 hari)',
-      'Garansi Resmi 2 Tahun',
-      'Harga FOB Jakarta Delivery'
-    ]
-  }
-];
+export const DEFAULT_MASTER_TEMPLATES = [];
 
 const MASTER_KEY = 'qact_global_master_terms_templates';
 const PERSONAL_KEY_PREFIX = 'qact_personal_terms_templates_';
@@ -51,11 +9,11 @@ const PERSONAL_KEY_PREFIX = 'qact_personal_terms_templates_';
 export function getMasterTemplates() {
   try {
     const stored = localStorage.getItem(MASTER_KEY);
-    if (!stored) return DEFAULT_MASTER_TEMPLATES;
+    if (!stored) return [];
     const parsed = JSON.parse(stored);
-    return Array.isArray(parsed) && parsed.length > 0 ? parsed : DEFAULT_MASTER_TEMPLATES;
+    return Array.isArray(parsed) ? parsed : [];
   } catch {
-    return DEFAULT_MASTER_TEMPLATES;
+    return [];
   }
 }
 
@@ -91,7 +49,7 @@ export function deleteMasterTemplate(id) {
     const current = getMasterTemplates();
     const updated = current.filter(t => t.id !== id);
     localStorage.setItem(MASTER_KEY, JSON.stringify(updated));
-    return updated.length > 0 ? updated : DEFAULT_MASTER_TEMPLATES;
+    return updated;
   } catch (err) {
     console.error('Failed to delete master template:', err);
     return getMasterTemplates();

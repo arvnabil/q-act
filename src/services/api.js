@@ -129,9 +129,11 @@ const generateShortId = (prefix = 'ID') => `${prefix}${Math.floor(100000 + Math.
 
 export async function createCustomer(customerData, picData) {
   // 1. Insert Customer — generate short 7-char ID (C + 6 digits) for VARCHAR(10) column
+  // Strip created_by & sales_id if customers table doesn't have those columns
+  const { created_by, sales_id, ...rawCustomerPayload } = customerData;
   const dataWithId = {
-    id: customerData.id || generateShortId('C'),
-    ...customerData,
+    id: rawCustomerPayload.id || generateShortId('C'),
+    ...rawCustomerPayload,
   };
 
   let customer;
@@ -141,12 +143,12 @@ export async function createCustomer(customerData, picData) {
     .select()
     .single();
 
-  // Fallback if address column is missing in Supabase schema
-  if (customerError && (customerError.code === '42703' || customerError.message?.includes('address'))) {
-    const { address, ...dataWithoutAddress } = dataWithId;
+  // Fallback if address, sales_id, or created_by column is missing in Supabase schema
+  if (customerError && (customerError.code === '42703' || customerError.message?.includes('address') || customerError.message?.includes('sales_id') || customerError.message?.includes('created_by') || customerError.message?.includes('schema cache'))) {
+    const { address, created_by, sales_id, bu_id, ...cleanData } = dataWithId;
     const retry = await supabase
       .from('customers')
-      .insert([dataWithoutAddress])
+      .insert([{ id: cleanData.id, name: cleanData.name }])
       .select()
       .single();
     if (retry.error) throw retry.error;
@@ -161,7 +163,7 @@ export async function createCustomer(customerData, picData) {
   let insertedPics = [];
   if (picData && picData.length > 0) {
     const picsToInsert = picData.map(p => {
-      const { id, ...rest } = p;
+      const { id, created_by, ...rest } = p;
       return {
         ...rest,
         customer_id: customer.id,
@@ -173,8 +175,8 @@ export async function createCustomer(customerData, picData) {
       .insert(picsToInsert)
       .select();
 
-    if (picError && (picError.code === '42703' || picError.message?.includes('sales_id'))) {
-      const picsWithoutSales = picsToInsert.map(({ sales_id, ...rest }) => rest);
+    if (picError && (picError.code === '42703' || picError.message?.includes('sales_id') || picError.message?.includes('created_by') || picError.message?.includes('schema cache'))) {
+      const picsWithoutSales = picsToInsert.map(({ sales_id, created_by, ...rest }) => rest);
       const retry = await supabase
         .from('customer_pics')
         .insert(picsWithoutSales)
@@ -193,20 +195,21 @@ export async function createCustomer(customerData, picData) {
 
 export async function updateCustomer(customerId, customerData, picData = []) {
   // 1. Update Customer (name, address, etc.)
+  const { created_by, sales_id, ...cleanCustomerPayload } = customerData;
   let customer;
   let { data, error: customerError } = await supabase
     .from('customers')
-    .update(customerData)
+    .update(cleanCustomerPayload)
     .eq('id', customerId)
     .select()
     .single();
 
-  // Fallback if address column is missing in Supabase schema
-  if (customerError && (customerError.code === '42703' || customerError.message?.includes('address'))) {
-    const { address, ...dataWithoutAddress } = customerData;
+  // Fallback if address, sales_id, or created_by column is missing in Supabase schema
+  if (customerError && (customerError.code === '42703' || customerError.message?.includes('address') || customerError.message?.includes('sales_id') || customerError.message?.includes('created_by') || customerError.message?.includes('schema cache'))) {
+    const { address, created_by, sales_id, bu_id, ...cleanData } = cleanCustomerPayload;
     const retry = await supabase
       .from('customers')
-      .update(dataWithoutAddress)
+      .update(cleanData)
       .eq('id', customerId)
       .select()
       .single();
@@ -383,30 +386,101 @@ export async function deleteProducts(skus) {
   return true;
 }
 
+/**
+ * Batch upsert products by SKU.
+ * If SKU exists → update. If new → insert.
+ * @param {Array} productsArray - array of product objects
+ * @returns {{ inserted: number, updated: number, errors: Array }}
+ */
+export async function upsertProducts(productsArray) {
+  if (!productsArray || productsArray.length === 0) return { inserted: 0, updated: 0, errors: [] };
 
-export async function uploadProductImage(file, sku = 'prod') {
+  // Fetch existing SKUs to differentiate insert vs update
+  const skus = productsArray.map(p => p.sku);
+  const { data: existing } = await supabase.from('products').select('sku').in('sku', skus);
+  const existingSkuSet = new Set((existing || []).map(e => e.sku));
+
+  const toInsert = productsArray.filter(p => !existingSkuSet.has(p.sku));
+  const toUpdate = productsArray.filter(p => existingSkuSet.has(p.sku));
+
+  const errors = [];
+  let inserted = 0;
+  let updated = 0;
+
+  // Insert new products
+  if (toInsert.length > 0) {
+    const { error } = await supabase.from('products').insert(toInsert);
+    if (error) errors.push({ phase: 'insert', message: error.message });
+    else inserted = toInsert.length;
+  }
+
+  // Update existing products one by one to capture individual errors
+  for (const prod of toUpdate) {
+    const { sku, ...rest } = prod;
+    const { error } = await supabase.from('products').update(rest).eq('sku', sku);
+    if (error) errors.push({ sku, message: error.message });
+    else updated++;
+  }
+
+  return { inserted, updated, errors };
+}
+
+
+/**
+ * Upload gambar produk ke server cPanel via PHP endpoint.
+ * Di development (Vite), request di-proxy ke plugin lokal.
+ * Di production (cPanel), request dikirim ke VITE_UPLOAD_URL.
+ */
+export async function uploadProductImage(file, sku = 'prod', oldUrl = null) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = async (ev) => {
+      try {
+        const base64 = ev.target.result;
+        const ext = (file.name || 'image.png').split('.').pop();
+        const cleanSku = (sku || 'prod').toLowerCase().replace(/[^a-z0-9_-]/g, '');
+        const filename = `${cleanSku}-${Date.now()}.${ext}`;
+
+        // Gunakan VITE_UPLOAD_URL di production (cPanel), paksa fallback ke /api/upload-local di dev (lokal)
+        const uploadEndpoint = (import.meta.env.PROD && import.meta.env.VITE_UPLOAD_URL) 
+          ? import.meta.env.VITE_UPLOAD_URL 
+          : '/api/upload-local';
+
+        const res = await fetch(uploadEndpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ base64, filename, old_url: oldUrl }),
+        });
+
+        if (!res.ok) {
+          const errJson = await res.json().catch(() => ({}));
+          throw new Error(errJson.error || `Upload gagal (HTTP ${res.status})`);
+        }
+
+        const data = await res.json();
+        resolve(data.url); // e.g. /images/prod-sku-123.png atau https://domain.com/images/...
+      } catch (err) {
+        reject(err);
+      }
+    };
+    reader.onerror = () => reject(new Error('Gagal membaca file gambar.'));
+    reader.readAsDataURL(file);
+  });
+}
+
+export async function deleteProductImage(url) {
+  if (!url) return true;
   try {
-    const fileExt = (file.name || 'image.png').split('.').pop();
-    const cleanSku = (sku || 'prod').toLowerCase().replace(/[^a-z0-9_-]/g, '');
-    const fileName = `${cleanSku}-${Date.now()}.${fileExt}`;
-    
-    const { data: uploadData, error: uploadError } = await supabase.storage
-      .from('products')
-      .upload(fileName, file, { upsert: true, cacheControl: '3600' });
-
-    if (uploadError) {
-      console.warn('Supabase Storage upload warning:', uploadError.message);
-      throw uploadError;
-    }
-
-    const { data } = supabase.storage
-      .from('products')
-      .getPublicUrl(fileName);
-      
-    return data.publicUrl;
+    const uploadEndpoint = import.meta.env.VITE_UPLOAD_URL || '/api/upload-local';
+    await fetch(uploadEndpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'delete', url }),
+    });
+    return true;
   } catch (err) {
-    console.error('uploadProductImage exception:', err);
-    throw err;
+    console.warn('Delete product image warning:', err.message);
+    return false;
   }
 }
 
@@ -449,7 +523,7 @@ export async function getQuotations() {
       pic:customer_pics(name, phone, email),
       items:quotation_items(
         *,
-        product:products(sku, name, image_url, description, brand:brands(name, color_hex))
+        product:products(sku, name, modal, pricelist_distributor, diskon_distributor, image_url, description, brand:brands(name, color_hex))
       )
     `)
     .order('created_at', { ascending: false });
@@ -463,7 +537,7 @@ export async function getQuotations() {
   const expiredIdsToUpdate = [];
   activeQuotations.forEach(q => {
     const expDateStr = (q.expired || q.expired_at || '').slice(0, 10);
-    if (expDateStr && expDateStr < todayStr && (q.status === 'sent' || q.status === 'draft')) {
+    if (expDateStr && expDateStr < todayStr && (q.status === 'sent' || q.status === 'created' || q.status === 'draft')) {
       q.status = 'expired';
       expiredIdsToUpdate.push(q.id);
     }
@@ -480,14 +554,29 @@ export async function getQuotations() {
     }
   });
 
-  const creatorIds = [...new Set(activeQuotations.map(q => q.sales_id || q.created_by).filter(Boolean))];
-  if (creatorIds.length > 0) {
-    const { data: users } = await supabase.from('users').select('id, name, email, signature_url, mobile').in('id', creatorIds);
-    const userMap = new Map(users?.map(u => [u.id, u]) || []);
-    activeQuotations.forEach(q => {
-      q.creator = userMap.get(q.sales_id || q.created_by) || null;
-    });
-  }
+  // Fetch all users to resolve creator by ID, sales_code, or ID prefix (e.g. Q05)
+  const { data: users } = await supabase.from('users').select('id, name, email, signature_url, mobile, sales_code');
+  const userById = new Map(users?.map(u => [u.id, u]) || []);
+  const userByCode = new Map(users?.filter(u => u.sales_code).map(u => [u.sales_code.trim().toUpperCase(), u]) || []);
+
+  activeQuotations.forEach(q => {
+    let matchedUser = userById.get(q.sales_id || q.created_by);
+
+    if (!matchedUser && q.sales_code) {
+      matchedUser = userByCode.get(q.sales_code.trim().toUpperCase());
+    }
+
+    if (!matchedUser && q.id && q.id.includes('.')) {
+      const prefix = q.id.split('.')[0].trim().toUpperCase();
+      matchedUser = userByCode.get(prefix);
+    }
+
+    if (!matchedUser && q.sales_name) {
+      matchedUser = { name: q.sales_name };
+    }
+
+    q.creator = matchedUser || (q.id && q.id.includes('.') ? { name: q.id.split('.')[0].trim().toUpperCase() } : null);
+  });
 
   return activeQuotations;
 }
@@ -501,7 +590,7 @@ export async function getQuotationsByUser(userId) {
       pic:customer_pics(name, phone, email),
       items:quotation_items(
         *,
-        product:products(sku, name, image_url, description, brand:brands(name, color_hex))
+        product:products(sku, name, modal, pricelist_distributor, diskon_distributor, image_url, description, brand:brands(name, color_hex))
       )
     `)
     .eq('sales_id', userId)
@@ -515,7 +604,7 @@ export async function getQuotationsByUser(userId) {
   const expiredIdsToUpdate = [];
   quotations.forEach(q => {
     const expDateStr = (q.expired || q.expired_at || '').slice(0, 10);
-    if (expDateStr && expDateStr < todayStr && (q.status === 'sent' || q.status === 'draft')) {
+    if (expDateStr && expDateStr < todayStr && (q.status === 'sent' || q.status === 'created' || q.status === 'draft')) {
       q.status = 'expired';
       expiredIdsToUpdate.push(q.id);
     }
@@ -591,8 +680,10 @@ export async function createQuotation(quotationData, itemsData) {
       quotation_id: quotation.id,
       sku: i.sku || null,
       qty: Number(i.qty) || 1,
+      hpp: Number(i.hpp) || 0,
       price: Number(i.price) || 0,
       margin: Number(i.margin) || 0,
+      is_pph_applied: Boolean(i.is_pph_applied),
       sort_order: i.sort_order || (idx + 1),
     }));
     const { error: itemsError } = await supabase
@@ -633,7 +724,7 @@ export async function getTrashQuotations() {
         pic:customer_pics(name, phone, email),
         items:quotation_items(
           *,
-          product:products(sku, name, image_url, description, brand:brands(name, color_hex))
+          product:products(sku, name, modal, pricelist_distributor, diskon_distributor, image_url, description, brand:brands(name, color_hex))
         )
       `)
       .eq('is_deleted', true);
@@ -647,7 +738,7 @@ export async function getTrashQuotations() {
         pic:customer_pics(name, phone, email),
         items:quotation_items(
           *,
-          product:products(sku, name, image_url, description, brand:brands(name, color_hex))
+          product:products(sku, name, modal, pricelist_distributor, diskon_distributor, image_url, description, brand:brands(name, color_hex))
         )
       `)
       .eq('status', 'deleted');
@@ -678,7 +769,7 @@ export async function getTrashQuotations() {
 export async function restoreQuotation(id) {
   const { data, error } = await supabase
     .from('quotations')
-    .update({ is_deleted: false, deleted_at: null, status: 'draft' })
+    .update({ is_deleted: false, deleted_at: null, status: 'created' })
     .eq('id', id)
     .select();
 
@@ -731,6 +822,72 @@ export async function setMaintenanceMode(settings) {
       enabled: !!settings.enabled,
       domains: Array.isArray(settings.domains) ? settings.domains.map(d => d.trim().toLowerCase()).filter(Boolean) : []
     },
+    updated_at: new Date().toISOString()
+  };
+
+  const { data, error } = await supabase
+    .from('system_settings')
+    .upsert(payload, { onConflict: 'key' })
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data.value;
+}
+
+export async function getCompanyInfoSettings() {
+  try {
+    const { data, error } = await supabase
+      .from('system_settings')
+      .select('value')
+      .eq('key', 'company_info')
+      .maybeSingle();
+
+    if (error || !data || !data.value) return null;
+    return data.value;
+  } catch (err) {
+    console.error('Failed to load company_info from system_settings:', err);
+    return null;
+  }
+}
+
+export async function saveCompanyInfoSettings(info) {
+  const payload = {
+    key: 'company_info',
+    value: info,
+    updated_at: new Date().toISOString()
+  };
+
+  const { data, error } = await supabase
+    .from('system_settings')
+    .upsert(payload, { onConflict: 'key' })
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data.value;
+}
+
+export async function getMasterTermsSettings() {
+  try {
+    const { data, error } = await supabase
+      .from('system_settings')
+      .select('value')
+      .eq('key', 'master_terms')
+      .maybeSingle();
+
+    if (error || !data || !data.value) return null;
+    return data.value;
+  } catch (err) {
+    console.error('Failed to load master_terms from system_settings:', err);
+    return null;
+  }
+}
+
+export async function saveMasterTermsSettings(templates) {
+  const payload = {
+    key: 'master_terms',
+    value: templates,
     updated_at: new Date().toISOString()
   };
 
@@ -933,15 +1090,19 @@ export async function getUsersWithoutBU() {
 /** Ambil quotations berdasarkan BU ID (untuk filter per BU di Manager/Admin) */
 export async function getQuotationsByBU(buId) {
   try {
-    // Ambil semua user_id yang ada di BU ini
-    const { data: members } = await supabase
-      .from('business_unit_members')
-      .select('user_id')
-      .eq('business_unit_id', buId);
+    if (!buId) return [];
 
-    const memberIds = (members || []).map(m => m.user_id);
-    if (memberIds.length === 0) return [];
+    // 1. Ambil data BU dan anggotanya
+    const { data: bu } = await supabase
+      .from('business_units')
+      .select('code, members:business_unit_members(user_id)')
+      .eq('id', buId)
+      .maybeSingle();
 
+    const memberIds = (bu?.members || []).map(m => m.user_id).filter(Boolean);
+    const buCode = bu?.code;
+
+    // 2. Ambil semua active quotations
     const { data: quotations, error } = await supabase
       .from('quotations')
       .select(`
@@ -950,15 +1111,22 @@ export async function getQuotationsByBU(buId) {
         pic:customer_pics(name, phone, email),
         items:quotation_items(
           *,
-          product:products(sku, name, image_url, description, brand:brands(name, color_hex))
+          product:products(sku, name, modal, pricelist_distributor, diskon_distributor, image_url, description, brand:brands(name, color_hex))
         )
       `)
-      .in('sales_id', memberIds)
       .eq('is_deleted', false)
       .order('created_at', { ascending: false });
 
     if (error) throw error;
-    return quotations || [];
+    if (!quotations) return [];
+
+    // 3. Filter quotation yang milik BU ini: bu_id, sales_id member, atau prefix ID
+    return quotations.filter(q => {
+      if (q.bu_id === buId) return true;
+      if (memberIds.length > 0 && memberIds.includes(q.sales_id || q.created_by)) return true;
+      if (buCode && (q.id?.toUpperCase().startsWith(buCode.toUpperCase() + '.') || q.id?.toUpperCase().startsWith(buCode.toUpperCase()))) return true;
+      return false;
+    });
   } catch (err) {
     console.error('getQuotationsByBU error:', err);
     return [];

@@ -40,12 +40,12 @@ export default function Analytics() {
   const totalQ = quotations.length;
   const approved = quotations.filter(q => q.status === 'approved');
   const sent = quotations.filter(q => q.status === 'sent');
-  const draft = quotations.filter(q => q.status === 'draft');
+  const created = quotations.filter(q => q.status === 'created' || q.status === 'draft');
   const rejected = quotations.filter(q => q.status === 'rejected');
   const expired = quotations.filter(q => q.status === 'expired');
 
   const totalRevenue = approved.reduce((sum, q) => sum + calcQGrand(q), 0);
-  const pipelineRevenue = [...sent, ...draft].reduce((sum, q) => sum + calcQGrand(q), 0);
+  const pipelineRevenue = [...sent, ...created].reduce((sum, q) => sum + calcQGrand(q), 0);
   const lostRevenue = [...rejected, ...expired].reduce((sum, q) => sum + calcQGrand(q), 0);
   const convRate = totalQ > 0 ? Math.round((approved.length / totalQ) * 100) : 0;
   const avgDealSize = approved.length > 0 ? Math.round(totalRevenue / approved.length) : 0;
@@ -114,9 +114,9 @@ export default function Analytics() {
 
   // 5. Dynamic Sales Leaderboard (Only include Sales & Presales roles)
   const salesOnlyUsers = salesUsers.filter(s => {
-    const r = (s.role || '').trim();
-    if (['Administrator', 'Manager', 'admin'].includes(r)) return false;
-    return true;
+    const r = (s.role || '').trim().toLowerCase();
+    if (['administrator', 'admin', 'manager', 'finance'].includes(r)) return false;
+    return ['sales', 'presales', 'account executive', 'sales representative'].includes(r) || r.includes('sales') || r.includes('presales');
   });
 
   const salesLeaderboard = salesOnlyUsers.map(s => {
@@ -215,7 +215,7 @@ export default function Analytics() {
         </div>
 
         <div className="bg-white rounded-xl border border-surface-200 p-4 shadow-sm">
-          <span className="text-[11px] font-bold text-surface-400 uppercase tracking-wider block mb-1">Pipeline (Sent+Draft)</span>
+          <span className="text-[11px] font-bold text-surface-400 uppercase tracking-wider block mb-1">Pipeline (Sent+Created)</span>
           <div className="text-xl font-extrabold text-blue-600 mb-1">{formatCurrencyShort(pipelineRevenue)}</div>
           <span className="text-[10px] text-surface-400 font-medium">Potensi revenue aktif</span>
         </div>

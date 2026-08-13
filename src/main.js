@@ -767,7 +767,7 @@ function bindGlobalEvents() {
         sales: salesName,
         date: dateStr,
         expired: expiredStr,
-        status: 'draft',
+        status: 'created',
         ppnRate: 0.11
       };
       QUOTATIONS.unshift(newQuotation);

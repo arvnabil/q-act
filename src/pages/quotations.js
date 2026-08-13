@@ -945,16 +945,19 @@ export function bindQuotationEvents(reRender) {
       const qty = editFormState.items[idx].qty || 1;
 
       if (trigger === 'modal' || trigger === 'margin') {
-        if (!isNaN(modal) && !isNaN(margin)) {
-          price = modal * (1 + margin / 100);
-          priceInput.value = price;
-        } else if (trigger === 'modal' && !isNaN(modal) && !isNaN(price)) {
-          margin = ((price / modal) - 1) * 100;
+        if (!isNaN(modal) && !isNaN(margin) && margin < 100) {
+          // Rumus Margin Sales: Price = Modal / (1 - Margin%)
+          price = modal / (1 - margin / 100);
+          priceInput.value = Math.round(price);
+        } else if (trigger === 'modal' && !isNaN(modal) && !isNaN(price) && price > 0) {
+          // Back-calculate margin: Margin = (Price - Modal) / Price
+          margin = ((price - modal) / price) * 100;
           marginInput.value = margin.toFixed(2);
         }
       } else if (trigger === 'price') {
-        if (!isNaN(modal) && !isNaN(price)) {
-          margin = ((price / modal) - 1) * 100;
+        if (!isNaN(modal) && !isNaN(price) && price > 0) {
+          // Rumus Margin Sales: Margin = (Price - Modal) / Price
+          margin = ((price - modal) / price) * 100;
           marginInput.value = margin.toFixed(2);
         }
       }

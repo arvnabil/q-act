@@ -3,7 +3,6 @@ import { format, parseISO, isValid } from 'date-fns';
 import { id as idLocale, enUS as enLocale } from 'date-fns/locale';
 
 import { getCompanyInfo } from './companyInfo.js';
-import { PRODUCTS } from '../data.js';
 
 const formatCurrencyDecimals = (val) => {
   const num = Number(val) || 0;
@@ -261,8 +260,15 @@ export function generateQuotationHTML(q, withImage = true, bankAccount = null, l
   const items = q.items || [];
   const baseSubtotal = items.reduce((sum, i) => sum + ((i.qty || 0) * (i.price || 0)), 0);
   const subtotal = bakeTaxIntoItems ? baseSubtotal * taxMultiplier : baseSubtotal;
-  const ppn = (calcTax && showTax) ? subtotal * ppnRate : 0;
-  const grand = subtotal + ppn;
+  const ppn = (calcTax && showTax) ? Math.round(subtotal * ppnRate) : 0;
+  
+  const calcPph = q.calc_pph === true;
+  const showPph = q.show_pph === true;
+  const pphRate = q.pph_rate || 0.02;
+  const pphBasis = items.filter(i => i.is_pph_applied).reduce((sum, i) => sum + ((i.qty || 0) * (i.price || 0)), 0);
+  const pphAmount = calcPph ? Math.round(pphBasis * pphRate) : 0;
+  
+  const grand = subtotal + ppn + pphAmount;
 
   let itemRows = '';
   const colSpanTotal = withImage ? 8 : 7;
@@ -272,7 +278,7 @@ export function generateQuotationHTML(q, withImage = true, bankAccount = null, l
     const rawProductName = prod?.name || item.name || item.product_name || '-';
     const sku = prod?.sku || item.sku || '-';
 
-    const catalogProd = PRODUCTS.find(p => 
+    const catalogProd = (q?.allProducts || []).find(p => 
       (p.sku && sku && p.sku.toLowerCase() === sku.toLowerCase()) || 
       (p.name && rawProductName && p.name.toLowerCase() === rawProductName.toLowerCase())
     );
@@ -510,6 +516,20 @@ export function generateQuotationHTML(q, withImage = true, bankAccount = null, l
                         <tr>
                           <td style="border: none !important; padding: 0; text-align: left; font-size: inherit; font-weight: inherit; background: transparent !important; width: 20px;">Rp</td>
                           <td style="border: none !important; padding: 0; text-align: right; font-size: inherit; font-weight: inherit; background: transparent !important;">${formatCurrencyDecimals(ppn)}</td>
+                        </tr>
+                      </table>
+                    </td>
+                  </tr>
+                ` : ''}
+                ${(calcPph && showPph) ? `
+                  <tr style="font-weight: bold;">
+                    <td colspan="${withImage ? 5 : 4}" style="border: none !important; border-top: 1px solid transparent !important; background: transparent !important;"></td>
+                    <td colspan="2" style="text-align: right; font-size: ${tdFontSize}; padding-right: 8px; border-left: 1px solid ${tableBorderColor} !important;">PPh Pasal 23 ${(pphRate * 100).toFixed(0)}%</td>
+                    <td style="font-size: ${tdFontSize}; vertical-align: middle; padding: ${tdPadding};">
+                      <table style="width: 100%; border: none !important; border-collapse: collapse; margin: 0; padding: 0; background: transparent !important;">
+                        <tr>
+                          <td style="border: none !important; padding: 0; text-align: left; font-size: inherit; font-weight: inherit; background: transparent !important; width: 20px; color: inherit;">Rp</td>
+                          <td style="border: none !important; padding: 0; text-align: right; font-size: inherit; font-weight: inherit; background: transparent !important; color: inherit;">${formatCurrencyDecimals(pphAmount)}</td>
                         </tr>
                       </table>
                     </td>

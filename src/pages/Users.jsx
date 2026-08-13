@@ -110,9 +110,12 @@ export default function UsersPage() {
       });
 
       if (authError) {
-        // If user already exists in Auth, try inserting into public.users using existing Auth ID
-        console.warn('Auth signup notice/error:', authError.message);
-        toast.error(`Auth error: ${authError.message}`);
+        console.warn('Auth signup error:', authError.message);
+        if (authError.message?.toLowerCase().includes('already registered')) {
+          toast.error(`Email ${cleanEmail} sudah terdaftar di Supabase Auth. Gunakan email lain.`);
+        } else {
+          toast.error(`Gagal registrasi user: ${authError.message}`);
+        }
         setIsSaving(false);
         return;
       } else {
@@ -184,6 +187,8 @@ export default function UsersPage() {
                   ? 'bg-brand-50 text-brand-700'
                   : s.role === 'Presales'
                   ? 'bg-amber-100 text-amber-700'
+                  : s.role === 'Finance'
+                  ? 'bg-cyan-100 text-cyan-700'
                   : 'bg-surface-100 text-surface-600';
                 return (
                   <tr key={s.id} className="border-b border-surface-100 hover:bg-surface-50/60 transition-colors group">
@@ -346,6 +351,7 @@ export default function UsersPage() {
                     <option value="Manager">Manager</option>
                     <option value="Sales">Sales</option>
                     <option value="Presales">Presales</option>
+                    <option value="Finance">Finance</option>
                   </select>
                 </div>
 
@@ -443,6 +449,7 @@ export default function UsersPage() {
                     <option value="Manager">Manager</option>
                     <option value="Sales">Sales</option>
                     <option value="Presales">Presales</option>
+                    <option value="Finance">Finance</option>
                   </select>
                 </div>
 

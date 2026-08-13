@@ -18,7 +18,7 @@ const PAGE_SIZE = 8;
 
 const STATUS_TABS = [
   { key: 'all',      label: 'Semua'    },
-  { key: 'draft',    label: 'Draft'    },
+  { key: 'created',  label: 'Created'  },
   { key: 'sent',     label: 'Sent'     },
   { key: 'approved', label: 'PO'       },
   { key: 'rejected', label: 'Rejected' },
@@ -27,6 +27,7 @@ const STATUS_TABS = [
 
 const statusClasses = (status) => {
   switch (status) {
+    case 'created':
     case 'draft':    return 'bg-surface-100 text-surface-600 border border-surface-200';
     case 'sent':     return 'bg-blue-50 text-blue-700 border border-blue-200';
     case 'approved': return 'bg-emerald-50 text-emerald-700 border border-emerald-200';
@@ -71,12 +72,13 @@ export default function Quotations() {
   const { user } = useAuthStore();
   const queryClient = useQueryClient();
   const isManager = ['admin', 'Administrator', 'Sales Manager', 'Manager'].includes(user?.role);
+  const isFinance = user?.role === 'Finance';
 
-  // Fetch quotations from Supabase: Admin/Manager gets all, BU members get BU quotations, others get own quotations
+  // Fetch quotations from Supabase: Admin/Manager & Finance get all, BU members get BU quotations, others get own quotations
   const allQuery  = useQuotations();
   const mineQuery = useQuotationsByUser(user?.id);
   const buQuery   = useQuotationsByBU(user?.bu?.id);
-  const activeQuery = isManager ? allQuery : (user?.bu?.id ? buQuery : mineQuery);
+  const activeQuery = (isManager || isFinance) ? allQuery : (user?.bu?.id ? buQuery : mineQuery);
   const { data: quotations, isLoading, isError } = activeQuery;
 
   // Reset page & selection on filter change
@@ -97,7 +99,8 @@ export default function Quotations() {
     return (
       q.id?.toLowerCase().includes(s) ||
       q.customer?.name?.toLowerCase().includes(s) ||
-      q.pic?.name?.toLowerCase().includes(s)
+      q.pic?.name?.toLowerCase().includes(s) ||
+      q.creator?.name?.toLowerCase().includes(s)
     );
   }) || [];
 
@@ -240,13 +243,15 @@ export default function Quotations() {
             />
           </div>
 
-          <button
-            onClick={() => setIsModalOpen(true)}
-            className="flex items-center gap-2 px-4 py-2 text-xs font-bold bg-brand-500 text-white rounded-lg hover:bg-brand-600 transition-all shadow-sm cursor-pointer whitespace-nowrap"
-          >
-            <Plus className="w-4 h-4" />
-            Buat Quotation
-          </button>
+          {!isFinance && (
+            <button
+              onClick={() => setIsModalOpen(true)}
+              className="flex items-center gap-2 px-4 py-2 text-xs font-bold bg-brand-500 text-white rounded-lg hover:bg-brand-600 transition-all shadow-sm cursor-pointer whitespace-nowrap"
+            >
+              <Plus className="w-4 h-4" />
+              Buat Quotation
+            </button>
+          )}
         </div>
       </div>
 
@@ -286,6 +291,7 @@ export default function Quotations() {
                     </th>
                     <th className="py-3.5 px-4 text-left text-xs font-bold text-surface-500 uppercase tracking-wider">No. Quotation</th>
                     <th className="py-3.5 px-4 text-left text-xs font-bold text-surface-500 uppercase tracking-wider">Customer</th>
+                    <th className="py-3.5 px-4 text-left text-xs font-bold text-surface-500 uppercase tracking-wider">Sales</th>
                     <th className="py-3.5 px-4 text-left text-xs font-bold text-surface-500 uppercase tracking-wider">Brand</th>
                     <th className="py-3.5 px-4 text-center text-xs font-bold text-surface-500 uppercase tracking-wider w-16">Items</th>
                     <th className="py-3.5 px-4 text-right text-xs font-bold text-surface-500 uppercase tracking-wider w-40">Grand Total</th>
@@ -320,6 +326,12 @@ export default function Quotations() {
                         <td className="py-3.5 px-4">
                           <div className="text-sm font-semibold text-surface-800 line-clamp-1">{q.customer?.name || '-'}</div>
                           <div className="text-xs text-surface-400">{q.pic?.name || '-'}</div>
+                        </td>
+                        <td className="py-3.5 px-4 text-xs font-semibold text-surface-700">
+                          {(() => {
+                            const raw = q.creator?.name || q.sales?.name || q.sales_name || (q.id && q.id.includes('.') ? q.id.split('.')[0].toUpperCase() : '-');
+                            return raw.trim().split(/\s+/)[0];
+                          })()}
                         </td>
                         <td className="py-3.5 px-4">
                           <div className="flex flex-wrap gap-1">
@@ -367,13 +379,15 @@ export default function Quotations() {
                             >
                               <Download className="w-4 h-4" />
                             </button>
-                            <button
-                              onClick={() => setDeleteTarget({ type: 'single', item: q })}
-                              className="w-7 h-7 rounded-md flex items-center justify-center text-surface-400 hover:bg-red-50 hover:text-red-600 transition-colors cursor-pointer"
-                              title="Hapus"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
+                            {!isFinance && (
+                              <button
+                                onClick={() => setDeleteTarget({ type: 'single', item: q })}
+                                className="w-7 h-7 rounded-md flex items-center justify-center text-surface-400 hover:bg-red-50 hover:text-red-600 transition-colors cursor-pointer"
+                                title="Hapus"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            )}
                           </div>
                         </td>
                       </tr>
@@ -399,7 +413,7 @@ export default function Quotations() {
       </div>
 
       {/* Floating Bulk Action Bar */}
-      {selectedIds.length > 0 && (
+      {selectedIds.length > 0 && !isFinance && (
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-surface-900 text-white rounded-xl shadow-2xl px-5 py-3.5 flex items-center gap-4 z-[100] border border-white/10 animate-fade-in-up">
           <span className="text-xs font-semibold flex items-center gap-2">
             <span className="bg-brand-500 text-white px-2.5 py-0.5 rounded-full font-bold">{selectedIds.length}</span>

@@ -131,6 +131,17 @@ export function useDeleteProducts() {
   });
 }
 
+export function useUpsertProducts() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (productsArray) => api.upsertProducts(productsArray),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['products'] });
+      queryClient.invalidateQueries({ queryKey: ['brands'] });
+    },
+  });
+}
+
 export function useUpdateProfile() {
   return useMutation({
     mutationFn: (profileData) => api.upsertProfile(profileData),
@@ -301,5 +312,40 @@ export function useQuotationsByBU(buId) {
     queryKey: ['quotations_by_bu', buId],
     queryFn: () => api.getQuotationsByBU(buId),
     enabled: !!buId,
+  });
+}
+
+// Company Info & Master Terms Settings
+export function useCompanyInfoSettings() {
+  return useQuery({
+    queryKey: ['company_info_settings'],
+    queryFn: api.getCompanyInfoSettings,
+  });
+}
+
+export function useUpdateCompanyInfoSettings() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (info) => api.saveCompanyInfoSettings(info),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['company_info_settings'] });
+    },
+  });
+}
+
+export function useMasterTermsSettings() {
+  return useQuery({
+    queryKey: ['master_terms_settings'],
+    queryFn: api.getMasterTermsSettings,
+  });
+}
+
+export function useUpdateMasterTermsSettings() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (templates) => api.saveMasterTermsSettings(templates),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['master_terms_settings'] });
+    },
   });
 }

@@ -108,7 +108,7 @@ export default function QuotationDetail({ quotation, onBack, onEdit }) {
       case 'sent':     return <span className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full text-xs font-bold bg-blue-50 text-blue-700 border border-blue-200 uppercase tracking-wide"><Clock className="w-3.5 h-3.5" /> Sent</span>;
       case 'rejected': return <span className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full text-xs font-bold bg-red-50 text-red-700 border border-red-200 uppercase tracking-wide"><XCircle className="w-3.5 h-3.5" /> Rejected</span>;
       case 'expired':  return <span className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full text-xs font-bold bg-orange-50 text-orange-700 border border-orange-200 uppercase tracking-wide"><AlertCircle className="w-3.5 h-3.5" /> Expired</span>;
-      default:         return <span className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full text-xs font-bold bg-surface-100 text-surface-600 border border-surface-200 uppercase tracking-wide"><FileText className="w-3.5 h-3.5" /> Draft</span>;
+      default:         return <span className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full text-xs font-bold bg-surface-100 text-surface-600 border border-surface-200 uppercase tracking-wide"><FileText className="w-3.5 h-3.5" /> Created</span>;
     }
   };
 
@@ -136,13 +136,15 @@ export default function QuotationDetail({ quotation, onBack, onEdit }) {
           </div>
 
           <div className="flex items-center gap-3">
-            <button
-              onClick={() => onEdit(quotation)}
-              className="flex items-center gap-1.5 px-4 py-2 text-xs font-semibold border border-surface-200 rounded-lg text-surface-700 hover:bg-surface-50 transition-colors cursor-pointer"
-            >
-              <Edit className="w-4 h-4" />
-              Edit Quotation
-            </button>
+            {currentUser?.role !== 'Finance' && (
+              <button
+                onClick={() => onEdit(quotation)}
+                className="flex items-center gap-1.5 px-4 py-2 text-xs font-semibold border border-surface-200 rounded-lg text-surface-700 hover:bg-surface-50 transition-colors cursor-pointer"
+              >
+                <Edit className="w-4 h-4" />
+                Edit Quotation
+              </button>
+            )}
 
             <button
               onClick={() => {

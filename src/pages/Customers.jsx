@@ -287,7 +287,7 @@ export default function Customers() {
                             </div>
                             <div>
                               <span className="text-sm font-bold text-surface-900 block line-clamp-1">{c.name}</span>
-                              {c.address && <span className="text-xs text-surface-400 block line-clamp-1">{c.address}</span>}
+                              {/* {c.address && <span className="text-xs text-surface-400 block line-clamp-1">{c.address}</span>} */}
                             </div>
                           </div>
                         </td>

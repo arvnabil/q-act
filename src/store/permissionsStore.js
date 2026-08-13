@@ -40,8 +40,8 @@ const usePermissionsStore = create((set, get) => ({
                            role === 'Sales Manager' ? 'Manager' : 
                            role;
 
-    // If permissions loaded from DB, use them
-    if (permissions && permissions[normalizedRole]) {
+    // If permissions loaded from DB and feature is defined, use them
+    if (permissions && permissions[normalizedRole] && typeof permissions[normalizedRole][feature] !== 'undefined') {
       return !!permissions[normalizedRole][feature];
     }
     
@@ -51,6 +51,7 @@ const usePermissionsStore = create((set, get) => ({
       'Manager': ['analytics', 'manager_view', 'dashboard', 'quotations', 'customers', 'products', 'brands'].includes(feature),
       'Account Executive': ['dashboard', 'quotations', 'customers', 'products'].includes(feature),
       'Sales Representative': ['dashboard', 'quotations', 'customers', 'products'].includes(feature),
+      'Finance': ['dashboard', 'quotations', 'quotations_view'].includes(feature),
     };
     
     if (normalizedRole === 'Administrator') return true;

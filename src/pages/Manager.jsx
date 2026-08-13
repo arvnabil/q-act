@@ -14,7 +14,7 @@ const PAGE_SIZE = 10;
 
 const STATUS_TABS = [
   { key: 'all',      label: 'Semua'    },
-  { key: 'draft',    label: 'Draft'    },
+  { key: 'created',  label: 'Created'  },
   { key: 'sent',     label: 'Sent'     },
   { key: 'approved', label: 'PO'       },
   { key: 'rejected', label: 'Rejected' },
@@ -24,6 +24,7 @@ const STATUS_TABS = [
 
 const statusClasses = (status) => {
   switch (status) {
+    case 'created':
     case 'draft':    return 'bg-surface-100 text-surface-600 border border-surface-200';
     case 'sent':     return 'bg-blue-50 text-blue-700 border border-blue-200';
     case 'approved': return 'bg-emerald-50 text-emerald-700 border border-emerald-200';
@@ -77,18 +78,39 @@ export default function Manager() {
     return q.items?.reduce((sum, item) => sum + ((item.qty || 0) * (item.price || 0)), 0) || 0;
   };
 
+  const isQuotationInBU = (q, targetBuId) => {
+    if (!targetBuId || targetBuId === 'all') return true;
+    const targetBu = businessUnits.find(b => b.id === targetBuId);
+
+    // 1. Direct bu_id on quotation
+    if (q.bu_id === targetBuId) return true;
+
+    // 2. Creator member check
+    const creatorId = q.sales_id || q.created_by || q.creator?.id;
+    if (targetBu && creatorId && targetBu.members?.some(m => m.user_id === creatorId)) return true;
+
+    // 3. Prefix ID or sales_code match with BU code
+    if (targetBu?.code) {
+      const codeUpper = targetBu.code.toUpperCase();
+      if (q.id?.toUpperCase().startsWith(codeUpper + '.') || q.id?.toUpperCase().startsWith(codeUpper)) return true;
+      if (q.sales_code?.toUpperCase() === codeUpper) return true;
+    }
+
+    return false;
+  };
+
   const countByStatus = (key) => {
     if (key === 'trash') return trashQuotations.length;
     let base = activeQuotations;
     if (filterSales !== 'all') base = base.filter(q => (q.sales_id || q.created_by) === filterSales);
-    if (filterBU !== 'all') base = base.filter(q => q.bu_id === filterBU || q.creator?.bu_id === filterBU);
+    if (filterBU !== 'all') base = base.filter(q => isQuotationInBU(q, filterBU));
     return key === 'all' ? base.length : base.filter(q => q.status === key).length;
   };
 
   const summaryStats = () => {
     let base = activeQuotations;
     if (filterSales !== 'all') base = base.filter(q => (q.sales_id || q.created_by) === filterSales);
-    if (filterBU !== 'all') base = base.filter(q => q.bu_id === filterBU || q.creator?.bu_id === filterBU);
+    if (filterBU !== 'all') base = base.filter(q => isQuotationInBU(q, filterBU));
     return {
       total:    base.length,
       approved: base.filter(q => q.status === 'approved').length,
@@ -102,7 +124,7 @@ export default function Manager() {
   const filtered = quotations?.filter(q => {
     if (!isTrashTab && filterStatus !== 'all' && q.status !== filterStatus) return false;
     if (filterSales !== 'all' && (q.sales_id || q.created_by) !== filterSales) return false;
-    if (filterBU !== 'all' && q.bu_id !== filterBU && q.creator?.bu_id !== filterBU) return false;
+    if (filterBU !== 'all' && !isQuotationInBU(q, filterBU)) return false;
     if (!search) return true;
     const s = search.toLowerCase();
     return (
@@ -180,7 +202,7 @@ export default function Manager() {
         </div>
 
         <div className="bg-white rounded-xl border border-surface-200 p-4 shadow-sm">
-          <span className="text-[11px] font-bold text-surface-400 uppercase tracking-wider block mb-1">Pending Approval</span>
+          <span className="text-[11px] font-bold text-surface-400 uppercase tracking-wider block mb-1">Pending PO</span>
           <div className="text-2xl font-extrabold text-amber-600">{stats.pending}</div>
         </div>
       </div>
@@ -254,7 +276,11 @@ export default function Manager() {
                 className="px-3 py-2 bg-surface-50 border border-surface-200 rounded-lg text-xs font-medium text-surface-700 focus:outline-none focus:border-brand-500 transition-colors"
               >
                 <option value="all">Semua Sales</option>
-                {salesUsers?.map(s => (
+                {salesUsers?.filter(s => {
+                  const r = (s.role || '').trim().toLowerCase();
+                  if (['administrator', 'admin', 'manager', 'finance'].includes(r)) return false;
+                  return true;
+                }).map(s => (
                   <option key={s.id} value={s.id}>{s.name}</option>
                 ))}
               </select>
@@ -289,7 +315,7 @@ export default function Manager() {
               </thead>
               <tbody className="divide-y divide-surface-100 text-xs">
                 {pagedItems.map(q => {
-                  const creatorName = q.creator?.name || 'Sales';
+                  const creatorName = (q.creator?.name || 'Sales').trim().split(/\s+/)[0];
                   const customerName = q.customer?.name || 'Customer';
                   const grandTotal = calcGrandTotal(q);
                   const isActioning = actionLoadingId === q.id;

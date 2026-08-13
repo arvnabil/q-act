@@ -9,12 +9,13 @@ import {
 export { QUOTATIONS, CUSTOMERS, SALES_TEAM, BRANDS, PRODUCTS, COMPANY, MONTHLY_REVENUE, formatCurrency, formatCurrencyShort, formatDate, calcQuotationTotal, calcGrandTotal, daysUntil };
 
 export function statusLabel(s) {
-  const map = { draft: 'Draft', sent: 'Sent', approved: 'PO', rejected: 'Rejected', expired: 'Expired', pending: 'Pending' };
+  const map = { created: 'Created', draft: 'Created', sent: 'Sent', approved: 'PO', rejected: 'Rejected', expired: 'Expired', pending: 'Pending' };
   return map[s] || s;
 }
 
 export function statusClasses(s) {
   const map = {
+    created: 'bg-gray-100 text-gray-600',
     draft: 'bg-gray-100 text-gray-600',
     sent: 'bg-blue-50 text-blue-700',
     approved: 'bg-emerald-50 text-emerald-700',
@@ -27,6 +28,7 @@ export function statusClasses(s) {
 
 export function statusDot(s) {
   const map = {
+    created: 'bg-gray-400',
     draft: 'bg-gray-400',
     sent: 'bg-blue-500',
     approved: 'bg-emerald-500',
@@ -239,7 +241,7 @@ export function printQuotation(q, withImage = true) {
               <div><strong>PT. Alfa Cipta Teknologi Virtual</strong></div>
               <div>Infinity Office, Bellezza BSA 1st Floor Unit 106,</div>
               <div>JL. Letjen Soepeno, Kebayoran Lama Jakarta Selatan 12210</div>
-              <div>Rep off: Ruko Golden Boulevard Blok S No.26 Pahlawan Seribu, BSD</div>
+              <div>Rep off: Ruko Golden Boulevard Blok S No.28 Pahlawan Seribu, BSD</div>
               <div>Serpong, Kota Tangerang Selatan, Serpong - Banten, 15315</div>
               <div>T: (021) 50110987 | E: sales@activ.co.id | W: www.activ.co.id</div>
             </td>

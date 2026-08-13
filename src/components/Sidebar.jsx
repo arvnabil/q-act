@@ -11,6 +11,7 @@ export default function Sidebar({ mobileOpen, setMobileOpen }) {
 
   const isManager = ['admin', 'Administrator', 'Sales Manager', 'Manager'].includes(user?.role);
   const isAdmin = ['admin', 'Administrator'].includes(user?.role);
+  const isFinance = user?.role === 'Finance';
 
   const canAnalytics = user && hasPermission(user.role, 'analytics');
   const canManager = user && (isManager || hasPermission(user.role, 'manager_view'));
@@ -26,23 +27,26 @@ export default function Sidebar({ mobileOpen, setMobileOpen }) {
 
   const allQuotations  = useQuotations();
   const mineQuotations = useQuotationsByUser(user?.id);
-  const quotationsData = isManager ? allQuotations.data : mineQuotations.data;
+  const quotationsData = (isManager || isFinance) ? allQuotations.data : mineQuotations.data;
   const quotationsCount = quotationsData?.length || 0;
 
-  const mainNav = [
+  const rawNav = [
     { path: '/', label: 'Dashboard', icon: LayoutDashboard },
     { path: '/quotations', label: 'Quotations', icon: FileText, badge: quotationsCount },
-    { path: '/customers', label: 'Customers', icon: Users },
+    { path: '/customers', label: 'Customers', icon: Users, hideForFinance: true },
     { 
       path: '/products-group', 
       label: 'Products', 
       icon: Box,
+      hideForFinance: true,
       submenu: [
         { path: '/products', label: 'Katalog Produk' },
         { path: '/brands', label: 'Kelola Brand' },
       ]
     },
   ];
+
+  const mainNav = isFinance ? rawNav.filter(n => !n.hideForFinance) : rawNav;
 
   if (!user) return null;
 

@@ -1,7 +1,10 @@
 import React, { useState } from 'react';
 import ReactDOM from 'react-dom';
 import { Plus, Edit, Trash2, Star, Building2, CreditCard, Users, Loader2, X, Eye, EyeOff, AlertTriangle, FileText, Wrench } from 'lucide-react';
-import { useSalesUsers, useBankAccounts, useMaintenanceMode, useUpdateMaintenanceMode } from '../hooks/useSupabase.js';
+import { 
+  useSalesUsers, useBankAccounts, useMaintenanceMode, useUpdateMaintenanceMode,
+  useCompanyInfoSettings, useUpdateCompanyInfoSettings, useMasterTermsSettings, useUpdateMasterTermsSettings 
+} from '../hooks/useSupabase.js';
 import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../services/supabase.js';
 import { toast } from 'react-hot-toast';
@@ -9,8 +12,6 @@ import useAuthStore from '../store/authStore.js';
 
 import { getCompanyInfo, saveCompanyInfo } from '../utils/companyInfo.js';
 import { getMasterTemplates, saveMasterTemplate, deleteMasterTemplate } from '../utils/termsTemplates.js';
-
-
 
 export default function Settings() {
   const { user } = useAuthStore();
@@ -28,11 +29,33 @@ export default function Settings() {
   const [isSavingBank, setIsSavingBank]     = useState(false);
   const [deletingBankId, setDeletingBankId] = useState(null);
 
+  // Supabase System Settings Sync
+  const { data: dbCompanyInfo } = useCompanyInfoSettings();
+  const updateCompanyInfoDb = useUpdateCompanyInfoSettings();
+  const { data: dbMasterTerms } = useMasterTermsSettings();
+  const updateMasterTermsDb = useUpdateMasterTermsSettings();
+
+  React.useEffect(() => {
+    if (dbCompanyInfo) {
+      setCompany(dbCompanyInfo);
+      saveCompanyInfo(dbCompanyInfo);
+    }
+  }, [dbCompanyInfo]);
+
   // Master Terms State
   const [masterTemplates, setMasterTemplates] = useState(() => getMasterTemplates());
   const [showMasterModal, setShowMasterModal] = useState(false);
   const [editingMasterId, setEditingMasterId] = useState(null);
   const [masterForm, setMasterForm] = useState({ name: '', termsText: '' });
+
+  React.useEffect(() => {
+    if (dbMasterTerms && Array.isArray(dbMasterTerms)) {
+      setMasterTemplates(dbMasterTerms);
+      try {
+        localStorage.setItem('master_terms_templates', JSON.stringify(dbMasterTerms));
+      } catch (e) {}
+    }
+  }, [dbMasterTerms]);
 
   const handleOpenAddMaster = () => {
     setEditingMasterId(null);
@@ -49,7 +72,7 @@ export default function Settings() {
     setShowMasterModal(true);
   };
 
-  const handleSaveMaster = (e) => {
+  const handleSaveMaster = async (e) => {
     e.preventDefault();
     if (!masterForm.name.trim() || !masterForm.termsText.trim()) {
       toast.error('Nama dan isi syarat & ketentuan wajib diisi!');
@@ -59,6 +82,12 @@ export default function Settings() {
     setMasterTemplates(updated);
     setShowMasterModal(false);
     toast.success(editingMasterId ? 'Master Template diperbarui!' : 'Master Template baru berhasil ditambahkan!');
+
+    try {
+      await updateMasterTermsDb.mutateAsync(updated);
+    } catch (err) {
+      console.warn('Master terms DB sync error:', err.message);
+    }
   };
 
   const [deleteTargetMaster, setDeleteTargetMaster] = useState(null);
@@ -67,12 +96,18 @@ export default function Settings() {
     setDeleteTargetMaster({ id, name });
   };
 
-  const executeDeleteMaster = () => {
+  const executeDeleteMaster = async () => {
     if (!deleteTargetMaster) return;
     const updated = deleteMasterTemplate(deleteTargetMaster.id);
     setMasterTemplates(updated);
     toast.success(`Master Template "${deleteTargetMaster.name}" berhasil dihapus.`);
     setDeleteTargetMaster(null);
+
+    try {
+      await updateMasterTermsDb.mutateAsync(updated);
+    } catch (err) {
+      console.warn('Master terms DB sync error:', err.message);
+    }
   };
 
   const { data: bankAccounts = [], isLoading: isBankLoading } = useBankAccounts();
@@ -253,10 +288,15 @@ export default function Settings() {
           {isEditing && (
             <div className="md:col-span-2 flex justify-end">
               <button
-                onClick={() => {
+                onClick={async () => {
                   saveCompanyInfo(company);
                   setIsEditing(false);
                   toast.success('Informasi perusahaan berhasil disimpan!');
+                  try {
+                    await updateCompanyInfoDb.mutateAsync(company);
+                  } catch (err) {
+                    console.warn('Company info DB sync error:', err.message);
+                  }
                 }}
                 className="flex items-center gap-2 px-5 py-2 text-sm font-bold bg-brand-500 text-white rounded-lg hover:bg-brand-600 transition-all shadow-sm"
               >

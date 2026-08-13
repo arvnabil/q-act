@@ -37,6 +37,26 @@ const localUploadPlugin = () => ({
             res.end(JSON.stringify({ error: e.message }));
           }
         });
+      } else if (req.url.startsWith('/images/') && req.method === 'GET') {
+        const filename = req.url.split('/').pop();
+        const filePath = path.resolve(__dirname, 'public/images', filename);
+        if (fs.existsSync(filePath)) {
+          const ext = path.extname(filename).slice(1);
+          const mimeTypes = {
+            'png': 'image/png',
+            'jpg': 'image/jpeg',
+            'jpeg': 'image/jpeg',
+            'webp': 'image/webp',
+            'gif': 'image/gif',
+            'avif': 'image/avif'
+          };
+          res.setHeader('Content-Type', mimeTypes[ext] || 'application/octet-stream');
+          // Add cache-control to prevent browser from caching the 404 from earlier if any
+          res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+          fs.createReadStream(filePath).pipe(res);
+        } else {
+          next();
+        }
       } else {
         next();
       }
