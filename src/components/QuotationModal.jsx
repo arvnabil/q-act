@@ -46,7 +46,10 @@ export default function QuotationModal({ isOpen, onClose, onCreated }) {
 
   // New customer form state
   const [newCompanyName, setNewCompanyName] = useState('');
+  const [newCompanyAddress, setNewCompanyAddress] = useState('');
   const [newPics, setNewPics]               = useState([{ name: '', phone: '', email: '' }]);
+
+  const [editCompanyAddress, setEditCompanyAddress] = useState('');
 
   // Quotation info state
   const [salesName, setSalesName]   = useState('');
@@ -82,9 +85,11 @@ export default function QuotationModal({ isOpen, onClose, onCreated }) {
         phone: primary.phone || '',
         email: primary.email || ''
       });
+      setEditCompanyAddress(customer.address || '');
     } else {
       setSelectedPicId('');
       setPicForm({ name: '', phone: '', email: '' });
+      setEditCompanyAddress('');
     }
   }, [selectedCustomerId, customers]);
 
@@ -143,22 +148,30 @@ export default function QuotationModal({ isOpen, onClose, onCreated }) {
     setIsSubmitting(true);
     try {
       // 1. If mode === 'existing' and selectedPicId === 'new', insert new PIC into Supabase
-      if (mode === 'existing' && selectedPicId === 'new') {
-        const { data: newPic, error: picErr } = await supabase
-          .from('customer_pics')
-          .insert([{
-            customer_id: selectedCustomerId,
-            name: picForm.name.trim(),
-            phone: picForm.phone.trim() || null,
-            email: picForm.email.trim() || null,
-            is_primary: false,
-          }])
-          .select()
-          .single();
+      if (mode === 'existing') {
+        if (selectedPicId === 'new') {
+          const { data: newPic, error: picErr } = await supabase
+            .from('customer_pics')
+            .insert([{
+              customer_id: selectedCustomerId,
+              name: picForm.name.trim(),
+              phone: picForm.phone.trim() || null,
+              email: picForm.email.trim() || null,
+              is_primary: false,
+            }])
+            .select()
+            .single();
 
-        if (picErr) throw picErr;
-        picId = String(newPic.id);
-        queryClient.invalidateQueries({ queryKey: ['customers'] });
+          if (picErr) throw picErr;
+          picId = String(newPic.id);
+          queryClient.invalidateQueries({ queryKey: ['customers'] });
+        }
+
+        const customer = customers?.find(c => c.id === selectedCustomerId);
+        if (customer && (customer.address || '') !== editCompanyAddress.trim()) {
+          await api.updateCustomer(selectedCustomerId, { address: editCompanyAddress.trim() || null });
+          queryClient.invalidateQueries({ queryKey: ['customers'] });
+        }
       }
 
       // 2. If mode === 'new', create customer and pics in Supabase
@@ -177,6 +190,7 @@ export default function QuotationModal({ isOpen, onClose, onCreated }) {
 
         const customerData = {
           name: newCompanyName.trim(),
+          address: newCompanyAddress.trim() || null,
           sales_id: user?.id || null,
           bu_id: user?.bu?.id || null,
         };
@@ -231,6 +245,8 @@ export default function QuotationModal({ isOpen, onClose, onCreated }) {
 
       // Reset form & Close
       setNewCompanyName('');
+      setNewCompanyAddress('');
+      setEditCompanyAddress('');
       setNewPics([{ name: '', phone: '', email: '' }]);
       setSelectedCustomerId('');
       setSelectedPicId('');
@@ -308,9 +324,21 @@ export default function QuotationModal({ isOpen, onClose, onCreated }) {
                     <option value="">-- Pilih Customer --</option>
                     {availableCustomers?.map(c => (
                       <option key={c.id} value={c.id}>{c.name}</option>
-                    ))}
                   </select>
                 </div>
+
+                {selectedCustomerId && (
+                  <div className="flex flex-col gap-1.5 animate-fade-in mt-1">
+                    <label className="text-xs font-semibold text-surface-600">Alamat Lengkap Perusahaan</label>
+                    <textarea
+                      placeholder="Alamat akan tersimpan otomatis saat quotation dibuat..."
+                      value={editCompanyAddress}
+                      onChange={e => setEditCompanyAddress(e.target.value)}
+                      rows={2}
+                      className="w-full bg-surface-50 border border-surface-200 rounded-lg px-3 py-2 text-sm text-surface-700 outline-none focus:border-brand-500 transition-colors resize-y"
+                    />
+                  </div>
+                )}
 
                 {/* PIC Selection Area for selected customer */}
                 {selectedCustomerId && (
@@ -408,8 +436,19 @@ export default function QuotationModal({ isOpen, onClose, onCreated }) {
                   />
                 </div>
 
+                <div className="flex flex-col gap-1.5 mt-1">
+                  <label className="text-xs font-semibold text-surface-600">Alamat Lengkap Perusahaan</label>
+                  <textarea
+                    placeholder="Contoh: Jl. Sudirman No. 1..."
+                    value={newCompanyAddress}
+                    onChange={e => setNewCompanyAddress(e.target.value)}
+                    rows={2}
+                    className="w-full bg-surface-50 border border-surface-200 rounded-lg px-3 py-2 text-sm text-surface-700 outline-none focus:border-brand-500 transition-colors resize-y"
+                  />
+                </div>
+
                 <div>
-                  <div className="flex items-center justify-between mb-1.5">
+                  <div className="flex items-center justify-between mb-1.5 mt-2">
                     <label className="text-xs font-semibold text-surface-600">Daftar PIC <span className="text-red-400">*</span></label>
                     <button
                       type="button"
