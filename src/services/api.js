@@ -1133,3 +1133,107 @@ export async function getQuotationsByBU(buId) {
   }
 }
 
+// ============================================
+// ACTIVITY LOGS
+// ============================================
+
+export async function logActivity({ userId, action, entityType, entityId, description }) {
+  try {
+    const { error } = await supabase.from('activity_logs').insert([{
+      user_id: userId,
+      action,
+      entity_type: entityType || null,
+      entity_id: entityId || null,
+      description: description || null,
+    }]);
+    if (error) console.warn('[logActivity] error:', error.message);
+  } catch (err) {
+    console.warn('[logActivity] exception:', err);
+  }
+}
+
+export async function getActivityLogs(userId, limit = 30) {
+  try {
+    let query = supabase
+      .from('activity_logs')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(limit);
+    if (userId) query = query.eq('user_id', userId);
+    const { data, error } = await query;
+    if (error) throw error;
+    return data || [];
+  } catch (err) {
+    console.warn('[getActivityLogs] error:', err);
+    return [];
+  }
+}
+
+// ============================================
+// NOTIFICATIONS
+// ============================================
+
+export async function createNotification({ userId, title, message, link }) {
+  try {
+    const { error } = await supabase.from('notifications').insert([{
+      user_id: userId,
+      title,
+      message,
+      link: link || null,
+      is_read: false,
+    }]);
+    if (error) console.warn('[createNotification] error:', error.message);
+  } catch (err) {
+    console.warn('[createNotification] exception:', err);
+  }
+}
+
+export async function getNotifications(userId) {
+  try {
+    const { data, error } = await supabase
+      .from('notifications')
+      .select('*')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false })
+      .limit(50);
+    if (error) throw error;
+    return data || [];
+  } catch (err) {
+    console.warn('[getNotifications] error:', err);
+    return [];
+  }
+}
+
+export async function markNotificationAsRead(id) {
+  try {
+    const { error } = await supabase
+      .from('notifications')
+      .update({ is_read: true })
+      .eq('id', id);
+    if (error) throw error;
+  } catch (err) {
+    console.warn('[markNotificationAsRead] error:', err);
+  }
+}
+
+export async function markAllNotificationsAsRead(userId) {
+  try {
+    const { error } = await supabase
+      .from('notifications')
+      .update({ is_read: true })
+      .eq('user_id', userId)
+      .eq('is_read', false);
+    if (error) throw error;
+  } catch (err) {
+    console.warn('[markAllNotificationsAsRead] error:', err);
+  }
+}
+
+export async function deleteNotification(id) {
+  try {
+    const { error } = await supabase.from('notifications').delete().eq('id', id);
+    if (error) throw error;
+  } catch (err) {
+    console.warn('[deleteNotification] error:', err);
+  }
+}

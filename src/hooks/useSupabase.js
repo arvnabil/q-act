@@ -349,3 +349,60 @@ export function useUpdateMasterTermsSettings() {
     },
   });
 }
+
+// ============================================
+// ACTIVITY LOGS
+// ============================================
+
+export function useActivityLogs(userId) {
+  return useQuery({
+    queryKey: ['activity_logs', userId],
+    queryFn: () => api.getActivityLogs(userId),
+    enabled: !!userId,
+    staleTime: 30000,
+  });
+}
+
+// ============================================
+// NOTIFICATIONS
+// ============================================
+
+export function useNotifications(userId) {
+  return useQuery({
+    queryKey: ['notifications', userId],
+    queryFn: () => api.getNotifications(userId),
+    enabled: !!userId,
+    refetchInterval: 30000, // poll every 30s for new notifications
+    staleTime: 15000,
+  });
+}
+
+export function useMarkNotificationRead() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id) => api.markNotificationAsRead(id),
+    onSuccess: (_, id) => {
+      queryClient.invalidateQueries({ queryKey: ['notifications'] });
+    },
+  });
+}
+
+export function useMarkAllNotificationsRead() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (userId) => api.markAllNotificationsAsRead(userId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['notifications'] });
+    },
+  });
+}
+
+export function useDeleteNotification() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id) => api.deleteNotification(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['notifications'] });
+    },
+  });
+}

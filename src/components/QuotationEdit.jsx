@@ -562,6 +562,21 @@ export default function QuotationEdit({ quotation, onBack, onSaved }) {
       setStatus(finalStatus);
       toast.success(`Quotation ${quotation.id} berhasil diperbarui (Status: ${finalStatus === 'sent' ? 'Sent' : finalStatus})!`);
       queryClient.invalidateQueries({ queryKey: ['quotations'] });
+
+      // Log activity
+      const actionLabel = finalStatus === 'sent' ? 'SEND_QUOTATION' : 'UPDATE_QUOTATION';
+      const descLabel = finalStatus === 'sent'
+        ? `Mengirim quotation ${quotation.id} ke customer`
+        : `Memperbarui quotation ${quotation.id}`;
+      api.logActivity({
+        userId: user?.id,
+        action: actionLabel,
+        entityType: 'QUOTATION',
+        entityId: quotation.id,
+        description: descLabel,
+      });
+      queryClient.invalidateQueries({ queryKey: ['activity_logs'] });
+
       if (onSaved) onSaved();
       else onBack();
     } catch (err) {

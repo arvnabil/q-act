@@ -3,7 +3,7 @@ import { Search, Eye, Download, Trash2, Loader2, FileText, Users, ShieldCheck, R
 import { format, parseISO, isValid } from 'date-fns';
 import { id as idLocale } from 'date-fns/locale';
 import { useQuotations, useSalesUsers, useTrashQuotations, useBusinessUnits } from '../hooks/useSupabase.js';
-import { restoreQuotation, hardDeleteQuotation } from '../services/api.js';
+import { restoreQuotation, hardDeleteQuotation, logActivity, createNotification } from '../services/api.js';
 import useAuthStore from '../store/authStore.js';
 import Pagination from '../components/Pagination.jsx';
 import { Navigate } from 'react-router-dom';
@@ -148,6 +148,15 @@ export default function Manager() {
       toast.success(`Quotation ${id} berhasil dipulihkan!`);
       queryClient.invalidateQueries({ queryKey: ['quotations'] });
       queryClient.invalidateQueries({ queryKey: ['trash_quotations'] });
+
+      // Find quotation owner to notify
+      const q = activeQuotations.find(q => q.id === id) || trashQuotations.find(q => q.id === id);
+      const ownerId = q?.sales_id || q?.created_by;
+      if (ownerId) {
+        createNotification({ userId: ownerId, title: `Quotation ${id} Dipulihkan`, message: `Manager memulihkan quotation ${id} dari trash.`, link: '/quotations' });
+      }
+      logActivity({ userId: user?.id, action: 'RESTORE_QUOTATION', entityType: 'QUOTATION', entityId: id, description: `Memulihkan quotation ${id} dari trash` });
+      queryClient.invalidateQueries({ queryKey: ['activity_logs'] });
     } catch (err) {
       console.error(err);
       toast.error('Gagal memulihkan quotation.');

@@ -243,6 +243,16 @@ export default function QuotationModal({ isOpen, onClose, onCreated }) {
       queryClient.invalidateQueries({ queryKey: ['quotations'] });
       queryClient.invalidateQueries({ queryKey: ['dashboard_stats'] });
 
+      // Log activity
+      api.logActivity({
+        userId: user?.id,
+        action: 'CREATE_QUOTATION',
+        entityType: 'QUOTATION',
+        entityId: newQuo.id,
+        description: `Membuat quotation baru untuk ${newQuo.customer?.name || customerId}`,
+      });
+      queryClient.invalidateQueries({ queryKey: ['activity_logs'] });
+
       // Reset form & Close
       setNewCompanyName('');
       setNewCompanyAddress('');
