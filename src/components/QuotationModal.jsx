@@ -324,6 +324,7 @@ export default function QuotationModal({ isOpen, onClose, onCreated }) {
                     <option value="">-- Pilih Customer --</option>
                     {availableCustomers?.map(c => (
                       <option key={c.id} value={c.id}>{c.name}</option>
+                    ))}
                   </select>
                 </div>
 
