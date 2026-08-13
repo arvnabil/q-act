@@ -134,6 +134,8 @@ export default function Manager() {
     );
   }) || [];
 
+  const totalNilaiQuotation = filtered.reduce((sum, q) => sum + calcGrandTotal(q), 0);
+
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const safePage   = Math.min(page, totalPages);
   const pagedItems = filtered.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
@@ -192,8 +194,8 @@ export default function Manager() {
         </div>
 
         <div className="bg-white rounded-xl border border-surface-200 p-4 shadow-sm">
-          <span className="text-[11px] font-bold text-surface-400 uppercase tracking-wider block mb-1">Total Revenue PO</span>
-          <div className="text-2xl font-extrabold text-emerald-600">{formatCurrency(stats.revenue)}</div>
+          <span className="text-[11px] font-bold text-surface-400 uppercase tracking-wider block mb-1">Total Nilai Quotation</span>
+          <div className="text-2xl font-extrabold text-emerald-600">{formatCurrency(totalNilaiQuotation)}</div>
         </div>
 
         <div className="bg-white rounded-xl border border-surface-200 p-4 shadow-sm">
