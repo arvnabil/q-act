@@ -563,7 +563,7 @@ export default function QuotationEdit({ quotation, onBack, onSaved }) {
       toast.success(`Quotation ${quotation.id} berhasil diperbarui (Status: ${finalStatus === 'sent' ? 'Sent' : finalStatus})!`);
       queryClient.invalidateQueries({ queryKey: ['quotations'] });
 
-      // Log activity
+      // Log activity + self-notification
       const actionLabel = finalStatus === 'sent' ? 'SEND_QUOTATION' : 'UPDATE_QUOTATION';
       const descLabel = finalStatus === 'sent'
         ? `Mengirim quotation ${quotation.id} ke customer`
@@ -575,7 +575,25 @@ export default function QuotationEdit({ quotation, onBack, onSaved }) {
         entityId: quotation.id,
         description: descLabel,
       });
+
+      // Notification message per status
+      const notifMap = {
+        sent:     { emoji: '📤', title: 'Quotation Terkirim', msg: `Quotation ${quotation.id} berhasil diubah status ke Sent / Dikirim.` },
+        approved: { emoji: '🎉', title: 'Quotation PO!', msg: `Quotation ${quotation.id} telah disetujui (PO). Selamat!` },
+        rejected: { emoji: '❌', title: 'Quotation Ditolak', msg: `Quotation ${quotation.id} ditandai sebagai Ditolak (Rejected).` },
+        expired:  { emoji: '⏰', title: 'Quotation Expired', msg: `Quotation ${quotation.id} telah ditandai sebagai Expired.` },
+        created:  { emoji: '📝', title: 'Quotation Diperbarui', msg: `Quotation ${quotation.id} berhasil diperbarui dan disimpan.` },
+      };
+      const notif = notifMap[finalStatus] || { emoji: '💾', title: 'Quotation Diperbarui', msg: `Quotation ${quotation.id} berhasil disimpan.` };
+      api.createNotification({
+        userId: user?.id,
+        title: `${notif.emoji} ${notif.title}`,
+        message: notif.msg,
+        link: '/quotations',
+      });
+
       queryClient.invalidateQueries({ queryKey: ['activity_logs'] });
+      queryClient.invalidateQueries({ queryKey: ['notifications'] });
 
       if (onSaved) onSaved();
       else onBack();

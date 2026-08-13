@@ -243,7 +243,7 @@ export default function QuotationModal({ isOpen, onClose, onCreated }) {
       queryClient.invalidateQueries({ queryKey: ['quotations'] });
       queryClient.invalidateQueries({ queryKey: ['dashboard_stats'] });
 
-      // Log activity
+      // Log activity + send self-notification
       api.logActivity({
         userId: user?.id,
         action: 'CREATE_QUOTATION',
@@ -251,7 +251,14 @@ export default function QuotationModal({ isOpen, onClose, onCreated }) {
         entityId: newQuo.id,
         description: `Membuat quotation baru untuk ${newQuo.customer?.name || customerId}`,
       });
+      api.createNotification({
+        userId: user?.id,
+        title: `✅ Quotation Berhasil Dibuat`,
+        message: `Quotation ${newQuo.id} untuk customer berhasil dibuat dan disimpan.`,
+        link: '/quotations',
+      });
       queryClient.invalidateQueries({ queryKey: ['activity_logs'] });
+      queryClient.invalidateQueries({ queryKey: ['notifications'] });
 
       // Reset form & Close
       setNewCompanyName('');
