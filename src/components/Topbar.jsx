@@ -1,6 +1,6 @@
 import React from 'react';
 import { Menu, Search, Bell, Plus } from 'lucide-react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 
 const PAGE_CONFIG = {
   '/': { title: 'Dashboard', subtitle: 'Overview kinerja quotation bulan ini' },
@@ -13,8 +13,9 @@ const PAGE_CONFIG = {
   '/profile': { title: 'Profil Pengguna', subtitle: 'Kelola informasi akun dan pengaturan profil' },
 };
 
-export default function Topbar({ setMobileOpen, openQuotationModal }) {
+export default function Topbar({ setMobileOpen }) {
   const location = useLocation();
+  const navigate = useNavigate();
   const config = PAGE_CONFIG[location.pathname] || PAGE_CONFIG['/'];
 
   return (
@@ -45,8 +46,8 @@ export default function Topbar({ setMobileOpen, openQuotationModal }) {
           <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full notif-dot"></span>
         </button>
         <button 
-          onClick={openQuotationModal}
-          className="flex items-center gap-2 bg-brand-500 hover:bg-brand-600 text-white text-sm font-semibold px-4 py-2 rounded-lg shadow-sm hover:shadow transition-all"
+          onClick={() => navigate('/quotations?create=true')}
+          className="flex items-center gap-2 bg-brand-500 hover:bg-brand-600 text-white text-sm font-semibold px-4 py-2 rounded-lg shadow-sm hover:shadow transition-all cursor-pointer"
         >
           <Plus className="w-4 h-4" />
           <span className="hidden sm:inline">Buat Quotation</span>

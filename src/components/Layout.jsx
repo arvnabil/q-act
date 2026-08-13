@@ -2,14 +2,12 @@ import React, { useState } from 'react';
 import { Outlet } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import Topbar from './Topbar';
-import QuotationModal from './QuotationModal';
 import useAuthStore from '../store/authStore';
 import { useMaintenanceMode } from '../hooks/useSupabase';
 import MaintenanceScreen from './MaintenanceScreen';
 
 export default function Layout() {
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [isQuotationModalOpen, setIsQuotationModalOpen] = useState(false);
   const { user } = useAuthStore();
   const { data: maintenanceSettings, isLoading } = useMaintenanceMode();
 
@@ -51,19 +49,11 @@ export default function Layout() {
     <div className="flex min-h-screen bg-surface-50">
       <Sidebar mobileOpen={mobileOpen} setMobileOpen={setMobileOpen} />
       <main className="flex-1 lg:ml-60 flex flex-col min-h-screen transition-all">
-        <Topbar 
-          setMobileOpen={setMobileOpen} 
-          openQuotationModal={() => setIsQuotationModalOpen(true)} 
-        />
+        <Topbar setMobileOpen={setMobileOpen} />
         <div className="flex-1 p-5 lg:p-7 flex flex-col gap-5">
           <Outlet />
         </div>
       </main>
-      
-      <QuotationModal 
-        isOpen={isQuotationModalOpen} 
-        onClose={() => setIsQuotationModalOpen(false)} 
-      />
     </div>
   );
 }

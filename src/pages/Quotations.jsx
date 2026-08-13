@@ -13,6 +13,7 @@ import { printQuotation } from '../utils/printQuotation.js';
 import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../services/supabase.js';
 import { toast } from 'react-hot-toast';
+import { useSearchParams } from 'react-router-dom';
 
 const PAGE_SIZE = 8;
 
@@ -59,6 +60,8 @@ export default function Quotations() {
   const [search, setSearch]             = useState('');
   const [page, setPage]                 = useState(1);
   const [selectedIds, setSelectedIds]   = useState([]);
+  
+  const [searchParams, setSearchParams] = useSearchParams();
 
   // View state: 'list' | 'edit' | 'detail'
   const [viewState, setViewState]             = useState('list');
@@ -80,6 +83,15 @@ export default function Quotations() {
   const buQuery   = useQuotationsByBU(user?.bu?.id);
   const activeQuery = (isManager || isFinance) ? allQuery : (user?.bu?.id ? buQuery : mineQuery);
   const { data: quotations, isLoading, isError } = activeQuery;
+
+  // Handle ?create=true search parameter to open modal automatically
+  useEffect(() => {
+    if (searchParams.get('create') === 'true') {
+      setIsModalOpen(true);
+      searchParams.delete('create');
+      setSearchParams(searchParams, { replace: true });
+    }
+  }, [searchParams, setSearchParams]);
 
   // Reset page & selection on filter change
   useEffect(() => { setPage(1); setSelectedIds([]); }, [search, filterStatus]);
