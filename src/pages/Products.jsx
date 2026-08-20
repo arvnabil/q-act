@@ -171,7 +171,10 @@ export default function Products() {
             });
             // Parse all numeric fields robustly
             ['price', 'pricelist_distributor', 'diskon_distributor', 'modal'].forEach(f => {
-              if (obj[f] !== undefined) obj[f] = parseNum(obj[f]);
+              if (obj[f] !== undefined) {
+                const parsedVal = parseNum(obj[f]);
+                obj[f] = f === 'diskon_distributor' ? parsedVal : Math.round(parsedVal);
+              }
             });
 
             const pl = obj.pricelist_distributor || 0;
@@ -188,12 +191,24 @@ export default function Products() {
                 obj.modal = Math.round(pl * (1 - dk / 100));
               }
             }
+            if (obj.sku) {
+              obj.sku = String(obj.sku).trim().toUpperCase();
+            }
             return { _rowNum: i + 2, ...obj };
           });
-          // Validate required columns
+          // Validate required columns and check duplicates within the file
           const errors = [];
+          const skuSeen = new Map();
           mapped.forEach(r => {
-            if (!r.sku) errors.push(`Baris ${r._rowNum}: SKU kosong.`);
+            if (!r.sku) {
+              errors.push(`Baris ${r._rowNum}: SKU kosong.`);
+            } else {
+              if (skuSeen.has(r.sku)) {
+                errors.push(`Baris ${r._rowNum}: SKU "${r.sku}" duplikat dengan Baris ${skuSeen.get(r.sku)} di file Excel.`);
+              } else {
+                skuSeen.set(r.sku, r._rowNum);
+              }
+            }
             if (!r.name) errors.push(`Baris ${r._rowNum}: Nama Produk kosong.`);
           });
           setImportErrors(errors);
@@ -239,13 +254,13 @@ export default function Products() {
         const { _rowNum, brand, ...rest } = r;
         const brandId = brandNameMap.get((brand || '').toLowerCase().trim()) || null;
         return {
-          sku: String(rest.sku || '').trim(),
+          sku: String(rest.sku || '').trim().toUpperCase(),
           name: String(rest.name || '').trim(),
           description: String(rest.description || '').trim() || null,
-          price: Number(rest.price) || 0,
-          pricelist_distributor: Number(rest.pricelist_distributor) || 0,
+          price: Math.round(Number(rest.price) || 0),
+          pricelist_distributor: Math.round(Number(rest.pricelist_distributor) || 0),
           diskon_distributor: Number(rest.diskon_distributor) || 0,
-          modal: Number(rest.modal) || 0,
+          modal: Math.round(Number(rest.modal) || 0),
           ...(brandId ? { brand_id: brandId } : {}),
         };
       });

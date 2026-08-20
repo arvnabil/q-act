@@ -203,7 +203,7 @@ flowchart TD
 
 | Kolom         | Tipe         | Constraint     | Keterangan         |
 | ------------- | ------------ | -------------- | ------------------ |
-| `sku`         | VARCHAR(30)  | PK             | Kode produk unik   |
+| `sku`         | VARCHAR(100) | PK             | Kode produk unik   |
 | `brand_id`    | INT          | FK → brands.id |                    |
 | `name`        | VARCHAR(200) | NOT NULL       | Nama produk        |
 | `description` | TEXT         |                | Deskripsi panjang  |
@@ -242,7 +242,7 @@ flowchart TD
 | -------------- | ------------ | ------------------ | -------------------------------------- |
 | `id`           | SERIAL       | PK                 |                                        |
 | `quotation_id` | VARCHAR(20)  | FK → quotations.id |                                        |
-| `sku`          | VARCHAR(30)  | FK → products.sku  |                                        |
+| `sku`          | VARCHAR(100) | FK → products.sku  |                                        |
 | `qty`          | INT          | NOT NULL           | Jumlah unit                            |
 | `price`        | BIGINT       | NOT NULL           | Harga saat quotation dibuat (snapshot) |
 | `margin`       | DECIMAL(5,2) | NULLABLE           | Margin % jika ada                      |
