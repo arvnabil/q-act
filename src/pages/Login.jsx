@@ -12,6 +12,7 @@ export default function Login() {
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
+  const [view, setView] = useState('login'); // 'login' | 'forgot' | 'reset-sent'
 
   const handleLogin = async (e) => {
     if (e) e.preventDefault();
@@ -37,6 +38,34 @@ export default function Login() {
       // If successful, authStore listener will pick it up and redirect automatically
     } catch (error) {
       setErrorMsg(error.message === 'Invalid login credentials' ? 'Email atau kata sandi salah.' : error.message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleRequestReset = async (e) => {
+    if (e) e.preventDefault();
+    if (!email) {
+      setErrorMsg('Harap isi alamat email Anda.');
+      return;
+    }
+
+    setIsLoading(true);
+    setErrorMsg('');
+
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/reset-password`,
+      });
+
+      if (error) {
+        throw error;
+      }
+
+      setView('reset-sent');
+      toast.success('Link reset kata sandi telah dikirim!');
+    } catch (error) {
+      setErrorMsg(error.message);
     } finally {
       setIsLoading(false);
     }
@@ -119,77 +148,163 @@ export default function Login() {
       <div className="flex-1 flex flex-col justify-center items-center p-6 md:p-12 lg:p-16 relative">
         <div className="w-full max-w-[420px] bg-white lg:bg-transparent rounded-2xl lg:rounded-none border border-surface-200 lg:border-none p-6 md:p-8 lg:p-0 shadow-sm lg:shadow-none animate-fade-in-up">
           
-          <div className="mb-8">
-            <h1 className="text-2xl font-bold text-surface-900 mb-2">Selamat Datang Kembali</h1>
-            <p className="text-sm text-surface-500">Masuk ke portal sales ACTiV untuk mengelola quotation</p>
-          </div>
-
-          <form onSubmit={handleLogin} className="flex flex-col gap-4">
-            
-            <div className="flex flex-col gap-1.5">
-              <label className="text-xs font-bold text-surface-600 uppercase tracking-wide">Alamat Email</label>
-              <div className="flex items-center bg-surface-50 border border-surface-200 rounded-xl px-4 py-3 focus-within:border-brand-500 focus-within:ring-2 focus-within:ring-brand-50 transition-all">
-                <svg className="w-5 h-5 text-surface-400 shrink-0 mr-3" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 01-2.25 2.25H4.5A2.25 2.25 0 012.25 17.25V6.75m19.5 0A2.25 2.25 0 0019.5 4.5H4.5a2.25 2.25 0 00-2.25 2.25m19.5 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 8.91a2.25 2.25 0 01-1.07-1.916V6.75" />
-                </svg>
-                <input 
-                  type="email" 
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="contoh@activ.co.id" 
-                  className="bg-transparent border-none outline-none text-sm text-surface-700 placeholder-surface-400 w-full" 
-                  required 
-                />
+          {view === 'login' && (
+            <>
+              <div className="mb-8 animate-fade-in-up">
+                <h1 className="text-2xl font-bold text-surface-900 mb-2">Selamat Datang Kembali</h1>
+                <p className="text-sm text-surface-500">Masuk ke portal sales ACTiV untuk mengelola quotation</p>
               </div>
-            </div>
 
-            <div className="flex flex-col gap-1.5">
-              <div className="flex justify-between items-center">
-                <label className="text-xs font-bold text-surface-600 uppercase tracking-wide">Kata Sandi</label>
-                <a href="#" className="text-xs font-semibold text-brand-600 hover:text-brand-700">Lupa Kata Sandi?</a>
-              </div>
-              <div className="flex items-center bg-surface-50 border border-surface-200 rounded-xl px-4 py-3 focus-within:border-brand-500 focus-within:ring-2 focus-within:ring-brand-50 transition-all">
-                <svg className="w-5 h-5 text-surface-400 shrink-0 mr-3" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
-                </svg>
-                <input 
-                  type={showPassword ? 'text' : 'password'}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="••••••••" 
-                  className="bg-transparent border-none outline-none text-sm text-surface-700 placeholder-surface-400 w-full" 
-                  required 
-                />
+              <form onSubmit={handleLogin} className="flex flex-col gap-4 animate-fade-in-up">
+                
+                <div className="flex flex-col gap-1.5 animate-fade-in-up">
+                  <label className="text-xs font-bold text-surface-600 uppercase tracking-wide">Alamat Email</label>
+                  <div className="flex items-center bg-surface-50 border border-surface-200 rounded-xl px-4 py-3 focus-within:border-brand-500 focus-within:ring-2 focus-within:ring-brand-50 transition-all">
+                    <svg className="w-5 h-5 text-surface-400 shrink-0 mr-3" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 01-2.25 2.25H4.5A2.25 2.25 0 012.25 17.25V6.75m19.5 0A2.25 2.25 0 0019.5 4.5H4.5a2.25 2.25 0 00-2.25 2.25m19.5 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 8.91a2.25 2.25 0 01-1.07-1.916V6.75" />
+                    </svg>
+                    <input 
+                      type="email" 
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder="contoh@activ.co.id" 
+                      className="bg-transparent border-none outline-none text-sm text-surface-700 placeholder-surface-400 w-full" 
+                      required 
+                    />
+                  </div>
+                </div>
+
+                <div className="flex flex-col gap-1.5 animate-fade-in-up animate-delay-1">
+                  <div className="flex justify-between items-center">
+                    <label className="text-xs font-bold text-surface-600 uppercase tracking-wide">Kata Sandi</label>
+                    <button 
+                      type="button" 
+                      onClick={() => { setView('forgot'); setErrorMsg(''); }}
+                      className="text-xs font-semibold text-brand-600 hover:text-brand-700 transition-colors"
+                    >
+                      Lupa Kata Sandi?
+                    </button>
+                  </div>
+                  <div className="flex items-center bg-surface-50 border border-surface-200 rounded-xl px-4 py-3 focus-within:border-brand-500 focus-within:ring-2 focus-within:ring-brand-50 transition-all">
+                    <svg className="w-5 h-5 text-surface-400 shrink-0 mr-3" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
+                    </svg>
+                    <input 
+                      type={showPassword ? 'text' : 'password'}
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      placeholder="••••••••" 
+                      className="bg-transparent border-none outline-none text-sm text-surface-700 placeholder-surface-400 w-full" 
+                      required 
+                    />
+                    <button 
+                      type="button" 
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="text-surface-400 hover:text-surface-600 focus:outline-none transition-colors p-1"
+                    >
+                      {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+                    </button>
+                  </div>
+                </div>
+                
+                {errorMsg && (
+                  <div className="text-xs font-medium text-red-500 bg-red-50 border border-red-100 rounded-lg p-2.5 animate-fade-in-up">
+                    {errorMsg}
+                  </div>
+                )}
+
+                <button type="submit" id="hidden-submit" className="hidden"></button>
                 <button 
                   type="button" 
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="text-surface-400 hover:text-surface-600 focus:outline-none transition-colors p-1"
+                  onClick={handleLogin}
+                  disabled={isLoading}
+                  className="flex items-center justify-center gap-2 bg-brand-500 hover:bg-brand-600 text-white text-sm font-semibold py-3 px-4 rounded-xl shadow-sm hover:shadow-md transition-all duration-200 disabled:opacity-70 disabled:cursor-not-allowed mt-2 animate-fade-in-up animate-delay-2"
                 >
-                  {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+                  {isLoading ? (
+                    <>Memverifikasi... <Loader2 className="animate-spin" size={18} /></>
+                  ) : (
+                    'Masuk Ke Sistem'
+                  )}
                 </button>
-              </div>
-            </div>
-            
-            {errorMsg && (
-              <div className="text-xs font-medium text-red-500 bg-red-50 border border-red-100 rounded-lg p-2.5">
-                {errorMsg}
-              </div>
-            )}
+              </form>
+            </>
+          )}
 
-            <button type="submit" id="hidden-submit" className="hidden"></button>
-            <button 
-              type="button" 
-              onClick={handleLogin}
-              disabled={isLoading}
-              className="flex items-center justify-center gap-2 bg-brand-500 hover:bg-brand-600 text-white text-sm font-semibold py-3 px-4 rounded-xl shadow-sm hover:shadow-md transition-all duration-200 disabled:opacity-70 disabled:cursor-not-allowed mt-2"
-            >
-              {isLoading ? (
-                <>Memverifikasi... <Loader2 className="animate-spin" size={18} /></>
-              ) : (
-                'Masuk Ke Sistem'
-              )}
-            </button>
-          </form>
+          {view === 'forgot' && (
+            <div className="animate-fade-in-up">
+              <div className="mb-8">
+                <h1 className="text-2xl font-bold text-surface-900 mb-2">Lupa Kata Sandi?</h1>
+                <p className="text-sm text-surface-500">Masukkan email terdaftar Anda untuk menerima tautan pemulihan kata sandi.</p>
+              </div>
+
+              <form onSubmit={handleRequestReset} className="flex flex-col gap-4">
+                <div className="flex flex-col gap-1.5 animate-fade-in-up">
+                  <label className="text-xs font-bold text-surface-600 uppercase tracking-wide">Alamat Email</label>
+                  <div className="flex items-center bg-surface-50 border border-surface-200 rounded-xl px-4 py-3 focus-within:border-brand-500 focus-within:ring-2 focus-within:ring-brand-50 transition-all">
+                    <svg className="w-5 h-5 text-surface-400 shrink-0 mr-3" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 01-2.25 2.25H4.5A2.25 2.25 0 012.25 17.25V6.75m19.5 0A2.25 2.25 0 0019.5 4.5H4.5a2.25 2.25 0 00-2.25 2.25m19.5 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 8.91a2.25 2.25 0 01-1.07-1.916V6.75" />
+                    </svg>
+                    <input 
+                      type="email" 
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder="contoh@activ.co.id" 
+                      className="bg-transparent border-none outline-none text-sm text-surface-700 placeholder-surface-400 w-full" 
+                      required 
+                    />
+                  </div>
+                </div>
+
+                {errorMsg && (
+                  <div className="text-xs font-medium text-red-500 bg-red-50 border border-red-100 rounded-lg p-2.5 animate-fade-in-up">
+                    {errorMsg}
+                  </div>
+                )}
+
+                <button 
+                  type="submit"
+                  disabled={isLoading}
+                  className="flex items-center justify-center gap-2 bg-brand-500 hover:bg-brand-600 text-white text-sm font-semibold py-3 px-4 rounded-xl shadow-sm hover:shadow-md transition-all duration-200 disabled:opacity-70 disabled:cursor-not-allowed mt-2 w-full animate-fade-in-up animate-delay-1"
+                >
+                  {isLoading ? (
+                    <>Mengirim... <Loader2 className="animate-spin" size={18} /></>
+                  ) : (
+                    'Kirim Link Reset'
+                  )}
+                </button>
+
+                <button 
+                  type="button"
+                  onClick={() => { setView('login'); setErrorMsg(''); }}
+                  className="text-xs font-semibold text-center text-surface-500 hover:text-brand-600 transition-colors mt-2 w-full"
+                >
+                  Kembali ke Halaman Login
+                </button>
+              </form>
+            </div>
+          )}
+
+          {view === 'reset-sent' && (
+            <div className="animate-fade-in-up text-center">
+              <div className="w-16 h-16 rounded-full bg-brand-50 flex items-center justify-center mx-auto mb-6 border border-brand-100">
+                <svg className="w-8 h-8 text-brand-500" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </div>
+              <h1 className="text-2xl font-bold text-surface-900 mb-3">Email Pemulihan Terkirim</h1>
+              <p className="text-sm text-surface-500 mb-6 leading-relaxed">
+                Tautan pemulihan kata sandi telah dikirim ke <strong className="text-surface-700 font-semibold">{email}</strong>. 
+                Silakan periksa kotak masuk atau folder spam email Anda.
+              </p>
+              <button 
+                type="button"
+                onClick={() => { setView('login'); setErrorMsg(''); }}
+                className="inline-flex items-center justify-center bg-brand-500 hover:bg-brand-600 text-white text-sm font-semibold py-3 px-6 rounded-xl shadow-sm hover:shadow-md transition-all duration-200 w-full"
+              >
+                Kembali ke Halaman Login
+              </button>
+            </div>
+          )}
 
         </div>
       </div>

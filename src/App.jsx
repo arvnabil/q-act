@@ -17,6 +17,7 @@ import BusinessUnits from './pages/BusinessUnits.jsx';
 import Analytics from './pages/Analytics.jsx';
 import Guide from './pages/Guide.jsx';
 import Support from './pages/Support.jsx';
+import ResetPassword from './pages/ResetPassword.jsx';
 import usePermissionsStore from './store/permissionsStore.js';
 
 function App() {
@@ -43,6 +44,7 @@ function App() {
     <Router>
       <Routes>
         <Route path="/login" element={!user ? <Login /> : <Navigate to="/" replace />} />
+        <Route path="/reset-password" element={<ResetPassword />} />
         <Route path="/guide" element={<Guide />} />
         <Route path="/support" element={<Support />} />
         

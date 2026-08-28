@@ -48,6 +48,9 @@ const useAuthStore = create((set) => ({
         if (currentSession) {
           const userWithBU = await loadUserProfile(currentSession);
           set({ session: currentSession, user: userWithBU, isLoading: false });
+          if (event === 'PASSWORD_RECOVERY' && window.location.pathname !== '/reset-password') {
+            window.location.href = '/reset-password';
+          }
         } else {
           set({ session: null, user: null, isLoading: false });
         }

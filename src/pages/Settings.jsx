@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import ReactDOM from 'react-dom';
-import { Plus, Edit, Trash2, Star, Building2, CreditCard, Users, Loader2, X, Eye, EyeOff, AlertTriangle, FileText, Wrench } from 'lucide-react';
+import { Plus, Edit, Trash2, Star, Building2, CreditCard, Users, Loader2, X, Eye, EyeOff, AlertTriangle, FileText, Wrench, ImageIcon, Globe } from 'lucide-react';
 import { 
   useSalesUsers, useBankAccounts, useMaintenanceMode, useUpdateMaintenanceMode,
   useCompanyInfoSettings, useUpdateCompanyInfoSettings, useMasterTermsSettings, useUpdateMasterTermsSettings 
@@ -12,6 +12,7 @@ import useAuthStore from '../store/authStore.js';
 
 import { getCompanyInfo, saveCompanyInfo } from '../utils/companyInfo.js';
 import { getMasterTemplates, saveMasterTemplate, deleteMasterTemplate } from '../utils/termsTemplates.js';
+import { getDomainLogoMap, saveDomainLogoMap, generateId } from '../utils/domainLogoMap.js';
 
 export default function Settings() {
   const { user } = useAuthStore();
@@ -22,6 +23,12 @@ export default function Settings() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [showPass, setShowPass]       = useState(false);
   const [isSaving, setIsSaving]       = useState(false);
+
+  // Domain Logo Map state
+  const [domainLogoMap, setDomainLogoMap] = useState(() => getDomainLogoMap());
+  const [showDomainModal, setShowDomainModal] = useState(false);
+  const [editingDomainEntry, setEditingDomainEntry] = useState(null); // null = add, object = edit
+  const [domainForm, setDomainForm] = useState({ domain: '', logoPath: '', label: '', maxHeight: '', maxWidth: '' });
 
   const [showBankModal, setShowBankModal]   = useState(false);
   const [editingBank, setEditingBank]       = useState(null); // null = add, object = edit
@@ -510,6 +517,121 @@ export default function Settings() {
         </div>
       )}
 
+      {/* Domain Logo Mapping (Admin Only) */}
+      {isAdmin && (
+        <div className="bg-white rounded-xl border border-surface-200 mb-5">
+          <div className="px-6 py-4 border-b border-surface-100 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Globe className="w-4 h-4 text-surface-400" />
+              <h2 className="text-sm font-bold text-surface-800">Logo per Domain Email</h2>
+              {domainLogoMap.length > 0 && (
+                <span className="text-xs font-bold bg-surface-100 text-surface-500 px-2 py-0.5 rounded-full">{domainLogoMap.length}</span>
+              )}
+            </div>
+            <button
+              onClick={() => {
+                setEditingDomainEntry(null);
+                setDomainForm({ domain: '', logoPath: '', label: '', maxHeight: '', maxWidth: '' });
+                setShowDomainModal(true);
+              }}
+              className="flex items-center gap-2 px-3 py-1.5 text-xs font-semibold bg-brand-500 text-white rounded-lg hover:bg-brand-600 transition-all cursor-pointer"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              Tambah Domain
+            </button>
+          </div>
+
+          <div className="px-6 py-3 bg-surface-50/60 border-b border-surface-100">
+            <p className="text-xs text-surface-500">
+              Pengguna dengan email domain tertentu akan mendapatkan logo yang berbeda pada PDF Quotation yang mereka cetak.
+            </p>
+          </div>
+
+          <div className="overflow-x-auto">
+            {domainLogoMap.length === 0 ? (
+              <div className="py-10 text-center">
+                <Globe className="w-8 h-8 text-surface-200 mx-auto mb-2" />
+                <p className="text-sm text-surface-400">Belum ada domain yang dikonfigurasi.</p>
+                <button
+                  onClick={() => { setEditingDomainEntry(null); setDomainForm({ domain: '', logoPath: '', label: '', maxHeight: '', maxWidth: '' }); setShowDomainModal(true); }}
+                  className="mt-2 text-xs font-semibold text-brand-600 hover:underline cursor-pointer"
+                >+ Tambah sekarang</button>
+              </div>
+            ) : (
+              <table className="w-full">
+                <thead>
+                  <tr className="bg-surface-50 border-b border-surface-200">
+                    <th className="py-3 px-4 text-left text-xs font-bold text-surface-400 uppercase tracking-wider">Domain Email</th>
+                    <th className="py-3 px-4 text-left text-xs font-bold text-surface-400 uppercase tracking-wider">Label</th>
+                    <th className="py-3 px-4 text-left text-xs font-bold text-surface-400 uppercase tracking-wider">Path / URL Logo</th>
+                    <th className="py-3 px-4 text-left text-xs font-bold text-surface-400 uppercase tracking-wider">Preview</th>
+                    <th className="py-3 px-4 text-center text-xs font-bold text-surface-400 uppercase tracking-wider w-24">Aksi</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {domainLogoMap.map(entry => (
+                    <tr key={entry.id} className="border-b border-surface-100 hover:bg-surface-50/60 transition-colors">
+                      <td className="py-3.5 px-4">
+                        <div className="flex items-center gap-2">
+                          <div className="w-7 h-7 rounded-md bg-brand-50 flex items-center justify-center shrink-0">
+                            <Globe className="w-3.5 h-3.5 text-brand-500" />
+                          </div>
+                          <span className="text-sm font-mono font-semibold text-surface-800">@{entry.domain}</span>
+                        </div>
+                      </td>
+                      <td className="py-3.5 px-4">
+                        <span className="text-sm text-surface-600">{entry.label || <span className="text-surface-300 italic">—</span>}</span>
+                      </td>
+                      <td className="py-3.5 px-4">
+                        <code className="text-xs bg-surface-100 text-surface-600 px-2 py-0.5 rounded font-mono">{entry.logoPath}</code>
+                      </td>
+                      <td className="py-3.5 px-4">
+                        <div className="w-20 h-9 bg-surface-100 rounded-md flex items-center justify-center overflow-hidden border border-surface-200">
+                          <img
+                            src={entry.logoPath}
+                            alt={entry.label || entry.domain}
+                            className="max-w-full max-h-full object-contain"
+                            onError={e => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'flex'; }}
+                          />
+                          <span className="hidden items-center justify-center w-full h-full text-[9px] text-surface-400 text-center leading-tight p-1">Tidak<br/>ditemukan</span>
+                        </div>
+                      </td>
+                      <td className="py-3.5 px-4">
+                        <div className="flex items-center justify-center gap-1">
+                          <button
+                            onClick={() => {
+                              setEditingDomainEntry(entry);
+                              setDomainForm({ domain: entry.domain, logoPath: entry.logoPath, label: entry.label || '', maxHeight: entry.maxHeight || '', maxWidth: entry.maxWidth || '' });
+                              setShowDomainModal(true);
+                            }}
+                            className="w-7 h-7 rounded-md flex items-center justify-center text-surface-400 hover:bg-blue-50 hover:text-blue-600 transition-colors cursor-pointer"
+                            title="Edit"
+                          >
+                            <Edit className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={() => {
+                              const updated = domainLogoMap.filter(e => e.id !== entry.id);
+                              setDomainLogoMap(updated);
+                              saveDomainLogoMap(updated);
+                              toast.success(`Domain @${entry.domain} berhasil dihapus.`);
+                            }}
+                            className="w-7 h-7 rounded-md flex items-center justify-center text-surface-400 hover:bg-red-50 hover:text-red-600 transition-colors cursor-pointer"
+                            title="Hapus"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Pengaturan Sistem - Maintenance Mode */}
       {isAdmin && (
         <div className="bg-white rounded-xl border border-surface-200 mb-5">
@@ -692,6 +814,150 @@ export default function Settings() {
                 Ya, Hapus Master Template
               </button>
             </div>
+          </div>
+        </div>,
+        document.body
+      )}
+      {/* Domain Logo Modal */}
+      {showDomainModal && ReactDOM.createPortal(
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden animate-scale-in">
+            <div className="px-6 py-4 border-b border-surface-100 flex items-center justify-between">
+              <h3 className="text-base font-bold text-surface-900">
+                {editingDomainEntry ? 'Edit Domain Logo' : 'Tambah Domain Logo'}
+              </h3>
+              <button onClick={() => setShowDomainModal(false)} className="text-surface-400 hover:text-surface-600 cursor-pointer">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form
+              onSubmit={e => {
+                e.preventDefault();
+                const d = domainForm.domain.trim().toLowerCase().replace(/^@/, '');
+                const l = domainForm.logoPath.trim();
+                if (!d || !l) { toast.error('Domain dan path logo wajib diisi!'); return; }
+
+                let updated;
+                if (editingDomainEntry) {
+                  updated = domainLogoMap.map(entry =>
+                    entry.id === editingDomainEntry.id
+                      ? { ...entry, domain: d, logoPath: l, label: domainForm.label.trim(), maxHeight: domainForm.maxHeight.trim() || undefined, maxWidth: domainForm.maxWidth.trim() || undefined }
+                      : entry
+                  );
+                  toast.success(`Domain @${d} berhasil diperbarui.`);
+                } else {
+                  if (domainLogoMap.some(e => e.domain.toLowerCase() === d)) {
+                    toast.error(`Domain @${d} sudah terdaftar!`);
+                    return;
+                  }
+                  updated = [...domainLogoMap, { id: generateId(), domain: d, logoPath: l, label: domainForm.label.trim(), maxHeight: domainForm.maxHeight.trim() || undefined, maxWidth: domainForm.maxWidth.trim() || undefined }];
+                  toast.success(`Domain @${d} berhasil ditambahkan.`);
+                }
+                setDomainLogoMap(updated);
+                saveDomainLogoMap(updated);
+                setShowDomainModal(false);
+              }}
+              className="p-6 flex flex-col gap-4"
+            >
+              <div>
+                <label className="text-xs font-semibold text-surface-600 mb-1 block">Label <span className="text-surface-400 font-normal">(opsional)</span></label>
+                <input
+                  type="text"
+                  value={domainForm.label}
+                  onChange={e => setDomainForm(f => ({ ...f, label: e.target.value }))}
+                  className="w-full bg-surface-50 border border-surface-200 rounded-lg px-3 py-2.5 text-sm outline-none focus:border-brand-500"
+                  placeholder="Contoh: Accommerce, Mitra ABC"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-surface-600 mb-1 block">Domain Email <span className="text-red-500">*</span></label>
+                <div className="flex items-center bg-surface-50 border border-surface-200 rounded-lg focus-within:border-brand-500 focus-within:ring-1 focus-within:ring-brand-100 transition-all">
+                  <span className="pl-3 text-sm text-surface-400 select-none">@</span>
+                  <input
+                    type="text"
+                    value={domainForm.domain}
+                    onChange={e => setDomainForm(f => ({ ...f, domain: e.target.value.replace(/^@/, '') }))}
+                    className="flex-1 bg-transparent px-2 py-2.5 text-sm outline-none font-mono"
+                    placeholder="accommerce.id"
+                    required
+                  />
+                </div>
+                <p className="text-[11px] text-surface-400 mt-1">Tanpa tanda @. Contoh: <code className="bg-surface-100 px-1 rounded">accommerce.id</code></p>
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-surface-600 mb-1 block">Path / URL Logo <span className="text-red-500">*</span></label>
+                <input
+                  type="text"
+                  value={domainForm.logoPath}
+                  onChange={e => setDomainForm(f => ({ ...f, logoPath: e.target.value }))}
+                  className="w-full bg-surface-50 border border-surface-200 rounded-lg px-3 py-2.5 text-sm font-mono outline-none focus:border-brand-500"
+                  placeholder="/logo_accommerce.png"
+                  required
+                />
+                <p className="text-[11px] text-surface-400 mt-1">File logo diletakkan di folder <code className="bg-surface-100 px-1 rounded">/public</code>. Contoh: <code className="bg-surface-100 px-1 rounded">/logo_accommerce.png</code></p>
+              </div>
+
+              {/* Size overrides */}
+              <div>
+                <label className="text-xs font-semibold text-surface-600 mb-1 block">
+                  Ukuran Logo di PDF <span className="text-surface-400 font-normal">(opsional)</span>
+                </label>
+                <div className="flex gap-3">
+                  <div className="flex-1">
+                    <div className="flex items-center bg-surface-50 border border-surface-200 rounded-lg focus-within:border-brand-500 focus-within:ring-1 focus-within:ring-brand-100 transition-all">
+                      <span className="pl-3 text-xs text-surface-400 select-none whitespace-nowrap">Tinggi</span>
+                      <input
+                        type="text"
+                        value={domainForm.maxHeight}
+                        onChange={e => setDomainForm(f => ({ ...f, maxHeight: e.target.value }))}
+                        className="flex-1 bg-transparent px-2 py-2.5 text-sm outline-none font-mono w-0"
+                        placeholder="70px"
+                      />
+                    </div>
+                  </div>
+                  <div className="flex-1">
+                    <div className="flex items-center bg-surface-50 border border-surface-200 rounded-lg focus-within:border-brand-500 focus-within:ring-1 focus-within:ring-brand-100 transition-all">
+                      <span className="pl-3 text-xs text-surface-400 select-none whitespace-nowrap">Lebar</span>
+                      <input
+                        type="text"
+                        value={domainForm.maxWidth}
+                        onChange={e => setDomainForm(f => ({ ...f, maxWidth: e.target.value }))}
+                        className="flex-1 bg-transparent px-2 py-2.5 text-sm outline-none font-mono w-0"
+                        placeholder="240px"
+                      />
+                    </div>
+                  </div>
+                </div>
+                <p className="text-[11px] text-surface-400 mt-1">Kosongkan untuk pakai ukuran default. Contoh: <code className="bg-surface-100 px-1 rounded">70px</code> dan <code className="bg-surface-100 px-1 rounded">240px</code></p>
+              </div>
+
+              {/* Live preview */}
+              {domainForm.logoPath && (
+                <div className="border border-surface-200 rounded-xl p-3 bg-surface-50">
+                  <p className="text-[11px] font-semibold text-surface-500 mb-2">Preview Logo:</p>
+                  <div className="h-12 flex items-center justify-center bg-white rounded-lg border border-surface-100 overflow-hidden">
+                    <img
+                      src={domainForm.logoPath}
+                      alt="preview"
+                      className="max-h-full max-w-full object-contain"
+                      onError={e => { e.target.style.opacity = '0.3'; }}
+                    />
+                  </div>
+                </div>
+              )}
+
+              <div className="flex items-center justify-end gap-3 pt-2">
+                <button type="button" onClick={() => setShowDomainModal(false)} className="px-4 py-2 text-sm font-semibold text-surface-600 hover:text-surface-900 cursor-pointer">Batal</button>
+                <button
+                  type="submit"
+                  className="flex items-center gap-2 px-4 py-2 text-sm font-bold bg-brand-500 text-white rounded-lg hover:bg-brand-600 transition-all shadow-sm cursor-pointer"
+                >
+                  <ImageIcon className="w-4 h-4" />
+                  {editingDomainEntry ? 'Simpan Perubahan' : 'Tambah Domain'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>,
         document.body

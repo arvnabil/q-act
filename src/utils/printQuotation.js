@@ -3,6 +3,23 @@ import { format, parseISO, isValid } from 'date-fns';
 import { id as idLocale, enUS as enLocale } from 'date-fns/locale';
 
 import { getCompanyInfo } from './companyInfo.js';
+import { resolveLogoConfigForEmail } from './domainLogoMap.js';
+
+/**
+ * Resolve the correct quotation logo config based on the creator's email domain.
+ * Reads from the user-editable mapping in localStorage (via domainLogoMap utility).
+ * @param {object} q          – the quotation object
+ * @param {boolean} isPdfMode – whether rendering in PDF mode (affects default sizes)
+ * @returns {{ logoPath: string, maxHeight: string, maxWidth: string }}
+ */
+function getLogoConfigForQuotation(q, isPdfMode = false) {
+  const email =
+    q?.creator?.email ||
+    q?.sales?.email ||
+    q?.created_by_email ||
+    '';
+  return resolveLogoConfigForEmail(email, isPdfMode);
+}
 
 const formatCurrencyDecimals = (val) => {
   const num = Number(val) || 0;
@@ -232,7 +249,7 @@ const TRANSLATIONS = {
 
 import html2pdf from 'html2pdf.js';
 
-export function generateQuotationHTML(q, withImage = true, bankAccount = null, lang = 'id', includePrintScript = true, isPdfMode = false) {
+export function generateQuotationHTML(q, withImage = true, bankAccount = null, lang = 'id', includePrintScript = true, isPdfMode = false, logoUrl = null) {
   const t = TRANSLATIONS[lang] || TRANSLATIONS.id;
   const dateLocale = lang === 'en' ? enLocale : idLocale;
   const COMPANY = getCompanyInfo();
@@ -248,8 +265,13 @@ export function generateQuotationHTML(q, withImage = true, bankAccount = null, l
   const descFontSize = isPdfMode ? '8px' : '7px';
   const prodNameFontSize = isPdfMode ? '9.5px' : '8.5px';
   const headerRightWidth = isPdfMode ? '250px' : '220px';
-  const logoMaxHeight = isPdfMode ? '50px' : '45px';
-  const logoMaxWidth = isPdfMode ? '180px' : '160px';
+
+  // Resolve per-domain logo config (size overrides may come from domain map)
+  const logoConfig = getLogoConfigForQuotation(q, isPdfMode);
+  const resolvedLogoUrl = logoUrl || logoConfig.logoPath;
+  const logoMaxHeight   = logoConfig.maxHeight;
+  const logoMaxWidth    = logoConfig.maxWidth;
+
   const tableBorderColor = isPdfMode ? '#6b7280' : '#9ca3af';
   const pageMargin = isPdfMode ? '10mm' : '25mm 20mm';
   const tdFontSize = isPdfMode ? '8.5px' : '7.5px';
@@ -461,7 +483,7 @@ export function generateQuotationHTML(q, withImage = true, bankAccount = null, l
 
               <td class="header-right">
                 <div style="width: ${headerRightWidth}; margin-left: auto; text-align: left;">
-                  <img src="/logo_quot.png" alt="ACTIV" style="max-height: ${logoMaxHeight}; max-width: ${logoMaxWidth}; display: block; margin-bottom: 4px; object-fit: contain;" onError="this.src='https://placehold.co/180x45/00a88f/ffffff?text=ACTIV'" />
+                  <img src="${resolvedLogoUrl}" alt="${COMPANY.brand}" style="max-height: ${logoMaxHeight}; max-width: ${logoMaxWidth}; display: block; margin-bottom: 4px; object-fit: contain;" onError="this.src='https://placehold.co/180x45/00a88f/ffffff?text=${COMPANY.brand}'" />
                   <div style="font-weight: bold; font-size: 8.5px; margin-bottom: 2px;">${COMPANY.name}</div>
                   <div style="font-size: 7.5px; line-height: 1.25; color: #333;">${COMPANY.address}</div>
                   ${COMPANY.address2 ? `<div style="font-size: 7.5px; line-height: 1.25; color: #333;">${COMPANY.address2}</div>` : ''}
@@ -601,7 +623,8 @@ export function printQuotation(q, withImage = true, bankAccount = null, lang = '
     alert('Mohon izinkan pop-up browser untuk mencetak / mendownload PDF Quotation.');
     return;
   }
-  const html = generateQuotationHTML(q, withImage, bankAccount, lang, true, false);
+  // logoUrl = null → generateQuotationHTML will call getLogoConfigForQuotation internally
+  const html = generateQuotationHTML(q, withImage, bankAccount, lang, true, false, null);
   printWindow.document.open();
   printWindow.document.write(html);
   printWindow.document.close();
@@ -627,7 +650,8 @@ export function downloadQuotationPDF(q, withImage = true, bankAccount = null, la
   }
 
   // isPdfMode = false so same clean web-print CSS is used (proven to render correctly)
-  const html = generateQuotationHTML(q, withImage, bankAccount, lang, false, false);
+  // logoUrl = null → generateQuotationHTML will call getLogoConfigForQuotation internally
+  const html = generateQuotationHTML(q, withImage, bankAccount, lang, false, false, null);
 
   // Inject a print script and override the document title to set the PDF save filename
   const htmlWithPrint = html.replace(
