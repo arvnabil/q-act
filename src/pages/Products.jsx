@@ -14,7 +14,7 @@ export default function Products() {
   const queryClient = useQueryClient();
   const [search, setSearch] = useState('');
   const [brandFilter, setBrandFilter] = useState('all');
-  const [viewMode, setViewMode] = useState('grid'); // 'grid' or 'list'
+  const [viewMode, setViewMode] = useState('list'); // 'grid' or 'list'
   const [page, setPage] = useState(1);
   const [selectedSkus, setSelectedSkus] = useState([]);
   const [deleteModalState, setDeleteModalState] = useState({
@@ -115,6 +115,47 @@ export default function Products() {
       const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
       const blob = new Blob([wbout], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
       saveAs(blob, 'template_import_produk.xlsx');
+    });
+  };
+
+  const handleExportProducts = () => {
+    if (!filteredProducts || filteredProducts.length === 0) {
+      toast.error('Tidak ada data produk untuk di-export.');
+      return;
+    }
+
+    import('xlsx').then(XLSX => {
+      const headers = [['SKU', 'Nama Produk', 'Brand', 'Deskripsi', 'Harga Jual', 'Pricelist Distributor', 'Diskon (%)', 'Modal / HPP']];
+      const dataRows = filteredProducts.map(p => [
+        p.sku || '',
+        p.name || '',
+        p.brand?.name || '',
+        p.description || '',
+        p.price || 0,
+        p.pricelist_distributor || 0,
+        p.diskon_distributor || 0,
+        p.modal || 0
+      ]);
+
+      const ws = XLSX.utils.aoa_to_sheet([...headers, ...dataRows]);
+      ws['!cols'] = [
+        { wch: 20 }, // SKU
+        { wch: 40 }, // Nama Produk
+        { wch: 20 }, // Brand
+        { wch: 40 }, // Deskripsi
+        { wch: 15 }, // Harga Jual
+        { wch: 22 }, // Pricelist Distributor
+        { wch: 12 }, // Diskon (%)
+        { wch: 15 }  // Modal / HPP
+      ];
+
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Products');
+      const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+      const blob = new Blob([wbout], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      const timestamp = new Date().toISOString().split('T')[0];
+      saveAs(blob, `export_produk_${timestamp}.xlsx`);
+      toast.success('Data produk berhasil diexport ke Excel! 📥');
     });
   };
 
@@ -474,7 +515,12 @@ export default function Products() {
 
   // Filter products based on search and brand filter
   const filteredProducts = products?.filter(p => {
-    const matchSearch = p.name.toLowerCase().includes(search.toLowerCase()) || p.sku.toLowerCase().includes(search.toLowerCase());
+    const searchLower = search.toLowerCase();
+    const matchSearch = 
+      p.name.toLowerCase().includes(searchLower) || 
+      p.sku.toLowerCase().includes(searchLower) ||
+      (p.description && p.description.toLowerCase().includes(searchLower)) ||
+      (p.brand?.name && p.brand.name.toLowerCase().includes(searchLower));
     const matchBrand = brandFilter === 'all' || p.brand_id.toString() === brandFilter;
     return matchSearch && matchBrand;
   }) || [];
@@ -570,7 +616,7 @@ export default function Products() {
             <Search className="w-4 h-4 text-surface-400 shrink-0" />
             <input
               type="text"
-              placeholder="Cari SKU, nama produk..."
+              placeholder="Cari SKU, nama produk, brand, deskripsi..."
               className="bg-transparent border-none outline-none text-sm text-surface-700 placeholder-surface-400 w-full"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
@@ -612,6 +658,13 @@ export default function Products() {
             >
               <Upload className="w-4 h-4" />
               <span>Import</span>
+            </button>
+            <button
+              onClick={handleExportProducts}
+              className="flex items-center gap-2 bg-surface-100 hover:bg-surface-200 text-surface-700 text-sm font-semibold px-4 py-2 rounded-lg border border-surface-200 hover:border-surface-300 transition-all shrink-0 cursor-pointer"
+            >
+              <Download className="w-4 h-4" />
+              <span>Export</span>
             </button>
             <button 
               onClick={openAddModal}
@@ -725,7 +778,8 @@ export default function Products() {
                     <th className="px-6 py-4 text-xs font-bold text-surface-500 uppercase tracking-wider">SKU</th>
                     <th className="px-6 py-4 text-xs font-bold text-surface-500 uppercase tracking-wider">Nama Produk</th>
                     <th className="px-6 py-4 text-xs font-bold text-surface-500 uppercase tracking-wider">Brand</th>
-                    <th className="px-6 py-4 text-xs font-bold text-surface-500 uppercase tracking-wider text-right">Harga Jual</th>
+                    <th className="px-6 py-4 text-xs font-bold text-surface-500 uppercase tracking-wider text-right">Pricelist</th>
+                    <th className="px-6 py-4 text-xs font-bold text-surface-500 uppercase tracking-wider text-right">Harga Modal</th>
                     <th className="px-6 py-4 text-xs font-bold text-surface-500 uppercase tracking-wider text-right">Aksi</th>
                   </tr>
                 </thead>
@@ -773,8 +827,11 @@ export default function Products() {
                           {p.brand?.name || 'Tanpa Brand'}
                         </span>
                       </td>
-                      <td className="px-6 py-4 text-sm font-extrabold text-brand-700 text-right">
-                        {formatCurrency(p.price)}
+                      <td className="px-6 py-4 text-sm font-semibold text-surface-700 text-right">
+                        {formatCurrency(p.pricelist_distributor || 0)}
+                      </td>
+                      <td className="px-6 py-4 text-sm font-semibold text-surface-700 text-right">
+                        {formatCurrency(p.modal || 0)}
                       </td>
                       <td className="px-6 py-4">
                         <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">

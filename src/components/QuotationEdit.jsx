@@ -204,7 +204,7 @@ export default function QuotationEdit({ quotation, onBack, onSaved }) {
     }
     try {
       if (editProdForm.sku) {
-        await api.updateProduct(editProdForm.sku, {
+        const updatedProduct = await api.updateProduct(editProdForm.sku, {
           name: editProdForm.name.trim(),
           price: Number(editProdForm.price) || 0,
           pricelist_distributor: Number(editProdForm.pricelist_distributor) || 0,
@@ -213,6 +213,13 @@ export default function QuotationEdit({ quotation, onBack, onSaved }) {
           description: editProdForm.description,
           image_url: editProdForm.image_url || null,
         });
+
+        // Update the products query cache immediately to prevent stale read race conditions
+        queryClient.setQueryData(['products'], (old) => {
+          if (!old) return [];
+          return old.map(p => p.sku === editProdForm.sku ? { ...p, ...updatedProduct } : p);
+        });
+
         queryClient.invalidateQueries({ queryKey: ['products'] });
       }
 
@@ -227,7 +234,11 @@ export default function QuotationEdit({ quotation, onBack, onSaved }) {
       toast.success(`Master Produk "${editProdForm.name}" berhasil diperbarui!`);
     } catch (err) {
       console.error(err);
-      toast.error(err.message || 'Gagal memperbarui master produk.');
+      let errMsg = err.message || 'Gagal memperbarui master produk.';
+      if (errMsg.includes('Cannot coerce') || errMsg.includes('JSON object')) {
+        errMsg = `Produk dengan SKU "${editProdForm.sku}" tidak ditemukan di database master katalog.`;
+      }
+      toast.error(errMsg);
     }
   };
 
@@ -1116,6 +1127,12 @@ export default function QuotationEdit({ quotation, onBack, onSaved }) {
                   (p.sku && p.sku.toLowerCase().includes(item.name.toLowerCase()))
                 );
 
+                const hasMasterProd = allAvailableProds.some(p => 
+                  (item.sku && p.sku === item.sku) ||
+                  (item.product_id && p.id === item.product_id) ||
+                  (p.name && p.name.trim().toLowerCase() === item.name.trim().toLowerCase())
+                );
+
                 return (
                   <tr key={item.id || `item-row-${idx}`} className="hover:bg-surface-50/50 transition-colors">
                     <td className="py-3 px-3 text-xs text-surface-400 text-center font-bold">{idx + 1}</td>
@@ -1132,7 +1149,7 @@ export default function QuotationEdit({ quotation, onBack, onSaved }) {
                             onFocus={() => setOpenDropdownIdx(idx)}
                             className="w-full bg-transparent border-none outline-none text-xs text-surface-800 placeholder-surface-400 font-semibold"
                           />
-                          {item.name ? (
+                          {item.name && hasMasterProd ? (
                             <button
                               type="button"
                               title="Edit Master Produk Katalog"

@@ -331,16 +331,31 @@ export async function deleteBrand(id) {
 }
 
 export async function getProducts() {
-  const { data, error } = await supabase
-    .from('products')
-    .select(`
-      *,
-      brand:brands(name, color_hex)
-    `)
-    .order('sku');
-    
-  if (error) throw error;
-  return data;
+  // Supabase default row limit is 1000. Paginate to fetch all products.
+  const PAGE = 1000;
+  let allData = [];
+  let from = 0;
+
+  while (true) {
+    const { data, error } = await supabase
+      .from('products')
+      .select(`
+        *,
+        brand:brands(name, color_hex)
+      `)
+      .order('sku')
+      .range(from, from + PAGE - 1);
+
+    if (error) throw error;
+    if (!data || data.length === 0) break;
+
+    allData = allData.concat(data);
+
+    if (data.length < PAGE) break; // Last page
+    from += PAGE;
+  }
+
+  return allData;
 }
 
 export async function createProduct(productData) {
