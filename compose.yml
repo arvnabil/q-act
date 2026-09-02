@@ -1,0 +1,20 @@
+services:
+  q-act:
+    build:
+      context: .
+      args:
+        VITE_SUPABASE_URL: ${VITE_SUPABASE_URL}
+        VITE_SUPABASE_ANON_KEY: ${VITE_SUPABASE_ANON_KEY}
+        VITE_SUPABASE_PUBLISHABLE_KEY: ${VITE_SUPABASE_PUBLISHABLE_KEY}
+        VITE_UPLOAD_URL: ${VITE_UPLOAD_URL}
+
+    container_name: q-act
+    restart: unless-stopped
+
+    networks:
+      - default
+      - proxy-net
+
+networks:
+  proxy-net:
+    external: true
