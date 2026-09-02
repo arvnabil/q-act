@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { NavLink, Link } from 'react-router-dom';
 import useAuthStore from '../store/authStore';
 import usePermissionsStore from '../store/permissionsStore';
-import { LayoutDashboard, FileText, Users, Box, Settings, LogOut, ChevronRight, ChevronDown, BarChart2, ShieldCheck, UserCog, Building2 } from 'lucide-react';
+import { LayoutDashboard, FileText, Users, Box, Settings, LogOut, ChevronRight, ChevronDown, BarChart2, ShieldCheck, UserCog, Building2, FileStack } from 'lucide-react';
 import { useQuotations, useQuotationsByUser } from '../hooks/useSupabase.js';
 
 export default function Sidebar({ mobileOpen, setMobileOpen }) {
@@ -33,6 +33,7 @@ export default function Sidebar({ mobileOpen, setMobileOpen }) {
   const rawNav = [
     { path: '/', label: 'Dashboard', icon: LayoutDashboard },
     { path: '/quotations', label: 'Quotations', icon: FileText, badge: quotationsCount },
+    { path: '/sales-orders', label: 'Sales Orders', icon: FileStack },
     { path: '/customers', label: 'Customers', icon: Users, hideForFinance: true },
     { 
       path: '/products-group', 

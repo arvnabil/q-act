@@ -139,6 +139,8 @@ export default function QuotationEdit({ quotation, onBack, onSaved }) {
   const [editProdForm, setEditProdForm] = useState({ id: '', sku: '', name: '', brand: '', price: 0, pricelist_distributor: 0, diskon_distributor: 0, hpp: 0, description: '', image_url: '' });
   const [editingRowIdx, setEditingRowIdx] = useState(null);
   const [showDraftModal, setShowDraftModal] = useState(false);
+  const [showSOConfirmModal, setShowSOConfirmModal] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
 
   // === LOW MARGIN ALERT ===
   const MARGIN_MIN_THRESHOLD = 12; // persen
@@ -266,7 +268,6 @@ export default function QuotationEdit({ quotation, onBack, onSaved }) {
 
   // Item rows state
   const [items, setItems] = useState([]);
-  const [isSaving, setIsSaving] = useState(false);
   const [openDropdownIdx, setOpenDropdownIdx] = useState(null);
 
   // Initialize items from quotation prop
@@ -442,6 +443,8 @@ export default function QuotationEdit({ quotation, onBack, onSaved }) {
 
     if (status === 'created' || status === 'Created' || status === 'draft' || status === 'Draft') {
       setShowDraftModal(true);
+    } else if (status === 'approved' && quotation.status !== 'approved') {
+      setShowSOConfirmModal(true);
     } else {
       executeSave(status);
     }
@@ -450,6 +453,7 @@ export default function QuotationEdit({ quotation, onBack, onSaved }) {
   // Save changes to Supabase
   const executeSave = async (targetStatus) => {
     setShowDraftModal(false);
+    setShowSOConfirmModal(false);
     if (!quotation?.id) return;
 
     const finalStatus = targetStatus || status;
@@ -572,7 +576,43 @@ export default function QuotationEdit({ quotation, onBack, onSaved }) {
 
       setStatus(finalStatus);
       toast.success(`Quotation ${quotation.id} berhasil diperbarui (Status: ${finalStatus === 'sent' ? 'Sent' : finalStatus})!`);
+      
+      // Auto Generate SO if status changed to approved
+      if (finalStatus === 'approved' && quotation.status !== 'approved') {
+        try {
+          const soId = `SO.${quotation.id}`;
+          const soData = {
+            id: soId,
+            quotation_id: quotation.id,
+            date: new Date().toISOString().slice(0, 10),
+            customer_id: customerId || quotation.customer_id,
+            sales_id: quotation.sales_id || quotation.created_by,
+            bu_id: quotation.bu_id || null,
+            status: 'Dibuat Sales',
+            total_item_value: grandTotal,
+            total_cost: 0,
+            grand_total: grandTotal,
+          };
+          const soItemsData = items
+            .filter(i => i.name || i.sku)
+            .map(i => ({
+              sku: i.sku || null,
+              qty: Number(i.qty) || 1,
+              price: Number(i.price) || 0
+            }));
+            
+          await api.createSalesOrder(soData, soItemsData, []);
+          toast.success(`Sales Order ${soId} berhasil digenerate otomatis!`);
+        } catch (soErr) {
+          console.error('Failed to generate SO:', soErr);
+          if (soErr.code !== '23505') { // Not unique constraint violation
+            toast.error(`Gagal membuat SO otomatis: ${soErr.message}`);
+          }
+        }
+      }
+
       queryClient.invalidateQueries({ queryKey: ['quotations'] });
+      queryClient.invalidateQueries({ queryKey: ['sales_orders'] });
 
       // Log activity + self-notification
       const actionLabel = finalStatus === 'sent' ? 'SEND_QUOTATION' : 'UPDATE_QUOTATION';
@@ -772,9 +812,46 @@ export default function QuotationEdit({ quotation, onBack, onSaved }) {
               </button>
             </div>
           </div>
-        </div>
+      </div>
 
-        {/* Rekening Bank */}
+      {/* Confirmation Modal for SO Generation */}
+      {showSOConfirmModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-2xl animate-in fade-in zoom-in-95">
+            <div className="flex items-center gap-3 text-emerald-600 mb-4">
+              <div className="p-3 bg-emerald-100 rounded-full">
+                <AlertTriangle className="w-6 h-6" />
+              </div>
+              <h3 className="text-xl font-bold text-surface-900">Konfirmasi Purchase Order (PO)</h3>
+            </div>
+            
+            <p className="text-surface-600 mb-6 leading-relaxed">
+              Anda mengubah status menjadi <span className="font-bold text-emerald-600">PO (Approved)</span>. 
+              Sistem akan secara otomatis <strong>men-generate dokumen Sales Order (SO)</strong> berdasarkan quotation ini. Lanjutkan?
+            </p>
+            
+            <div className="flex items-center justify-end gap-3 pt-4 border-t border-surface-100">
+              <button
+                onClick={() => setShowSOConfirmModal(false)}
+                className="px-5 py-2.5 text-sm font-semibold text-surface-600 bg-surface-100 rounded-xl hover:bg-surface-200 transition-colors"
+                disabled={isSaving}
+              >
+                Batal
+              </button>
+              <button
+                onClick={() => executeSave('approved')}
+                className="px-5 py-2.5 text-sm font-bold text-white bg-emerald-600 rounded-xl hover:bg-emerald-700 transition-all shadow-sm flex items-center gap-2"
+                disabled={isSaving}
+              >
+                {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+                Ya, Generate SO
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Rekening Bank */}
         <div className="px-6 py-4 border-b border-surface-100">
           <div className="bg-surface-50 rounded-lg px-4 py-3 flex flex-col sm:flex-row sm:items-center gap-4 border border-surface-100">
             <span className="text-xs font-bold text-surface-700 whitespace-nowrap">Rekening Bank:</span>

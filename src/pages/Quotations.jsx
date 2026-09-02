@@ -14,6 +14,51 @@ import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../services/supabase.js';
 import { toast } from 'react-hot-toast';
 import { useSearchParams } from 'react-router-dom';
+import { saveAs } from 'file-saver';
+
+// Resizable Table Header Component
+const ResizableTH = ({ children, defaultWidth, align = 'left', className = '' }) => {
+  const [width, setWidth] = useState(defaultWidth);
+  const [isResizing, setIsResizing] = useState(false);
+  const thRef = React.useRef(null);
+
+  const startResize = (e) => {
+    e.preventDefault();
+    setIsResizing(true);
+    const startX = e.pageX;
+    const startWidth = thRef.current.offsetWidth;
+
+    const onMouseMove = (e) => {
+      const newWidth = Math.max(40, startWidth + (e.pageX - startX));
+      setWidth(newWidth);
+    };
+
+    const onMouseUp = () => {
+      setIsResizing(false);
+      document.removeEventListener('mousemove', onMouseMove);
+      document.removeEventListener('mouseup', onMouseUp);
+    };
+
+    document.addEventListener('mousemove', onMouseMove);
+    document.addEventListener('mouseup', onMouseUp);
+  };
+
+  return (
+    <th
+      ref={thRef}
+      className={`relative py-3.5 px-4 group select-none ${className}`}
+      style={width ? { width: `${width}px`, minWidth: `${width}px`, maxWidth: `${width}px` } : {}}
+    >
+      <div className={`text-${align} text-xs font-bold text-surface-500 uppercase tracking-wider block w-full truncate`}>
+        {children}
+      </div>
+      <div
+        onMouseDown={startResize}
+        className={`absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-brand-500 ${isResizing ? 'bg-brand-500' : 'bg-transparent'} transition-colors z-10`}
+      />
+    </th>
+  );
+};
 
 const PAGE_SIZE = 8;
 
@@ -58,6 +103,8 @@ export default function Quotations() {
   const { user: currentUser } = useAuthStore();
   const [filterStatus, setFilterStatus] = useState('all');
   const [search, setSearch]             = useState('');
+  const [dateStart, setDateStart]       = useState('');
+  const [dateEnd, setDateEnd]           = useState('');
   const [page, setPage]                 = useState(1);
   const [selectedIds, setSelectedIds]   = useState([]);
   
@@ -84,17 +131,28 @@ export default function Quotations() {
   const activeQuery = (isManager || isFinance) ? allQuery : (user?.bu?.id ? buQuery : mineQuery);
   const { data: quotations, isLoading, isError } = activeQuery;
 
-  // Handle ?create=true search parameter to open modal automatically
+  // Handle URL search parameters
   useEffect(() => {
+    let changed = false;
     if (searchParams.get('create') === 'true') {
       setIsModalOpen(true);
       searchParams.delete('create');
+      changed = true;
+    }
+    const paramStatus = searchParams.get('status');
+    if (paramStatus && STATUS_TABS.some(t => t.key === paramStatus)) {
+      setFilterStatus(paramStatus);
+      searchParams.delete('status');
+      changed = true;
+    }
+    
+    if (changed) {
       setSearchParams(searchParams, { replace: true });
     }
   }, [searchParams, setSearchParams]);
 
   // Reset page & selection on filter change
-  useEffect(() => { setPage(1); setSelectedIds([]); }, [search, filterStatus]);
+  useEffect(() => { setPage(1); setSelectedIds([]); }, [search, filterStatus, dateStart, dateEnd]);
 
   // Counts per status
   const countByStatus = (key) => {
@@ -106,6 +164,17 @@ export default function Quotations() {
   const filtered = quotations?.filter(q => {
     const matchStatus = filterStatus === 'all' || q.status === filterStatus;
     if (!matchStatus) return false;
+    
+    // Date filter (by created_at)
+    if (dateStart) {
+      const qDate = new Date(q.created_at).toISOString().split('T')[0];
+      if (qDate < dateStart) return false;
+    }
+    if (dateEnd) {
+      const qDate = new Date(q.created_at).toISOString().split('T')[0];
+      if (qDate > dateEnd) return false;
+    }
+
     if (!search) return true;
     const s = search.toLowerCase();
     return (
@@ -140,6 +209,52 @@ export default function Quotations() {
       if (brandName) brands.add(brandName);
     });
     return [...brands];
+  };
+
+  // Export to Excel
+  const handleExportExcel = () => {
+    if (!filtered || filtered.length === 0) {
+      toast.error('Tidak ada data untuk diexport.');
+      return;
+    }
+
+    import('xlsx').then(XLSX => {
+      const headers = [[
+        'No. Quotation', 'Tanggal Buat', 'Customer', 'PIC', 'Sales', 
+        'Brand(s)', 'Status', 'Total Item', 'Grand Total'
+      ]];
+      
+      const dataRows = filtered.map(q => [
+        q.id || '',
+        q.created_at ? format(parseISO(q.created_at), 'yyyy-MM-dd') : '',
+        q.customer?.name || '',
+        q.pic?.name || '',
+        q.creator?.name || q.sales_id || '',
+        getBrands(q).join(', '),
+        q.status?.toUpperCase() || '',
+        q.items?.length || 0,
+        q.grand_total || q.items?.reduce((s, i) => s + (i.qty * i.price), 0) || 0
+      ]);
+
+      const ws = XLSX.utils.aoa_to_sheet([...headers, ...dataRows]);
+      
+      // Auto-size columns
+      ws['!cols'] = [
+        { wch: 18 }, { wch: 12 }, { wch: 30 }, { wch: 20 }, { wch: 20 }, 
+        { wch: 25 }, { wch: 12 }, { wch: 12 }, { wch: 20 }
+      ];
+
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Quotations');
+      const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+      
+      const blob = new Blob([wbout], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      const timestamp = new Date().toISOString().split('T')[0];
+      const statusLabel = filterStatus === 'all' ? 'All' : filterStatus.toUpperCase();
+      saveAs(blob, `export_quotation_${statusLabel}_${timestamp}.xlsx`);
+      
+      toast.success('Data berhasil diexport ke Excel! 📥');
+    });
   };
 
   // Checkbox Selection
@@ -218,7 +333,7 @@ export default function Quotations() {
   }
 
   return (
-    <div className="animate-fade-in-up">
+    <div className="animate-fade-in-up w-full max-w-full min-w-0">
       {/* Status Tabs */}
       <div className="flex items-center gap-1 mb-5 overflow-x-auto pb-1">
         {STATUS_TABS.map(t => (
@@ -243,27 +358,58 @@ export default function Quotations() {
 
       {/* Controls: Search bar & Create Button */}
       <div className="bg-white rounded-xl border border-surface-200 mb-5">
-        <div className="px-5 py-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-          <div className="flex items-center gap-2 bg-surface-50 border border-surface-200 rounded-lg px-3 py-2 flex-1 min-w-[240px] focus-within:border-brand-400 transition-colors w-full">
-            <Search className="w-4 h-4 text-surface-400 shrink-0" />
-            <input
-              type="text"
-              placeholder="Cari no. quotation, customer, PIC..."
-              className="bg-transparent border-none outline-none text-sm text-surface-700 placeholder-surface-400 w-full"
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-            />
+        <div className="px-5 py-4 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
+          
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 w-full lg:w-auto">
+            <div className="flex items-center gap-2 bg-surface-50 border border-surface-200 rounded-lg px-3 py-2 w-full sm:w-72 focus-within:border-brand-400 transition-colors">
+              <Search className="w-4 h-4 text-surface-400 shrink-0" />
+              <input
+                type="text"
+                placeholder="Cari no. quotation, customer..."
+                className="bg-transparent border-none outline-none text-sm text-surface-700 placeholder-surface-400 w-full"
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+              />
+            </div>
+            
+            <div className="flex items-center gap-2 text-sm">
+              <input
+                type="date"
+                value={dateStart}
+                onChange={e => setDateStart(e.target.value)}
+                className="border border-surface-200 rounded-lg px-2.5 py-1.5 text-surface-700 focus:outline-none focus:border-brand-500 bg-surface-50"
+                title="Tanggal Mulai"
+              />
+              <span className="text-surface-400">-</span>
+              <input
+                type="date"
+                value={dateEnd}
+                onChange={e => setDateEnd(e.target.value)}
+                className="border border-surface-200 rounded-lg px-2.5 py-1.5 text-surface-700 focus:outline-none focus:border-brand-500 bg-surface-50"
+                title="Tanggal Akhir"
+              />
+            </div>
           </div>
 
-          {!isFinance && (
+          <div className="flex items-center gap-2 w-full sm:w-auto mt-2 lg:mt-0">
             <button
-              onClick={() => setIsModalOpen(true)}
-              className="flex items-center gap-2 px-4 py-2 text-xs font-bold bg-brand-500 text-white rounded-lg hover:bg-brand-600 transition-all shadow-sm cursor-pointer whitespace-nowrap"
+              onClick={handleExportExcel}
+              className="flex items-center justify-center gap-2 px-4 py-2 text-xs font-bold bg-white text-surface-700 border border-surface-200 rounded-lg hover:bg-surface-50 transition-all shadow-sm w-full sm:w-auto"
             >
-              <Plus className="w-4 h-4" />
-              Buat Quotation
+              <Download className="w-4 h-4" />
+              Export
             </button>
-          )}
+            
+            {!isFinance && (
+              <button
+                onClick={() => setIsModalOpen(true)}
+                className="flex items-center justify-center gap-2 px-4 py-2 text-xs font-bold bg-brand-500 text-white rounded-lg hover:bg-brand-600 transition-all shadow-sm cursor-pointer whitespace-nowrap w-full sm:w-auto"
+              >
+                <Plus className="w-4 h-4" />
+                Buat Quotation
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
@@ -290,7 +436,7 @@ export default function Quotations() {
         {!isLoading && filtered.length > 0 && (
           <div className="bg-white border border-surface-200 rounded-xl overflow-hidden shadow-sm">
             <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse">
+              <table className="w-full text-left border-collapse table-fixed min-w-[1000px]">
                 <thead>
                   <tr className="bg-surface-50 border-b border-surface-200">
                     <th className="py-3.5 px-4 text-center w-12">
@@ -301,15 +447,15 @@ export default function Quotations() {
                         className="w-4 h-4 rounded cursor-pointer accent-brand-500"
                       />
                     </th>
-                    <th className="py-3.5 px-4 text-left text-xs font-bold text-surface-500 uppercase tracking-wider">No. Quotation</th>
-                    <th className="py-3.5 px-4 text-left text-xs font-bold text-surface-500 uppercase tracking-wider">Customer</th>
-                    <th className="py-3.5 px-4 text-left text-xs font-bold text-surface-500 uppercase tracking-wider">Sales</th>
-                    <th className="py-3.5 px-4 text-left text-xs font-bold text-surface-500 uppercase tracking-wider">Brand</th>
-                    <th className="py-3.5 px-4 text-center text-xs font-bold text-surface-500 uppercase tracking-wider w-16">Items</th>
-                    <th className="py-3.5 px-4 text-right text-xs font-bold text-surface-500 uppercase tracking-wider w-40">Grand Total</th>
-                    <th className="py-3.5 px-4 text-left text-xs font-bold text-surface-500 uppercase tracking-wider w-28">Tanggal</th>
-                    <th className="py-3.5 px-4 text-left text-xs font-bold text-surface-500 uppercase tracking-wider w-28">Expired</th>
-                    <th className="py-3.5 px-4 text-left text-xs font-bold text-surface-500 uppercase tracking-wider w-28">Status</th>
+                    <ResizableTH defaultWidth={140}>No. Quotation</ResizableTH>
+                    <ResizableTH defaultWidth={200}>Customer</ResizableTH>
+                    <ResizableTH defaultWidth={80}>Sales</ResizableTH>
+                    <ResizableTH defaultWidth={90}>Brand</ResizableTH>
+                    <ResizableTH defaultWidth={75} align="center">Items</ResizableTH>
+                    <ResizableTH defaultWidth={140} align="right">Grand Total</ResizableTH>
+                    <ResizableTH defaultWidth={110}>Tanggal</ResizableTH>
+                    <ResizableTH defaultWidth={110}>Expired</ResizableTH>
+                    <ResizableTH defaultWidth={100}>Status</ResizableTH>
                     <th className="py-3.5 px-4 text-center text-xs font-bold text-surface-500 uppercase tracking-wider w-24">Aksi</th>
                   </tr>
                 </thead>
@@ -337,7 +483,7 @@ export default function Quotations() {
                         </td>
                         <td className="py-3.5 px-4">
                           <div className="text-sm font-semibold text-surface-800 line-clamp-1">{q.customer?.name || '-'}</div>
-                          <div className="text-xs text-surface-400">{q.pic?.name || '-'}</div>
+                          <div className="text-xs text-surface-400 truncate">{q.pic?.name || '-'}</div>
                         </td>
                         <td className="py-3.5 px-4 text-xs font-semibold text-surface-700">
                           {(() => {
@@ -346,9 +492,9 @@ export default function Quotations() {
                           })()}
                         </td>
                         <td className="py-3.5 px-4">
-                          <div className="flex flex-wrap gap-1">
+                          <div className="flex flex-wrap gap-1 max-h-[40px] overflow-hidden">
                             {brands.length > 0 ? brands.map((b, i) => (
-                              <span key={i} className="inline-flex px-2 py-0.5 rounded-full text-[10px] font-bold border bg-surface-50 text-surface-600 border-surface-200">{b}</span>
+                              <span key={i} className="inline-flex px-2 py-0.5 rounded-full text-[10px] font-bold border bg-surface-50 text-surface-600 border-surface-200 truncate max-w-[80px]">{b}</span>
                             )) : <span className="text-xs text-surface-400">-</span>}
                           </div>
                         </td>
@@ -357,11 +503,11 @@ export default function Quotations() {
                         <td className="py-3.5 px-4 text-xs text-surface-500">{formatDate(q.date || q.created_at)}</td>
                         <td className="py-3.5 px-4 text-xs text-surface-500">{formatDate(q.expired || q.expired_at)}</td>
                         <td className="py-3.5 px-4">
-                          <span className={`inline-flex px-2.5 py-0.5 rounded-full text-xs font-bold uppercase tracking-wide ${statusClasses(q.status)}`}>
+                          <span className={`inline-flex px-2.5 py-0.5 rounded-full text-xs font-bold uppercase tracking-wide truncate max-w-full ${statusClasses(q.status)}`}>
                             {statusLabel(q.status)}
                           </span>
                         </td>
-                        <td className="py-3.5 px-4">
+                        <td className="py-3.5 px-4 text-center">
                           <div className="flex items-center justify-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                             <button
                               onClick={() => { setActiveQuotation(q); setViewState('detail'); }}

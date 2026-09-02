@@ -181,6 +181,23 @@ export function useSalesUsers() {
   });
 }
 
+export function useSalesTargets() {
+  return useQuery({
+    queryKey: ['sales_targets'],
+    queryFn: api.getSalesTargets,
+  });
+}
+
+export function useUpdateSalesTargets() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (targetsMap) => api.saveSalesTargets(targetsMap),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['sales_targets'] });
+    },
+  });
+}
+
 export function useCreateQuotation() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -403,6 +420,70 @@ export function useDeleteNotification() {
     mutationFn: (id) => api.deleteNotification(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['notifications'] });
+    },
+  });
+}
+
+// ============================================
+// SALES ORDERS (SO)
+// ============================================
+
+export function useSalesOrders() {
+  return useQuery({
+    queryKey: ['sales_orders'],
+    queryFn: api.getSalesOrders,
+    retry: 1,
+    staleTime: 30000,
+  });
+}
+
+export function useSalesOrder(id) {
+  return useQuery({
+    queryKey: ['sales_order', id],
+    queryFn: () => api.getSalesOrderById(id),
+    enabled: !!id,
+  });
+}
+
+export function useCreateSalesOrder() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ soData, items, costs }) => api.createSalesOrder(soData, items, costs),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['sales_orders'] });
+    },
+  });
+}
+
+export function useUpdateSalesOrderStatus() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, status }) => api.updateSalesOrderStatus(id, status),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['sales_orders'] });
+      queryClient.invalidateQueries({ queryKey: ['sales_order', variables.id] });
+    },
+  });
+}
+
+export function useAddSalesOrderCost() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (costData) => api.addSalesOrderCost(costData),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['sales_orders'] });
+      queryClient.invalidateQueries({ queryKey: ['sales_order', variables.so_id] });
+    },
+  });
+}
+
+export function useRemoveSalesOrderCost() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, so_id }) => api.removeSalesOrderCost(id, so_id),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['sales_orders'] });
+      queryClient.invalidateQueries({ queryKey: ['sales_order', variables.so_id] });
     },
   });
 }

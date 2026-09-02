@@ -18,6 +18,7 @@ import Analytics from './pages/Analytics.jsx';
 import Guide from './pages/Guide.jsx';
 import Support from './pages/Support.jsx';
 import ResetPassword from './pages/ResetPassword.jsx';
+import SalesOrders from './pages/SalesOrders.jsx';
 import usePermissionsStore from './store/permissionsStore.js';
 
 function App() {
@@ -51,6 +52,7 @@ function App() {
         <Route path="/" element={user ? <Layout /> : <Navigate to="/login" replace />}>
           <Route index element={<Dashboard />} />
           <Route path="quotations" element={<Quotations />} />
+          <Route path="sales-orders" element={<SalesOrders />} />
           <Route path="customers" element={<Customers />} />
           <Route path="products" element={<Products />} />
           <Route path="brands" element={<Brands />} />

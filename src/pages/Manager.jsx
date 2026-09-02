@@ -289,8 +289,7 @@ export default function Manager() {
                 <option value="all">Semua Sales</option>
                 {salesUsers?.filter(s => {
                   const r = (s.role || '').trim().toLowerCase();
-                  if (['administrator', 'admin', 'manager', 'finance'].includes(r)) return false;
-                  return true;
+                  return r === 'sales' || r === 'presales';
                 }).map(s => (
                   <option key={s.id} value={s.id}>{s.name}</option>
                 ))}

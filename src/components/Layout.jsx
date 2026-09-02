@@ -48,9 +48,9 @@ export default function Layout() {
   return (
     <div className="flex min-h-screen bg-surface-50">
       <Sidebar mobileOpen={mobileOpen} setMobileOpen={setMobileOpen} />
-      <main className="flex-1 lg:ml-60 flex flex-col min-h-screen transition-all">
+      <main className="flex-1 lg:ml-60 flex flex-col min-h-screen transition-all min-w-0">
         <Topbar setMobileOpen={setMobileOpen} />
-        <div className="flex-1 p-5 lg:p-7 flex flex-col gap-5">
+        <div className="flex-1 p-5 lg:p-7 flex flex-col gap-5 min-w-0">
           <Outlet />
         </div>
       </main>

@@ -1252,3 +1252,183 @@ export async function deleteNotification(id) {
     console.warn('[deleteNotification] error:', err);
   }
 }
+
+// ============================================
+// SALES TARGETS
+// ============================================
+
+export async function getSalesTargets() {
+  try {
+    const { data, error } = await supabase
+      .from('system_settings')
+      .select('value')
+      .eq('key', 'sales_targets')
+      .maybeSingle();
+    if (error) throw error;
+    return data?.value || { _default: 600000000 };
+  } catch (err) {
+    console.warn('[getSalesTargets] error:', err);
+    return { _default: 600000000 };
+  }
+}
+
+export async function saveSalesTargets(targetsMap) {
+  // targetsMap: { [userId]: number, _default: number }
+  const { error } = await supabase
+    .from('system_settings')
+    .upsert({ key: 'sales_targets', value: targetsMap }, { onConflict: 'key' });
+  if (error) throw error;
+  return targetsMap;
+}
+
+// ============================================
+// SALES ORDERS (SO)
+// ============================================
+
+export async function getSalesOrders() {
+  try {
+    const { data, error } = await supabase
+      .from('sales_orders')
+      .select(`
+        *,
+        customer:customers(id, name, address),
+        items:sales_order_items(*),
+        costs:sales_order_costs(*)
+      `)
+      .order('created_at', { ascending: false });
+    if (error) throw error;
+
+    // Fetch sales user info separately by sales_id
+    if (data && data.length > 0) {
+      const salesIds = [...new Set(data.map(so => so.sales_id).filter(Boolean))];
+      if (salesIds.length > 0) {
+        const { data: salesUsers } = await supabase
+          .from('users')
+          .select('id, name, email')
+          .in('id', salesIds);
+        const salesMap = new Map((salesUsers || []).map(u => [u.id, u]));
+        data.forEach(so => { so.sales = salesMap.get(so.sales_id) || null; });
+      }
+    }
+
+    return data || [];
+  } catch (err) {
+    console.warn('[getSalesOrders] error:', err);
+    throw err;
+  }
+}
+
+export async function getSalesOrderById(id) {
+  try {
+    const { data, error } = await supabase
+      .from('sales_orders')
+      .select(`
+        *,
+        customer:customers(id, name, address),
+        items:sales_order_items(*),
+        costs:sales_order_costs(*)
+      `)
+      .eq('id', id)
+      .single();
+    if (error) throw error;
+
+    // Fetch sales user separately
+    if (data && data.sales_id) {
+      const { data: salesUser } = await supabase
+        .from('users')
+        .select('id, name, email')
+        .eq('id', data.sales_id)
+        .maybeSingle();
+      data.sales = salesUser || null;
+    }
+
+    return data;
+  } catch (err) {
+    console.warn('[getSalesOrderById] error:', err);
+    throw err;
+  }
+}
+
+export async function createSalesOrder(soData, items, costs) {
+  // Insert Header
+  const { data: header, error: headerErr } = await supabase
+    .from('sales_orders')
+    .insert([soData])
+    .select()
+    .single();
+  if (headerErr) throw headerErr;
+
+  // Insert Items
+  if (items && items.length > 0) {
+    const itemsData = items.map(item => ({ ...item, so_id: header.id }));
+    const { error: itemsErr } = await supabase.from('sales_order_items').insert(itemsData);
+    if (itemsErr) console.warn('[createSalesOrder] items error:', itemsErr.message);
+  }
+
+  // Insert Costs
+  if (costs && costs.length > 0) {
+    const costsData = costs.map(cost => ({ ...cost, so_id: header.id }));
+    const { error: costsErr } = await supabase.from('sales_order_costs').insert(costsData);
+    if (costsErr) console.warn('[createSalesOrder] costs error:', costsErr.message);
+  }
+
+  return header;
+}
+
+export async function updateSalesOrderStatus(id, status) {
+  const { data, error } = await supabase
+    .from('sales_orders')
+    .update({ status, updated_at: new Date().toISOString() })
+    .eq('id', id)
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+export async function addSalesOrderCost(costData) {
+  const { data, error } = await supabase
+    .from('sales_order_costs')
+    .insert([costData])
+    .select()
+    .single();
+  if (error) throw error;
+  
+  // Update SO grand_total
+  await recalculateSOGrandTotal(costData.so_id);
+  return data;
+}
+
+export async function removeSalesOrderCost(id, soId) {
+  const { error } = await supabase
+    .from('sales_order_costs')
+    .delete()
+    .eq('id', id);
+  if (error) throw error;
+  
+  // Update SO grand_total
+  await recalculateSOGrandTotal(soId);
+  return true;
+}
+
+async function recalculateSOGrandTotal(soId) {
+  // Fetch SO, items, and costs
+  const { data, error } = await supabase
+    .from('sales_orders')
+    .select(`
+      total_item_value,
+      costs:sales_order_costs(amount)
+    `)
+    .eq('id', soId)
+    .single();
+    
+  if (error || !data) return;
+  
+  const totalCost = (data.costs || []).reduce((sum, c) => sum + Number(c.amount), 0);
+  const grandTotal = Number(data.total_item_value) + totalCost;
+  
+  await supabase
+    .from('sales_orders')
+    .update({ total_cost: totalCost, grand_total: grandTotal, updated_at: new Date().toISOString() })
+    .eq('id', soId);
+}

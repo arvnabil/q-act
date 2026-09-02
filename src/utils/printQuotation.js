@@ -334,7 +334,9 @@ export function generateQuotationHTML(q, withImage = true, bankAccount = null, l
     const itemTotal = qty * price;
 
     const imageHtml = imageUrl
-      ? `<img src="${imageUrl}" style="max-width: 75px; max-height: 42px; object-fit: contain; display: block; margin: 0 auto;" alt="${productName}" />`
+      ? `<div style="max-width: 75px; max-height: 42px; overflow: hidden; margin: 0 auto; display: flex; align-items: center; justify-content: center;">
+           <img src="${imageUrl}" style="max-width: 100%; max-height: 100%; object-fit: contain; font-size: 7px; color: #9ca3af; text-align: center; word-break: break-word; line-height: 1.1;" alt="${productName}" />
+         </div>`
       : `<div style="width: 55px; height: 30px; background: #f3f4f6; border-radius: 4px; display: inline-flex; align-items: center; justify-content: center; color: #9ca3af; font-size: 7px;">${t.noImage}</div>`;
 
     itemRows += `
