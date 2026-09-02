@@ -75,7 +75,7 @@ export default function QuotationModal({ isOpen, onClose, onCreated }) {
       setPicForm({ name: '', phone: '', email: '' });
       return;
     }
-    const customer = customers.find(c => c.id === selectedCustomerId);
+    const customer = customers.find(c => String(c.id) === String(selectedCustomerId));
     if (customer && customer.pics && customer.pics.length > 0) {
       const primary = customer.pics.find(p => p.is_primary) || customer.pics[0];
       // Convert to string so <select value> comparison works (BIGINT id vs string)
@@ -97,7 +97,7 @@ export default function QuotationModal({ isOpen, onClose, onCreated }) {
   const handlePicSelectChange = (picId) => {
     setSelectedPicId(picId); // already a string from <select onChange>
     if (!selectedCustomerId || !customers) return;
-    const customer = customers.find(c => c.id === selectedCustomerId);
+    const customer = customers.find(c => String(c.id) === String(selectedCustomerId));
     if (!customer) return;
     // Find by comparing string ids (BIGINT comes as number from Supabase)
     const pic = customer.pics?.find(p => String(p.id) === String(picId));
@@ -167,7 +167,7 @@ export default function QuotationModal({ isOpen, onClose, onCreated }) {
           queryClient.invalidateQueries({ queryKey: ['customers'] });
         }
 
-        const customer = customers?.find(c => c.id === selectedCustomerId);
+        const customer = customers?.find(c => String(c.id) === String(selectedCustomerId));
         if (customer && (customer.address || '') !== editCompanyAddress.trim()) {
           await api.updateCustomer(selectedCustomerId, { address: editCompanyAddress.trim() || null });
           queryClient.invalidateQueries({ queryKey: ['customers'] });
@@ -228,7 +228,7 @@ export default function QuotationModal({ isOpen, onClose, onCreated }) {
       // 3. Create Quotation in Supabase
       const quotationData = {
         customer_id: customerId,
-        pic_id: picId ? Number(picId) : null,
+        pic_id: (picId && picId !== '' && picId !== '0') ? Number(picId) : null,
         sales_id: user?.id || null,
         sales_code: chosenPrefixCode,
         bu_id: user?.bu?.id || null,
