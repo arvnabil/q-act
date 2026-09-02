@@ -270,11 +270,18 @@ export default function QuotationEdit({ quotation, onBack, onSaved }) {
     if (customerId && customers) {
       const cust = customers.find(c => c.id === customerId);
       if (cust && cust.pics && cust.pics.length > 0) {
-        if (!picId || !cust.pics.some(p => String(p.id) === String(picId))) {
+        // If current picId doesn't belong to this customer, reset it
+        const picBelongsToCust = cust.pics.some(p => String(p.id) === String(picId));
+        if (!picId || !picBelongsToCust) {
           const primary = cust.pics.find(p => p.is_primary) || cust.pics[0];
           setPicId(String(primary.id));
         }
+      } else {
+        // Customer has no PICs — clear picId to avoid stale FK
+        setPicId('');
       }
+    } else if (!customerId) {
+      setPicId('');
     }
   }, [customerId, customers]);
 
@@ -490,7 +497,7 @@ export default function QuotationEdit({ quotation, onBack, onSaved }) {
       // 1. Update quotation header (with graceful fallback if 'terms' column does not exist in DB)
       const basePayload = {
         customer_id: customerId || quotation.customer_id,
-        pic_id: picId ? Number(picId) : null,
+        pic_id: (picId && picId !== '' && picId !== '0') ? Number(picId) : null,
         status: finalStatus,
         calc_tax: calcTax,
         show_tax: showTax,
