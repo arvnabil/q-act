@@ -487,3 +487,51 @@ export function useRemoveSalesOrderCost() {
     },
   });
 }
+
+// ============================================
+// SALES ZONE
+// ============================================
+
+import { supabase } from '../services/supabase.js';
+
+/**
+ * Lazy fetch: only fetches when `enabled` is true (i.e. when Sales Zone is opened).
+ */
+export function useQuotationSalesNote(quotationId, enabled = false) {
+  return useQuery({
+    queryKey: ['quotation_sales_note', quotationId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('quotation_sales_notes')
+        .select('*')
+        .eq('quotation_id', quotationId)
+        .maybeSingle();
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!quotationId && enabled,
+    staleTime: 30_000,
+  });
+}
+
+export function useUpsertSalesNote() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ quotationId, adjustments }) => {
+      const { data, error } = await supabase
+        .from('quotation_sales_notes')
+        .upsert(
+          { quotation_id: quotationId, adjustments, updated_at: new Date().toISOString() },
+          { onConflict: 'quotation_id' }
+        )
+        .select()
+        .single();
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['quotation_sales_note', variables.quotationId] });
+    },
+  });
+}
+

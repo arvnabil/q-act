@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import ReactDOM from 'react-dom';
 import { ArrowLeft, Plus, Edit, Trash2, Save, Loader2, Info, ChevronDown, Check, Search, X, UploadCloud, Image as ImageIcon, Box, FileText, BookmarkPlus, AlertTriangle } from 'lucide-react';
+import SalesZoneCard from './SalesZoneCard.jsx';
 import { useProducts, useCustomers, useBankAccounts, useBrands, useCreateBrand } from '../hooks/useSupabase.js';
 import * as api from '../services/api.js';
 import { useQueryClient } from '@tanstack/react-query';
@@ -1396,6 +1397,9 @@ export default function QuotationEdit({ quotation, onBack, onSaved }) {
           </div>
         </div>
       </div>
+
+      {/* Sales Zone — internal margin calculator */}
+      <SalesZoneCard items={items} quotationId={quotation?.id} />
 
       {/* Syarat & Ketentuan Card with Template Selector */}
       <div className="bg-white rounded-2xl border border-surface-200 shadow-sm p-6 mb-6">
