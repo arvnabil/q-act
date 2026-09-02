@@ -10,6 +10,31 @@ import Pagination from '../components/Pagination.jsx';
 
 const PAGE_SIZE = 8;
 
+const formatCurrency = (val) =>
+  new Intl.NumberFormat('id-ID', {
+    style: 'currency', currency: 'IDR', minimumFractionDigits: 0,
+  }).format(val || 0);
+
+const EditableCurrencyInput = ({ value, onChange, onBlur, className, placeholder }) => {
+  const [isFocused, setIsFocused] = useState(false);
+
+  return (
+    <input
+      type={isFocused ? "number" : "text"}
+      min="0"
+      placeholder={placeholder}
+      value={isFocused ? (value ?? '') : (value ? formatCurrency(value) : (placeholder || ''))}
+      onFocus={() => setIsFocused(true)}
+      onChange={e => onChange(e.target.value)}
+      onBlur={(e) => {
+        setIsFocused(false);
+        if (onBlur) onBlur(e);
+      }}
+      className={className}
+    />
+  );
+};
+
 export default function Products() {
   const queryClient = useQueryClient();
   const [search, setSearch] = useState('');
@@ -349,7 +374,6 @@ export default function Products() {
     });
   };
 
-  const formatCurrency = (val) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(val);
 
   // Reset to page 1 and clear selection when filter/view changes
   useEffect(() => {
@@ -949,19 +973,12 @@ export default function Products() {
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <label className="text-xs font-semibold text-surface-600 mb-1 block">Pricelist Distributor (Rp)</label>
-                      <div className="relative">
-                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                          <span className="text-surface-400 text-xs font-bold">Rp</span>
-                        </div>
-                        <input
-                          type="number"
-                          min="0"
-                          value={newProduct.pricelist_distributor}
-                          onChange={e => handleProductPriceChange('pricelist_distributor', e.target.value)}
-                          className="w-full border border-surface-200 rounded-lg pl-9 pr-3 py-2 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-50 transition-all bg-white"
-                          placeholder="0"
-                        />
-                      </div>
+                      <EditableCurrencyInput
+                        value={newProduct.pricelist_distributor}
+                        onChange={val => handleProductPriceChange('pricelist_distributor', val)}
+                        className="w-full border border-surface-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-50 transition-all bg-white"
+                        placeholder="0"
+                      />
                     </div>
                     <div>
                       <label className="text-xs font-semibold text-surface-600 mb-1 block">Diskon Distributor (%)</label>
@@ -989,19 +1006,12 @@ export default function Products() {
                       Harga Modal / HPP (Rp)
                       <span className="text-[10px] text-brand-500 font-normal bg-brand-50 px-1.5 py-0.5 rounded">Auto</span>
                     </label>
-                    <div className="relative">
-                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                        <span className="text-surface-400 text-xs font-bold">Rp</span>
-                      </div>
-                      <input
-                        type="number"
-                        min="0"
-                        value={newProduct.modal}
-                        onChange={e => handleProductPriceChange('modal', e.target.value)}
-                        className="w-full border border-brand-200 bg-brand-50/30 rounded-lg pl-9 pr-3 py-2 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-50 transition-all font-semibold text-brand-900"
-                        placeholder="= Pricelist × (1 − Diskon%)"
-                      />
-                    </div>
+                    <EditableCurrencyInput
+                      value={newProduct.modal}
+                      onChange={val => handleProductPriceChange('modal', val)}
+                      className="w-full border border-brand-200 bg-brand-50/30 rounded-lg px-3 py-2 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-50 transition-all font-semibold text-brand-900"
+                      placeholder="= Pricelist × (1 − Diskon%)"
+                    />
                     <p className="text-[10px] text-surface-400 mt-0.5">Rumus: Pricelist × (1 − Diskon%) − dapat diubah manual</p>
                   </div>
                 </div>
@@ -1011,19 +1021,12 @@ export default function Products() {
                   <label className="text-xs font-bold text-surface-600 uppercase tracking-wider mb-2 block">
                     Harga Jual Referensi (IDR) <span className="text-surface-400 font-normal normal-case text-[11px]">(opsional)</span>
                   </label>
-                  <div className="relative">
-                    <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                      <span className="text-surface-500 text-sm font-bold">Rp</span>
-                    </div>
-                    <input
-                      type="number"
-                      min="0"
-                      value={newProduct.price}
-                      onChange={e => setNewProduct(p => ({ ...p, price: e.target.value }))}
-                      className="w-full border border-surface-200 rounded-xl pl-12 pr-4 py-2.5 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-50 transition-all"
-                      placeholder="0"
-                    />
-                  </div>
+                  <EditableCurrencyInput
+                    value={newProduct.price}
+                    onChange={val => setNewProduct(p => ({ ...p, price: val }))}
+                    className="w-full border border-surface-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-50 transition-all"
+                    placeholder="0"
+                  />
                   <p className="text-[10px] text-surface-400 mt-1">Harga referensi di katalog. Harga final per-penawaran dihitung berdasarkan Margin Sales di form Quotation.</p>
                 </div>
 

@@ -37,6 +37,26 @@ const formatBrandName = (brand) => {
   return String(brand);
 };
 
+const EditableCurrencyInput = ({ value, onChange, onBlur, className, placeholder }) => {
+  const [isFocused, setIsFocused] = useState(false);
+
+  return (
+    <input
+      type={isFocused ? "number" : "text"}
+      min="0"
+      placeholder={placeholder}
+      value={isFocused ? (value ?? '') : (value ? formatCurrency(value) : (placeholder || ''))}
+      onFocus={() => setIsFocused(true)}
+      onChange={e => onChange(e.target.value)}
+      onBlur={(e) => {
+        setIsFocused(false);
+        if (onBlur) onBlur(e);
+      }}
+      className={className}
+    />
+  );
+};
+
 export default function QuotationEdit({ quotation, onBack, onSaved }) {
   const queryClient = useQueryClient();
   const { data: products } = useProducts();
@@ -968,19 +988,12 @@ export default function QuotationEdit({ quotation, onBack, onSaved }) {
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="text-xs font-semibold text-surface-600 mb-1 block">Pricelist Distributor (Rp)</label>
-                    <div className="relative">
-                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                        <span className="text-surface-400 text-xs font-bold">Rp</span>
-                      </div>
-                      <input
-                        type="number"
-                        min="0"
-                        value={newProdForm.pricelist_distributor || ''}
-                        onChange={e => handleProductPriceChange('pricelist_distributor', e.target.value, false)}
-                        className="w-full border border-surface-200 rounded-lg pl-9 pr-3 py-2 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-50 transition-all bg-white"
-                        placeholder="0"
-                      />
-                    </div>
+                    <EditableCurrencyInput
+                      value={newProdForm.pricelist_distributor || ''}
+                      onChange={val => handleProductPriceChange('pricelist_distributor', val, false)}
+                      className="w-full border border-surface-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-50 transition-all bg-white"
+                      placeholder="0"
+                    />
                   </div>
                   <div>
                     <label className="text-xs font-semibold text-surface-600 mb-1 block">Diskon Distributor (%)</label>
@@ -1007,19 +1020,12 @@ export default function QuotationEdit({ quotation, onBack, onSaved }) {
                     Harga Modal / HPP (Rp)
                     <span className="text-[10px] text-brand-500 font-normal bg-brand-50 px-1.5 py-0.5 rounded">Auto</span>
                   </label>
-                  <div className="relative">
-                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                      <span className="text-surface-400 text-xs font-bold">Rp</span>
-                    </div>
-                    <input
-                      type="number"
-                      min="0"
-                      value={newProdForm.hpp || ''}
-                      onChange={e => handleProductPriceChange('hpp', e.target.value, false)}
-                      className="w-full border border-brand-200 bg-brand-50/30 rounded-lg pl-9 pr-3 py-2 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-50 transition-all font-semibold text-brand-900"
-                      placeholder="= Pricelist × (1 − Diskon%)"
-                    />
-                  </div>
+                  <EditableCurrencyInput
+                    value={newProdForm.hpp || ''}
+                    onChange={val => handleProductPriceChange('hpp', val, false)}
+                    className="w-full border border-brand-200 bg-brand-50/30 rounded-lg px-3 py-2 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-50 transition-all font-semibold text-brand-900"
+                    placeholder="= Pricelist × (1 − Diskon%)"
+                  />
                   <p className="text-[10px] text-surface-400 mt-0.5">Rumus: Pricelist × (1 − Diskon%) − dapat diubah manual</p>
                 </div>
               </div>
@@ -1030,15 +1036,10 @@ export default function QuotationEdit({ quotation, onBack, onSaved }) {
                   Harga Jual Referensi (IDR) <span className="text-surface-400 font-normal normal-case text-[11px]">(opsional)</span>
                 </label>
                 <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                    <span className="text-surface-500 text-sm font-bold">Rp</span>
-                  </div>
-                  <input
-                    type="number"
-                    min="0"
+                  <EditableCurrencyInput
                     value={newProdForm.price || ''}
-                    onChange={e => setNewProdForm(p => ({ ...p, price: Number(e.target.value) }))}
-                    className="w-full border border-surface-200 rounded-xl pl-12 pr-4 py-2.5 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-50 transition-all"
+                    onChange={val => setNewProdForm(p => ({ ...p, price: Number(val) }))}
+                    className="w-full border border-surface-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-50 transition-all"
                     placeholder="0"
                   />
                 </div>
@@ -1181,17 +1182,17 @@ export default function QuotationEdit({ quotation, onBack, onSaved }) {
         )}
 
         <div className="overflow-visible">
-          <table className="w-full text-left border-collapse min-w-[1050px]">
+          <table className="w-full text-left border-collapse min-w-[1100px]">
             <thead>
               <tr className="bg-surface-50 border-b border-surface-200">
                 <th className="py-3 px-3 text-center text-xs font-bold text-surface-400 uppercase w-10">No</th>
-                <th className="py-3 px-3 text-left text-xs font-bold text-surface-400 uppercase min-w-[350px]">Produk</th>
-                <th className="py-3 px-3 text-left text-xs font-bold text-surface-400 uppercase w-28">Brand</th>
-                <th className="py-3 px-3 text-center text-xs font-bold text-surface-400 uppercase w-20">QTY</th>
-                <th className="py-3 px-3 text-right text-xs font-bold text-surface-400 uppercase w-32">Modal (HPP)</th>
-                <th className="py-3 px-3 text-center text-xs font-bold text-surface-400 uppercase w-36">Margin</th>
-                <th className="py-3 px-3 text-right text-xs font-bold text-surface-400 uppercase w-32">Harga Satuan</th>
-                <th className="py-3 px-3 text-right text-xs font-bold text-surface-400 uppercase w-36">Total</th>
+                <th className="py-3 px-3 text-left text-xs font-bold text-surface-400 uppercase min-w-[300px]">Produk</th>
+                <th className="py-3 px-3 text-left text-xs font-bold text-surface-400 uppercase w-24">Brand</th>
+                <th className="py-3 px-3 text-center text-xs font-bold text-surface-400 uppercase w-16">QTY</th>
+                <th className="py-3 px-3 text-right text-xs font-bold text-surface-400 uppercase min-w-[130px]">Modal (HPP)</th>
+                <th className="py-3 px-3 text-center text-xs font-bold text-surface-400 uppercase min-w-[120px]">Margin</th>
+                <th className="py-3 px-3 text-right text-xs font-bold text-surface-400 uppercase min-w-[140px]">Harga Satuan</th>
+                <th className="py-3 px-3 text-right text-xs font-bold text-surface-400 uppercase min-w-[140px]">Total</th>
                 <th className="py-3 px-3 text-center text-xs font-bold text-surface-400 uppercase w-12">Aksi</th>
               </tr>
             </thead>
@@ -1298,12 +1299,10 @@ export default function QuotationEdit({ quotation, onBack, onSaved }) {
                     </td>
 
                     <td className="py-3 px-3">
-                      <input
-                        type="number"
-                        min="0"
+                      <EditableCurrencyInput
                         placeholder="0"
                         value={item.hpp}
-                        onChange={e => handleItemChange(idx, 'hpp', e.target.value)}
+                        onChange={val => handleItemChange(idx, 'hpp', val)}
                         onBlur={() => handleItemBlur(idx)}
                         className="w-full bg-surface-50 border border-surface-200 rounded-lg px-2 py-1.5 text-xs text-surface-800 outline-none text-right font-mono focus:border-brand-500"
                       />
@@ -1324,23 +1323,32 @@ export default function QuotationEdit({ quotation, onBack, onSaved }) {
                         >
                           {item.margin_type === 'nominal' ? 'Rp' : '%'}
                         </button>
-                        <input
-                          type="number"
-                          placeholder={item.margin_type === 'nominal' ? 'Rp' : '%'}
-                          value={item.margin_type === 'nominal' ? (item.margin_value ?? '') : (item.margin ?? '')}
-                          onChange={e => handleItemChange(idx, item.margin_type === 'nominal' ? 'margin_value' : 'margin', e.target.value)}
-                          onBlur={() => handleItemBlur(idx)}
-                          className="w-20 bg-surface-50 border border-surface-200 rounded-lg px-2 py-1.5 text-xs text-surface-800 outline-none text-center font-bold focus:border-brand-500"
-                        />
+                        {item.margin_type === 'nominal' ? (
+                          <EditableCurrencyInput
+                            placeholder="Rp"
+                            value={item.margin_value ?? ''}
+                            onChange={val => handleItemChange(idx, 'margin_value', val)}
+                            onBlur={() => handleItemBlur(idx)}
+                            className="w-32 bg-surface-50 border border-surface-200 rounded-lg px-2 py-1.5 text-xs text-surface-800 outline-none text-center font-bold focus:border-brand-500"
+                          />
+                        ) : (
+                          <input
+                            type="number"
+                            placeholder="%"
+                            value={item.margin ?? ''}
+                            onChange={e => handleItemChange(idx, 'margin', e.target.value)}
+                            onBlur={() => handleItemBlur(idx)}
+                            className="w-20 bg-surface-50 border border-surface-200 rounded-lg px-2 py-1.5 text-xs text-surface-800 outline-none text-center font-bold focus:border-brand-500"
+                          />
+                        )}
                       </div>
                     </td>
 
                     <td className="py-3 px-3">
-                      <input
-                        type="number"
-                        min="0"
+                      <EditableCurrencyInput
+                        placeholder="0"
                         value={item.price}
-                        onChange={e => handleItemChange(idx, 'price', e.target.value)}
+                        onChange={val => handleItemChange(idx, 'price', val)}
                         onBlur={() => handleItemBlur(idx)}
                         className="w-full bg-surface-50 border border-surface-200 rounded-lg px-2 py-1.5 text-xs text-surface-800 outline-none text-right font-mono font-bold focus:border-brand-500"
                       />
@@ -1811,19 +1819,12 @@ export default function QuotationEdit({ quotation, onBack, onSaved }) {
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="text-xs font-semibold text-surface-600 mb-1 block">Pricelist Distributor (Rp)</label>
-                    <div className="relative">
-                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                        <span className="text-surface-400 text-xs font-bold">Rp</span>
-                      </div>
-                      <input
-                        type="number"
-                        min="0"
-                        value={editProdForm.pricelist_distributor || ''}
-                        onChange={e => handleProductPriceChange('pricelist_distributor', e.target.value, true)}
-                        className="w-full border border-surface-200 rounded-lg pl-9 pr-3 py-2 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-50 transition-all bg-white"
-                        placeholder="0"
-                      />
-                    </div>
+                    <EditableCurrencyInput
+                      value={editProdForm.pricelist_distributor || ''}
+                      onChange={val => handleProductPriceChange('pricelist_distributor', val, true)}
+                      className="w-full border border-surface-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-50 transition-all bg-white"
+                      placeholder="0"
+                    />
                   </div>
                   <div>
                     <label className="text-xs font-semibold text-surface-600 mb-1 block">Diskon Distributor (%)</label>
@@ -1850,19 +1851,12 @@ export default function QuotationEdit({ quotation, onBack, onSaved }) {
                     Harga Modal / HPP (Rp)
                     <span className="text-[10px] text-brand-500 font-normal bg-brand-50 px-1.5 py-0.5 rounded">Auto</span>
                   </label>
-                  <div className="relative">
-                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                      <span className="text-surface-400 text-xs font-bold">Rp</span>
-                    </div>
-                    <input
-                      type="number"
-                      min="0"
-                      value={editProdForm.hpp || ''}
-                      onChange={e => handleProductPriceChange('hpp', e.target.value, true)}
-                      className="w-full border border-brand-200 bg-brand-50/30 rounded-lg pl-9 pr-3 py-2 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-50 transition-all font-semibold text-brand-900"
-                      placeholder="= Pricelist × (1 − Diskon%)"
-                    />
-                  </div>
+                  <EditableCurrencyInput
+                    value={editProdForm.hpp || ''}
+                    onChange={val => handleProductPriceChange('hpp', val, true)}
+                    className="w-full border border-brand-200 bg-brand-50/30 rounded-lg px-3 py-2 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-50 transition-all font-semibold text-brand-900"
+                    placeholder="= Pricelist × (1 − Diskon%)"
+                  />
                   <p className="text-[10px] text-surface-400 mt-0.5">Rumus: Pricelist × (1 − Diskon%) − dapat diubah manual</p>
                 </div>
               </div>
@@ -1873,15 +1867,10 @@ export default function QuotationEdit({ quotation, onBack, onSaved }) {
                   Harga Jual Referensi (IDR) <span className="text-surface-400 font-normal normal-case text-[11px]">(opsional)</span>
                 </label>
                 <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                    <span className="text-surface-500 text-sm font-bold">Rp</span>
-                  </div>
-                  <input
-                    type="number"
-                    min="0"
+                  <EditableCurrencyInput
                     value={editProdForm.price || ''}
-                    onChange={e => setEditProdForm(p => ({ ...p, price: Number(e.target.value) }))}
-                    className="w-full border border-surface-200 rounded-xl pl-12 pr-4 py-2.5 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-50 transition-all"
+                    onChange={val => setEditProdForm(p => ({ ...p, price: Number(val) }))}
+                    className="w-full border border-surface-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-50 transition-all"
                     placeholder="0"
                   />
                 </div>
