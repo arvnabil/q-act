@@ -1,0 +1,64 @@
+name: q-act-laravel
+
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: q_act_mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: secret
+      MYSQL_DATABASE: q_act
+      MYSQL_USER: q_act_user
+      MYSQL_PASSWORD: secret
+    ports:
+      - "3306:3306"
+    volumes:
+      - q_act_mysql_data:/var/lib/mysql
+    networks:
+      - q_act_network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-psecret"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  phpmyadmin:
+    image: phpmyadmin:latest
+    container_name: q_act_phpmyadmin
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      PMA_HOST: mysql
+      PMA_PORT: 3306
+      PMA_USER: root
+      PMA_PASSWORD: secret
+    ports:
+      - "8080:80"
+    networks:
+      - q_act_network
+
+  queue:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: q_act_queue
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      DB_HOST: mysql
+    volumes:
+      - .:/var/www/html
+    networks:
+      - q_act_network
+
+volumes:
+  q_act_mysql_data:
+    driver: local
+
+networks:
+  q_act_network:
+    driver: bridge

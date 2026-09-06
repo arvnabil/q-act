@@ -1,0 +1,8 @@
+{
+    "This password reset token is invalid.": "Token reset kata sandi ini tidak valid atau sudah kadaluwarsa.",
+    "We have emailed your password reset link.": "Tautan reset kata sandi telah dikirim ke email Anda.",
+    "Your password has been reset.": "Kata sandi Anda berhasil diperbarui.",
+    "Please wait before retrying.": "Silakan tunggu sebentar sebelum mencoba lagi.",
+    "User": "Pengguna",
+    "We can't find a user with that email address.": "Email tersebut tidak terdaftar di sistem kami."
+}

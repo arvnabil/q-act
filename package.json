@@ -1,31 +1,33 @@
 {
-  "name": "quote",
-  "version": "0.0.0",
-  "private": true,
-  "type": "module",
-  "scripts": {
-    "dev": "vite",
-    "build": "vite build",
-    "preview": "vite preview"
-  },
-  "devDependencies": {
-    "@vitejs/plugin-react": "^6.0.5",
-    "vite": "^8.1.1"
-  },
-  "dependencies": {
-    "@supabase/supabase-js": "^2.112.1",
-    "@tailwindcss/vite": "^4.3.3",
-    "@tanstack/react-query": "^5.101.4",
-    "date-fns": "^4.4.0",
-    "file-saver": "^2.0.5",
-    "html2pdf.js": "^0.14.0",
-    "lucide-react": "^1.28.0",
-    "react": "^19.2.8",
-    "react-dom": "^19.2.8",
-    "react-hot-toast": "^2.6.0",
-    "react-router-dom": "^7.18.2",
-    "tailwindcss": "^4.3.3",
-    "xlsx": "^0.18.5",
-    "zustand": "^5.0.14"
-  }
+    "$schema": "https://www.schemastore.org/package.json",
+    "private": true,
+    "type": "module",
+    "scripts": {
+        "build": "vite build",
+        "dev": "vite"
+    },
+    "devDependencies": {
+        "@headlessui/react": "^2.0.0",
+        "@inertiajs/react": "^2.0.0",
+        "@tailwindcss/forms": "^0.5.3",
+        "@vitejs/plugin-react": "^4.2.0",
+        "autoprefixer": "^10.4.12",
+        "concurrently": "^10.0.3",
+        "laravel-vite-plugin": "^3.1",
+        "postcss": "^8.4.31",
+        "react": "^18.2.0",
+        "react-dom": "^18.2.0",
+        "tailwindcss": "^3.2.1",
+        "vite": "^8.0.0"
+    },
+    "optionalDependencies": {
+        "@laravel/multiplex": "^0.4.1"
+    },
+    "dependencies": {
+        "date-fns": "^4.4.0",
+        "file-saver": "^2.0.5",
+        "lucide-react": "^1.40.0",
+        "react-hot-toast": "^2.6.0",
+        "xlsx": "^0.18.5"
+    }
 }

@@ -1,0 +1,1 @@
+ npx supabase db dump --data-only -f supabase_data.sql

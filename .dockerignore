@@ -1,6 +1,8 @@
 node_modules
-dist
+vendor
 .git
-.gitignore
-.env.local
-npm-debug.log*
+storage/*.key
+storage/framework/cache/data/*
+storage/framework/sessions/*
+storage/framework/views/*
+storage/logs/*
