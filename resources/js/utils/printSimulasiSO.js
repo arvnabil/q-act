@@ -254,7 +254,7 @@ export function generateSimulasiSOHTML(q, adjustments = [], currentUser = null) 
 <html lang="id">
 <head>
     <meta charset="UTF-8">
-    <title>Simulasi SO - ${quotationId}</title>
+    <title>SO - ${quotationId}</title>
     <style>
         * {
             box-sizing: border-box;

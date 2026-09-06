@@ -210,7 +210,7 @@ export default function SalesOrderDetail({ so, costCategories = [], isFinance })
         });
     };
 
-    const handleExportSimulasiSO = () => {
+    const handleExportSO = () => {
         const adjustments = (so.costs || []).map(c => ({
             category: c.category_name || 'Others / Shipping/ Import',
             label: c.description || '',
@@ -266,11 +266,11 @@ export default function SalesOrderDetail({ so, costCategories = [], isFinance })
                     </Link>
 
                     <button
-                        onClick={handleExportSimulasiSO}
+                        onClick={handleExportSO}
                         className="inline-flex items-center gap-2 px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm cursor-pointer"
                     >
                         <Printer className="w-4 h-4" />
-                        <span>Cetak / Export Simulasi SO</span>
+                        <span>Cetak / Export SO</span>
                     </button>
                 </div>
 
