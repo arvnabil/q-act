@@ -2,10 +2,11 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
     Calculator, ChevronDown, ChevronUp, Plus, Trash2,
     Save, AlertTriangle, TrendingDown, TrendingUp, Minus,
-    Lock, Unlock, Printer, FileText
+    Lock, Unlock, Printer, FileText, FileSpreadsheet
 } from 'lucide-react';
+import { toast } from 'react-hot-toast';
 import { calculateSalesMargin, generateAdjId } from '@/utils/salesMargin';
-import { printSimulasiSO } from '@/utils/printSimulasiSO';
+import { printSimulasiSO, exportSimulasiSOExcel } from '@/utils/printSimulasiSO';
 
 // ─── Formatters ───────────────────────────────────────────────────────────────
 const fmtRp = (val) =>
@@ -57,6 +58,19 @@ export default function SalesZoneCard({ items = [], quotationId, quotation = nul
         e?.stopPropagation();
         const targetQ = quotation ? { ...quotation, items: items.length > 0 ? items : quotation.items } : { id: quotationId, items };
         printSimulasiSO(targetQ, adjustments, currentUser);
+    };
+
+    const handleExportSimulasiSOExcel = async (e) => {
+        e?.preventDefault();
+        e?.stopPropagation();
+        const targetQ = quotation ? { ...quotation, items: items.length > 0 ? items : quotation.items } : { id: quotationId, items };
+        try {
+            await exportSimulasiSOExcel(targetQ, adjustments, currentUser);
+            toast.success('File Excel simulasi SO berhasil diunduh! 📥');
+        } catch (err) {
+            console.error('Export Excel simulasi SO gagal:', err);
+            toast.error('Gagal export Excel. Silakan coba lagi atau periksa console.');
+        }
     };
 
     // Load saved adjustments when opened
@@ -214,14 +228,24 @@ const CATEGORY_OPTIONS = [
                                     <p className="text-xs font-bold text-violet-700 uppercase tracking-wider">
                                         Profitabilitas Item
                                     </p>
-                                    <button
-                                        type="button"
-                                        onClick={handleExportSimulasiSO}
-                                        className="flex items-center gap-1.5 text-xs font-semibold text-violet-700 bg-white border border-violet-200 px-3 py-1.5 rounded-lg hover:bg-violet-100 transition-all shadow-2xs cursor-pointer"
-                                        title="Eksport draft SO simulasi ke PDF"
-                                    >
-                                        <Printer className="w-3.5 h-3.5 text-violet-600" /> Export PDF Simulasi SO
-                                    </button>
+                                    <div className="flex items-center gap-2">
+                                        <button
+                                            type="button"
+                                            onClick={handleExportSimulasiSOExcel}
+                                            className="flex items-center gap-1.5 text-xs font-semibold text-emerald-700 bg-white border border-emerald-200 px-3 py-1.5 rounded-lg hover:bg-emerald-50 transition-all shadow-2xs cursor-pointer"
+                                            title="Eksport draft SO simulasi ke Excel"
+                                        >
+                                            <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" /> Export Excel
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={handleExportSimulasiSO}
+                                            className="flex items-center gap-1.5 text-xs font-semibold text-violet-700 bg-white border border-violet-200 px-3 py-1.5 rounded-lg hover:bg-violet-100 transition-all shadow-2xs cursor-pointer"
+                                            title="Eksport draft SO simulasi ke PDF"
+                                        >
+                                            <Printer className="w-3.5 h-3.5 text-violet-600" /> Export PDF Simulasi SO
+                                        </button>
+                                    </div>
                                 </div>
 
                                 {hasUnknownHpp && (

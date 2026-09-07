@@ -3,10 +3,10 @@ import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head, Link, router, usePage } from '@inertiajs/react';
 import {
     ArrowLeft, Plus, Trash2, Loader2, FileText, CheckCircle2, Box,
-    Printer, Tag, FolderPlus, Pencil, Check, X
+    Printer, Tag, FolderPlus, Pencil, Check, X, FileSpreadsheet
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
-import { printSimulasiSO } from '@/utils/printSimulasiSO';
+import { printSimulasiSO, exportSimulasiSOExcel } from '@/utils/printSimulasiSO';
 
 const formatCurrency = (val) =>
     new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(val || 0);
@@ -210,7 +210,7 @@ export default function SalesOrderDetail({ so, costCategories = [], isFinance })
         });
     };
 
-    const handleExportSO = () => {
+    const buildExportPayload = () => {
         const adjustments = (so.costs || []).map(c => ({
             category: c.category_name || 'Others / Shipping/ Import',
             label: c.description || '',
@@ -235,7 +235,23 @@ export default function SalesOrderDetail({ so, costCategories = [], isFinance })
             })),
         };
 
+        return { quotationObj, adjustments };
+    };
+
+    const handleExportSO = () => {
+        const { quotationObj, adjustments } = buildExportPayload();
         printSimulasiSO(quotationObj, adjustments, auth?.user);
+    };
+
+    const handleExportSOExcel = async () => {
+        const { quotationObj, adjustments } = buildExportPayload();
+        try {
+            await exportSimulasiSOExcel(quotationObj, adjustments, auth?.user);
+            toast.success('File Excel analisa SO berhasil diunduh! 📥');
+        } catch (err) {
+            console.error('Export Excel SO gagal:', err);
+            toast.error('Gagal export Excel. Silakan coba lagi atau periksa console.');
+        }
     };
 
     return (
@@ -265,13 +281,22 @@ export default function SalesOrderDetail({ so, costCategories = [], isFinance })
                         Kembali
                     </Link>
 
-                    <button
-                        onClick={handleExportSO}
-                        className="inline-flex items-center gap-2 px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm cursor-pointer"
-                    >
-                        <Printer className="w-4 h-4" />
-                        <span>Cetak / Export SO</span>
-                    </button>
+                    <div className="flex flex-wrap items-center gap-2">
+                        <button
+                            onClick={handleExportSOExcel}
+                            className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm cursor-pointer"
+                        >
+                            <FileSpreadsheet className="w-4 h-4" />
+                            <span>Export Excel</span>
+                        </button>
+                        <button
+                            onClick={handleExportSO}
+                            className="inline-flex items-center gap-2 px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm cursor-pointer"
+                        >
+                            <Printer className="w-4 h-4" />
+                            <span>Cetak / Export SO</span>
+                        </button>
+                    </div>
                 </div>
 
                 {/* Header Info */}
