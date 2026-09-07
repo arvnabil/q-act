@@ -1579,7 +1579,16 @@ const getProductDisplayName = (prod) => {
                                     </div>
                                     <EditableCurrencyInput
                                         value={editingItemData.hpp}
-                                        onChange={val => setEditingItemData(prev => ({ ...prev, hpp: Number(val) }))}
+                                        onChange={val => {
+                                            const hpp = Number(val) || 0;
+                                            const pl = Number(editingItemData.pricelist_distributor) || 0;
+                                            if (pl > 0) {
+                                                const calcDiskon = (1 - hpp / pl) * 100;
+                                                setEditingItemData(prev => ({ ...prev, hpp, diskon_distributor: calcDiskon > 0 ? parseFloat(calcDiskon.toFixed(2)) : 0 }));
+                                            } else {
+                                                setEditingItemData(prev => ({ ...prev, hpp }));
+                                            }
+                                        }}
                                         placeholder="Rp 0"
                                         className="w-full bg-emerald-50/50 border border-emerald-300 rounded-lg px-3 py-2 text-xs font-bold text-surface-900 outline-none focus:border-emerald-500 font-mono"
                                     />
@@ -1829,7 +1838,16 @@ const getProductDisplayName = (prod) => {
                                     </div>
                                     <EditableCurrencyInput
                                         value={newProductData.hpp}
-                                        onChange={val => setNewProductData(prev => ({ ...prev, hpp: val }))}
+                                        onChange={val => {
+                                            const hpp = Number(val) || 0;
+                                            const pl = Number(newProductData.pricelist_distributor) || 0;
+                                            if (pl > 0) {
+                                                const calcDiskon = (1 - hpp / pl) * 100;
+                                                setNewProductData(prev => ({ ...prev, hpp, diskon_distributor: calcDiskon > 0 ? parseFloat(calcDiskon.toFixed(2)) : 0 }));
+                                            } else {
+                                                setNewProductData(prev => ({ ...prev, hpp }));
+                                            }
+                                        }}
                                         placeholder="= Pricelist × (1 – Diskon%)"
                                         className="w-full bg-emerald-50/50 border border-emerald-300 rounded-xl px-3.5 py-2.5 text-xs font-bold text-surface-900 outline-none focus:border-emerald-500 font-mono"
                                     />
