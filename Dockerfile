@@ -7,7 +7,8 @@ RUN apk add --no-cache \
     freetype-dev \
     zip \
     unzip \
-    && docker-php-ext-install pdo pdo_mysql
+    && docker-php-ext-configure gd --with-freetype --with-jpeg \
+    && docker-php-ext-install gd pdo pdo_mysql
 
 WORKDIR /var/www/html
 
