@@ -4,7 +4,7 @@ import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head, Link, router, usePage } from '@inertiajs/react';
 import {
     ArrowLeft, Edit, Download, CheckCircle2, Clock, XCircle,
-    AlertCircle, FileText, CreditCard, Loader2, Trash2, AlertTriangle
+    AlertCircle, FileText, CreditCard, Loader2, Trash2, AlertTriangle, Copy
 } from 'lucide-react';
 import { printQuotation } from '@/utils/printQuotation';
 import { format, parseISO, isValid, differenceInDays } from 'date-fns';
@@ -53,6 +53,8 @@ export default function QuotationDetail({ quotation, bankAccounts, currentUser }
     const [pdfLanguage, setPdfLanguage] = useState('id');
     const [deleteTarget, setDeleteTarget] = useState(null);
     const [isDeleting, setIsDeleting] = useState(false);
+    const [showDuplicateConfirm, setShowDuplicateConfirm] = useState(false);
+    const [isDuplicating, setIsDuplicating] = useState(false);
 
     if (!quotation) return null;
 
@@ -123,6 +125,17 @@ export default function QuotationDetail({ quotation, bankAccounts, currentUser }
         });
     };
 
+    const handleDuplicate = () => {
+        if (isDuplicating) return;
+        setIsDuplicating(true);
+        router.post(route('quotations.duplicate', quotation.id), {}, {
+            onSuccess: () => setShowDuplicateConfirm(false),
+            onFinish: () => setIsDuplicating(false),
+        });
+    };
+
+    const canManage = (currentUser?.spatie_role !== 'Finance' && currentUser?.role !== 'Finance');
+
     return (
         <AuthenticatedLayout>
             <Head title={`Quotation ${quotation.id}`} />
@@ -155,7 +168,7 @@ export default function QuotationDetail({ quotation, bankAccounts, currentUser }
                         </div>
 
                         <div className="flex items-center gap-3 flex-wrap">
-                            {(currentUser?.spatie_role !== 'Finance' && currentUser?.role !== 'Finance') && (
+                            {canManage && (
                                 <>
                                     <Link
                                         href={route('quotations.edit', quotation.id)}
@@ -164,6 +177,14 @@ export default function QuotationDetail({ quotation, bankAccounts, currentUser }
                                         <Edit className="w-4 h-4" />
                                         Edit Quotation
                                     </Link>
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowDuplicateConfirm(true)}
+                                        className="flex items-center gap-1.5 px-4 py-2 text-xs font-semibold border border-brand-200 rounded-lg text-brand-700 hover:bg-brand-50 transition-colors cursor-pointer"
+                                    >
+                                        <Copy className="w-4 h-4" />
+                                        Duplikat Quotation
+                                    </button>
                                     <button
                                         onClick={() => setDeleteTarget(quotation)}
                                         className="flex items-center gap-1.5 px-4 py-2 text-xs font-semibold border border-red-200 rounded-lg text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
@@ -355,6 +376,33 @@ export default function QuotationDetail({ quotation, bankAccounts, currentUser }
                     )}
                 </div>
             </div>
+
+            {/* Duplicate Confirmation Modal */}
+            {showDuplicateConfirm && ReactDOM.createPortal(
+                <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-surface-900/60 backdrop-blur-sm animate-fade-in">
+                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden p-6 text-center animate-scale-in">
+                        <div className="w-12 h-12 rounded-full bg-brand-50 text-brand-600 flex items-center justify-center mx-auto mb-4 border border-brand-100 shadow-sm">
+                            <Copy className="w-6 h-6" />
+                        </div>
+                        <h3 className="text-base font-bold text-surface-900 mb-1">Duplikat Quotation</h3>
+                        <p className="text-xs text-surface-500 mb-6 leading-relaxed">
+                            Duplicate quotation "{quotation.id}" ini? Semua data dan item akan disalin menjadi quotation baru dengan nomor quotation baru.
+                        </p>
+                        <div className="flex items-center justify-center gap-3">
+                            <button type="button" onClick={() => setShowDuplicateConfirm(false)} disabled={isDuplicating}
+                                className="px-4 py-2 text-xs font-semibold border border-surface-200 rounded-lg text-surface-700 hover:bg-surface-50 transition-colors cursor-pointer disabled:opacity-50">
+                                Batal
+                            </button>
+                            <button type="button" onClick={handleDuplicate} disabled={isDuplicating}
+                                className="flex items-center gap-2 px-4 py-2 text-xs font-bold bg-brand-500 hover:bg-brand-600 text-white rounded-lg transition-all shadow-sm cursor-pointer disabled:opacity-50">
+                                {isDuplicating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Copy className="w-4 h-4" />}
+                                <span>{isDuplicating ? 'Menduplikasi...' : 'Ya, Duplikat'}</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>,
+                document.body
+            )}
 
             {/* Delete Confirmation Modal */}
             {deleteTarget && ReactDOM.createPortal(

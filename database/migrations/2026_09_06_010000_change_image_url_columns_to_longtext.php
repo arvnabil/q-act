@@ -1,14 +1,19 @@
 <?php
 
 use Illuminate\Database\Migrations\Migration;
-use Illuminate\Database\Schema\Blueprint;
-use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
     public function up(): void
     {
+        // LONGTEXT is a MySQL/MariaDB type. Other drivers (e.g. SQLite used by
+        // the test suite) store long text natively, so the ALTER is a no-op.
+        if (! in_array(DB::connection()->getDriverName(), ['mysql', 'mariadb'], true)) {
+            return;
+        }
+
         if (Schema::hasColumn('quotation_items', 'image_url')) {
             DB::statement('ALTER TABLE quotation_items MODIFY image_url LONGTEXT NULL');
         }
@@ -25,6 +30,10 @@ return new class extends Migration
 
     public function down(): void
     {
+        if (! in_array(DB::connection()->getDriverName(), ['mysql', 'mariadb'], true)) {
+            return;
+        }
+
         if (Schema::hasColumn('quotation_items', 'image_url')) {
             DB::statement('ALTER TABLE quotation_items MODIFY image_url TEXT NULL');
         }

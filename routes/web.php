@@ -61,6 +61,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/quotations/{quotation}/edit', [QuotationController::class, 'edit'])->name('quotations.edit');
     Route::put('/quotations/{quotation}', [QuotationController::class, 'update'])->name('quotations.update');
     Route::post('/quotations/{quotation}/reorder-items', [QuotationController::class, 'reorderItems'])->name('quotations.reorder-items');
+    Route::post('/quotations/{quotation}/duplicate', [QuotationController::class, 'duplicate'])->name('quotations.duplicate');
     Route::delete('/quotations/{quotation}', [QuotationController::class, 'destroy'])->name('quotations.destroy');
 
     // Quotation Sales Notes (Sales Zone)

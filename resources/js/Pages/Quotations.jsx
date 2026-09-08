@@ -3,7 +3,7 @@ import ReactDOM from 'react-dom';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import Pagination from '@/Components/Pagination';
 import { Head, Link, router, usePage } from '@inertiajs/react';
-import { Search, Eye, Download, Trash2, Loader2, FileText, Plus, AlertTriangle, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
+import { Search, Eye, Download, Copy, Trash2, Loader2, FileText, Plus, AlertTriangle, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 
 const PAGE_SIZE = 8;
 
@@ -107,6 +107,8 @@ export default function Quotations({ quotations, isFinance }) {
     const [selectedIds, setSelectedIds] = useState([]);
     const [deleteTarget, setDeleteTarget] = useState(null);
     const [isDeleting, setIsDeleting] = useState(false);
+    const [duplicateTarget, setDuplicateTarget] = useState(null);
+    const [isDuplicating, setIsDuplicating] = useState(false);
 
     // Sorting state
     const [sortKey, setSortKey] = useState('date');
@@ -248,6 +250,15 @@ export default function Quotations({ quotations, isFinance }) {
                 onFinish: () => setIsDeleting(false),
             });
         }
+    };
+
+    const handleDuplicate = () => {
+        if (!duplicateTarget || isDuplicating) return;
+        setIsDuplicating(true);
+        router.post(route('quotations.duplicate', duplicateTarget.id), {}, {
+            onSuccess: () => setDuplicateTarget(null),
+            onFinish: () => setIsDuplicating(false),
+        });
     };
 
     const handleExportExcel = async () => {
@@ -444,12 +455,16 @@ export default function Quotations({ quotations, isFinance }) {
                                                             >
                                                                 <Eye className="w-4 h-4" />
                                                             </Link>
-                                                            <button
-                                                                className="w-7 h-7 rounded-md flex items-center justify-center text-surface-400 hover:bg-emerald-50 hover:text-emerald-600 transition-colors cursor-pointer"
-                                                                title="Cetak / Download PDF"
-                                                            >
-                                                                <Download className="w-4 h-4" />
-                                                            </button>
+                                                            {!isFinance && (
+                                                                <button
+                                                                    onClick={() => setDuplicateTarget(q)}
+                                                                    className="w-7 h-7 rounded-md flex items-center justify-center text-surface-400 hover:bg-emerald-50 hover:text-emerald-600 transition-colors cursor-pointer"
+                                                                    title="Duplikat Quotation"
+                                                                    aria-label="Duplikat Quotation"
+                                                                >
+                                                                    <Copy className="w-4 h-4" />
+                                                                </button>
+                                                            )}
                                                             {!isFinance && (
                                                                 <button
                                                                     onClick={() => setDeleteTarget({ type: 'single', item: q })}
@@ -505,6 +520,41 @@ export default function Quotations({ quotations, isFinance }) {
                             Batal
                         </button>
                     </div>
+                )}
+
+                {/* Duplicate Confirmation Modal */}
+                {duplicateTarget && ReactDOM.createPortal(
+                    <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-surface-900/60 backdrop-blur-sm animate-fade-in">
+                        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden p-6 text-center animate-scale-in">
+                            <div className="w-12 h-12 rounded-full bg-brand-50 text-brand-600 flex items-center justify-center mx-auto mb-4 border border-brand-100 shadow-sm">
+                                <Copy className="w-6 h-6" />
+                            </div>
+                            <h3 className="text-base font-bold text-surface-900 mb-1">Duplikat Quotation</h3>
+                            <p className="text-xs text-surface-500 mb-6 leading-relaxed">
+                                Duplicate quotation "{duplicateTarget.id}" ini? Semua data dan item akan disalin menjadi quotation baru dengan nomor quotation baru.
+                            </p>
+                            <div className="flex items-center justify-center gap-3">
+                                <button
+                                    type="button"
+                                    onClick={() => setDuplicateTarget(null)}
+                                    disabled={isDuplicating}
+                                    className="px-4 py-2 text-xs font-semibold border border-surface-200 rounded-lg text-surface-700 hover:bg-surface-50 transition-colors cursor-pointer disabled:opacity-50"
+                                >
+                                    Batal
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={handleDuplicate}
+                                    disabled={isDuplicating}
+                                    className="flex items-center gap-2 px-4 py-2 text-xs font-bold bg-brand-500 hover:bg-brand-600 text-white rounded-lg transition-all shadow-sm cursor-pointer disabled:opacity-50"
+                                >
+                                    {isDuplicating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Copy className="w-4 h-4" />}
+                                    <span>{isDuplicating ? 'Menduplikasi...' : 'Ya, Duplikat'}</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>,
+                    document.body
                 )}
 
                 {/* Delete Confirmation Modal */}

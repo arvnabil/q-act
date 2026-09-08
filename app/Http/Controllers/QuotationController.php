@@ -9,10 +9,13 @@ use App\Models\CustomerPic;
 use App\Models\Product;
 use App\Models\Quotation;
 use App\Models\QuotationItem;
+use App\Models\QuotationSalesNote;
 use App\Models\SalesOrder;
 use App\Models\SalesOrderItem;
 use App\Models\SystemSetting;
+use App\Models\User;
 use App\Services\NotificationService;
+use Illuminate\Database\QueryException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -697,6 +700,145 @@ class QuotationController extends Controller
         return response()->json(['success' => true]);
     }
 
+    // ─── DUPLICATE ────────────────────────────────────────────────────────────
+    /**
+     * Create an independent copy of an existing quotation.
+     *
+     * A brand-new quotation record is created (new PK = new quotation number via
+     * the shared generateQuotationId() generator) together with fresh child rows
+     * for every quotation item and sales-zone note. Shared master data (customer,
+     * PIC, sales, business unit, bank account, products) is re-referenced, never
+     * copied. The workflow always starts over from "created".
+     *
+     * The whole copy runs inside a single transaction; any failure rolls back the
+     * entire duplicate so no partial quotation can ever be left behind. The new id
+     * is picked with the central generator, and in the unlikely case of a
+     * concurrent collision on the primary key the operation retries a few times
+     * before giving up.
+     */
+    public function duplicate(Request $request, Quotation $quotation)
+    {
+        $user = $request->user()->load('businessUnit');
+
+        if (! $this->canCreateQuotation($user)) {
+            return back()->with('error', 'Anda tidak memiliki izin untuk menduplikasi quotation.');
+        }
+
+        if ($quotation->is_deleted || $quotation->deleted_at) {
+            return back()->with('error', 'Quotation tidak ditemukan.');
+        }
+
+        $quotation->load(['items', 'salesNotes']);
+
+        // Resolve the numbering prefix exactly like a freshly created quotation
+        // (QuotationController::store), so the duplicate continues the normal
+        // sequential series for the acting user's BU/sales namespace.
+        $buCode = $user->businessUnit?->code;
+        $prefixCode = $buCode ?: ($user->sales_code ?? strtoupper(substr($user->name ?? 'SLS', 0, 3)));
+
+        $attempts = 0;
+        while (true) {
+            try {
+                $newQuotation = DB::transaction(function () use ($quotation, $user, $prefixCode) {
+                    $newId = $this->generateQuotationId($prefixCode);
+
+                    $newQuotation = Quotation::create([
+                        'id' => $newId,
+                        'customer_id' => $quotation->customer_id,
+                        'pic_id' => $quotation->pic_id,
+                        'sales_id' => $quotation->sales_id ?: $user->id,
+                        'bu_id' => $quotation->bu_id,
+                        'bank_account_id' => $quotation->bank_account_id,
+                        'status' => 'created',
+                        'date' => now()->toDateString(),
+                        'expired' => $quotation->expired?->toDateString(),
+                        'calc_tax' => $quotation->calc_tax,
+                        'show_tax' => $quotation->show_tax,
+                        'ppn_rate' => $quotation->ppn_rate,
+                        'calc_pph' => $quotation->calc_pph,
+                        'show_pph' => $quotation->show_pph,
+                        'pph_rate' => $quotation->pph_rate,
+                        'subtotal' => $quotation->subtotal,
+                        'tax_amount' => $quotation->tax_amount,
+                        'grand_total' => $quotation->grand_total,
+                        'notes' => $quotation->notes,
+                        'terms' => $quotation->terms,
+                        'is_deleted' => false,
+                        'deleted_at' => null,
+                        'created_by' => $user->id,
+                    ]);
+
+                    foreach ($quotation->items as $item) {
+                        QuotationItem::create([
+                            'quotation_id' => $newQuotation->id,
+                            'product_id' => $item->product_id,
+                            'sku' => $item->sku,
+                            'name' => $item->name,
+                            'brand' => $item->brand,
+                            'description' => $item->description,
+                            'image_url' => $item->image_url,
+                            'qty' => $item->qty,
+                            'hpp' => $item->hpp,
+                            'price' => $item->price,
+                            'margin' => $item->margin,
+                            'is_pph_applied' => $item->is_pph_applied,
+                            'sort_order' => $item->sort_order,
+                        ]);
+                    }
+
+                    foreach ($quotation->salesNotes as $note) {
+                        QuotationSalesNote::create([
+                            'quotation_id' => $newQuotation->id,
+                            'adjustments' => $note->adjustments,
+                        ]);
+                    }
+
+                    return $newQuotation;
+                });
+
+                NotificationService::notifyUser(
+                    $user->id,
+                    'Quotation Duplikat',
+                    "Anda membuat duplikat quotation: {$newQuotation->id} (dari {$quotation->id}).",
+                    "/quotations/{$newQuotation->id}"
+                );
+
+                return redirect()->route('quotations.edit', $newQuotation->id)
+                    ->with('message', "Quotation berhasil diduplikasi. Quotation baru: {$newQuotation->id}");
+            } catch (QueryException $e) {
+                $attempts++;
+                if ($attempts >= 3 || ! $this->isUniqueConstraintViolation($e)) {
+                    report($e);
+
+                    return back()->with('error', 'Gagal menduplikasi quotation. Silakan coba lagi.');
+                }
+            } catch (\Throwable $e) {
+                report($e);
+
+                return back()->with('error', 'Gagal menduplikasi quotation. Silakan coba lagi.');
+            }
+        }
+    }
+
+    /**
+     * Roles that may create quotations may also duplicate them. Mirrors the
+     * DEFAULT_ROLE_PERMISSIONS used by the role manager (quotations_create).
+     */
+    private function canCreateQuotation(User $user): bool
+    {
+        return in_array($user->role, ['Administrator', 'Manager', 'Sales Manager', 'Sales', 'Presales', 'admin'], true);
+    }
+
+    private function isUniqueConstraintViolation(QueryException $e): bool
+    {
+        $code = (string) $e->getCode();
+        $message = $e->getMessage();
+
+        return in_array($code, ['23000', '23505'], true)
+            || str_contains($message, 'Duplicate entry')
+            || str_contains($message, 'UNIQUE constraint failed');
+    }
+
     // ─── DESTROY ──────────────────────────────────────────────────────────────
     public function destroy(Quotation $quotation)
     {
@@ -736,9 +878,21 @@ class QuotationController extends Controller
         $date = now()->format('my'); // MMYY
         $prefix = "{$code}.{$date}.";
 
-        $last = Quotation::where('id', 'LIKE', "{$prefix}%")
-            ->orderByRaw('CAST(SUBSTRING_INDEX(id, ".", -1) AS UNSIGNED) DESC')
-            ->first();
+        $last = null;
+
+        if (in_array(DB::connection()->getDriverName(), ['mysql', 'mariadb'], true)) {
+            $last = Quotation::where('id', 'LIKE', "{$prefix}%")
+                ->orderByRaw('CAST(SUBSTRING_INDEX(id, ".", -1) AS UNSIGNED) DESC')
+                ->first();
+        } else {
+            // Portable fallback for drivers without SUBSTRING_INDEX/REVERSE
+            // (e.g. the SQLite test database): resolve the max sequence number
+            // in PHP instead of in SQL.
+            $last = Quotation::where('id', 'LIKE', "{$prefix}%")
+                ->get(['id'])
+                ->sortByDesc(fn ($q) => (int) substr($q->id, strrpos($q->id, '.') + 1))
+                ->first();
+        }
 
         $num = $last ? (int) substr($last->id, strrpos($last->id, '.') + 1) + 1 : 1;
 
