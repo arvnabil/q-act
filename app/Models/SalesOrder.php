@@ -5,11 +5,11 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use Illuminate\Support\Str;
 
 class SalesOrder extends Model
 {
     protected $keyType = 'string';
+
     public $incrementing = false;
 
     protected $fillable = [
@@ -53,7 +53,10 @@ class SalesOrder extends Model
 
     public function items(): HasMany
     {
-        return $this->hasMany(SalesOrderItem::class, 'so_id');
+        return $this->hasMany(SalesOrderItem::class, 'so_id')
+            ->orderBy('sort_order')
+            ->orderBy('created_at')
+            ->orderBy('id');
     }
 
     public function costs(): HasMany

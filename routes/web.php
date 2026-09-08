@@ -1,21 +1,22 @@
 <?php
 
-use App\Http\Controllers\ProfileController;
-use App\Http\Controllers\DashboardController;
-use App\Http\Controllers\CustomerController;
-use App\Http\Controllers\ProductController;
-use App\Http\Controllers\QuotationController;
-use App\Http\Controllers\BrandController;
-use App\Http\Controllers\UserController;
-use App\Http\Controllers\BusinessUnitController;
-use App\Http\Controllers\SalesOrderController;
-use App\Http\Controllers\CostCategoryController;
-use App\Http\Controllers\QuotationSalesNoteController;
 use App\Http\Controllers\AnalyticsController;
+use App\Http\Controllers\BrandController;
+use App\Http\Controllers\BusinessUnitController;
+use App\Http\Controllers\CostCategoryController;
+use App\Http\Controllers\CustomerController;
+use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\ManagerController;
 use App\Http\Controllers\NotificationController;
-use Illuminate\Foundation\Application;
+use App\Http\Controllers\ProductController;
+use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\QuotationController;
+use App\Http\Controllers\QuotationSalesNoteController;
+use App\Http\Controllers\RoleController;
+use App\Http\Controllers\SalesOrderController;
+use App\Http\Controllers\SettingController;
+use App\Http\Controllers\UserController;
 use Illuminate\Support\Facades\Route;
-use Inertia\Inertia;
 
 // Redirect root to dashboard or login
 Route::get('/', function () {
@@ -59,6 +60,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/quotations/{quotation}', [QuotationController::class, 'show'])->name('quotations.show');
     Route::get('/quotations/{quotation}/edit', [QuotationController::class, 'edit'])->name('quotations.edit');
     Route::put('/quotations/{quotation}', [QuotationController::class, 'update'])->name('quotations.update');
+    Route::post('/quotations/{quotation}/reorder-items', [QuotationController::class, 'reorderItems'])->name('quotations.reorder-items');
     Route::delete('/quotations/{quotation}', [QuotationController::class, 'destroy'])->name('quotations.destroy');
 
     // Quotation Sales Notes (Sales Zone)
@@ -111,22 +113,22 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::delete('/notifications/{id}', [NotificationController::class, 'destroy'])->name('notifications.destroy');
 
     // Manager View & Trash Management
-    Route::get('/manager', [\App\Http\Controllers\ManagerController::class, 'index'])->name('manager');
-    Route::post('/manager/quotations/batch-restore', [\App\Http\Controllers\ManagerController::class, 'batchRestore'])->name('manager.quotations.batch-restore');
-    Route::post('/manager/quotations/batch-force-delete', [\App\Http\Controllers\ManagerController::class, 'batchForceDelete'])->name('manager.quotations.batch-force-delete');
-    Route::post('/manager/quotations/{id}/restore', [\App\Http\Controllers\ManagerController::class, 'restore'])->name('manager.quotations.restore');
-    Route::delete('/manager/quotations/{id}/force-delete', [\App\Http\Controllers\ManagerController::class, 'forceDelete'])->name('manager.quotations.force-delete');
-    Route::get('/roles', [\App\Http\Controllers\RoleController::class, 'index'])->name('roles.index');
-    Route::put('/roles', [\App\Http\Controllers\RoleController::class, 'update'])->name('roles.update');
-    Route::get('/settings', [\App\Http\Controllers\SettingController::class, 'index'])->name('settings');
-    Route::post('/settings/company-info', [\App\Http\Controllers\SettingController::class, 'updateCompanyInfo'])->name('settings.company-info');
-    Route::post('/settings/bank-accounts', [\App\Http\Controllers\SettingController::class, 'storeBankAccount'])->name('settings.bank-accounts.store');
-    Route::put('/settings/bank-accounts/{id}', [\App\Http\Controllers\SettingController::class, 'updateBankAccount'])->name('settings.bank-accounts.update');
-    Route::post('/settings/bank-accounts/{id}/default', [\App\Http\Controllers\SettingController::class, 'setDefaultBankAccount'])->name('settings.bank-accounts.default');
-    Route::delete('/settings/bank-accounts/{id}', [\App\Http\Controllers\SettingController::class, 'destroyBankAccount'])->name('settings.bank-accounts.destroy');
-    Route::post('/settings/master-terms', [\App\Http\Controllers\SettingController::class, 'updateMasterTerms'])->name('settings.master-terms');
-    Route::post('/settings/domain-logo', [\App\Http\Controllers\SettingController::class, 'updateDomainLogoMap'])->name('settings.domain-logo');
-    Route::post('/settings/maintenance-mode', [\App\Http\Controllers\SettingController::class, 'updateMaintenanceMode'])->name('settings.maintenance-mode');
+    Route::get('/manager', [ManagerController::class, 'index'])->name('manager');
+    Route::post('/manager/quotations/batch-restore', [ManagerController::class, 'batchRestore'])->name('manager.quotations.batch-restore');
+    Route::post('/manager/quotations/batch-force-delete', [ManagerController::class, 'batchForceDelete'])->name('manager.quotations.batch-force-delete');
+    Route::post('/manager/quotations/{id}/restore', [ManagerController::class, 'restore'])->name('manager.quotations.restore');
+    Route::delete('/manager/quotations/{id}/force-delete', [ManagerController::class, 'forceDelete'])->name('manager.quotations.force-delete');
+    Route::get('/roles', [RoleController::class, 'index'])->name('roles.index');
+    Route::put('/roles', [RoleController::class, 'update'])->name('roles.update');
+    Route::get('/settings', [SettingController::class, 'index'])->name('settings');
+    Route::post('/settings/company-info', [SettingController::class, 'updateCompanyInfo'])->name('settings.company-info');
+    Route::post('/settings/bank-accounts', [SettingController::class, 'storeBankAccount'])->name('settings.bank-accounts.store');
+    Route::put('/settings/bank-accounts/{id}', [SettingController::class, 'updateBankAccount'])->name('settings.bank-accounts.update');
+    Route::post('/settings/bank-accounts/{id}/default', [SettingController::class, 'setDefaultBankAccount'])->name('settings.bank-accounts.default');
+    Route::delete('/settings/bank-accounts/{id}', [SettingController::class, 'destroyBankAccount'])->name('settings.bank-accounts.destroy');
+    Route::post('/settings/master-terms', [SettingController::class, 'updateMasterTerms'])->name('settings.master-terms');
+    Route::post('/settings/domain-logo', [SettingController::class, 'updateDomainLogoMap'])->name('settings.domain-logo');
+    Route::post('/settings/maintenance-mode', [SettingController::class, 'updateMaintenanceMode'])->name('settings.maintenance-mode');
 });
 
 require __DIR__.'/auth.php';

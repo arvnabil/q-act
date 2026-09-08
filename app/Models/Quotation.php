@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 class Quotation extends Model
 {
     protected $keyType = 'string';
+
     public $incrementing = false;
 
     protected $fillable = [
@@ -71,7 +72,9 @@ class Quotation extends Model
 
     public function items(): HasMany
     {
-        return $this->hasMany(QuotationItem::class)->orderBy('sort_order');
+        return $this->hasMany(QuotationItem::class)
+            ->orderBy('sort_order')
+            ->orderBy('id');
     }
 
     public function salesNotes(): HasMany
@@ -95,8 +98,9 @@ class Quotation extends Model
             return (float) $value;
         }
         if ($this->relationLoaded('items')) {
-            return (float) $this->items->sum(fn($i) => ($i->qty ?? 0) * ($i->price ?? 0));
+            return (float) $this->items->sum(fn ($i) => ($i->qty ?? 0) * ($i->price ?? 0));
         }
+
         return (float) ($value ?? 0);
     }
 
@@ -108,6 +112,7 @@ class Quotation extends Model
         $sub = $this->subtotal;
         $ppn = ($this->calc_tax !== false && $this->show_tax !== false) ? round($sub * ($this->ppn_rate ?? 0.11)) : 0;
         $pph = ($this->calc_pph && $this->show_pph) ? round($sub * ($this->pph_rate ?? 0.02)) : 0;
+
         return (float) ($sub + $ppn + $pph);
     }
 }

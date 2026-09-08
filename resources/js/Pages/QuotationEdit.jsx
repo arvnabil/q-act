@@ -5,7 +5,7 @@ import { Head, Link, router, usePage } from '@inertiajs/react';
 import {
     ArrowLeft, Plus, Trash2, Save, Loader2, Info, ChevronDown,
     Check, Search, X, FileText, BookmarkPlus, AlertTriangle, Edit3,
-    Box, UploadCloud,
+    Box, UploadCloud, GripVertical,
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import axios from 'axios';
@@ -97,6 +97,11 @@ export default function QuotationEdit({ quotation, customers, products, brands, 
     const [openDropdownIdx, setOpenDropdownIdx] = useState(null);
     const [productSearch, setProductSearch] = useState('');
     const [showCustomerDropdown, setShowCustomerDropdown] = useState(false);
+
+    // Drag-and-drop reorder state
+    const [dragItemIdx, setDragItemIdx] = useState(null);
+    const [dragOverIdx, setDragOverIdx] = useState(null);
+    const [isReordering, setIsReordering] = useState(false);
 
     // Custom product item editor modal
     const [editingCustomItemIdx, setEditingCustomItemIdx] = useState(null);
@@ -566,6 +571,74 @@ const getProductDisplayName = (prod) => {
 
     const handleRemoveItemRow = (idx) => setItems(prev => prev.filter((_, i) => i !== idx));
 
+    // ─── Item Reorder (drag-and-drop) ─────────────────────────────────────────
+    const handleDragStart = (e, idx) => {
+        if (isReordering) {
+            e.preventDefault();
+            return;
+        }
+        setOpenDropdownIdx(null);
+        setDragItemIdx(idx);
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/plain', String(idx));
+    };
+
+    const handleDragEnd = () => {
+        setDragItemIdx(null);
+        setDragOverIdx(null);
+    };
+
+    const handleRowDragOver = (e, idx) => {
+        if (dragItemIdx === null || isReordering || idx === dragItemIdx) return;
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+        if (idx !== dragOverIdx) setDragOverIdx(idx);
+    };
+
+    const handleRowDrop = (e, idx) => {
+        e.preventDefault();
+        if (dragItemIdx === null || isReordering) return;
+        const from = dragItemIdx;
+        const to = idx;
+        setDragOverIdx(null);
+        setDragItemIdx(null);
+        if (from === to) return;
+        commitItemReorder(from, to);
+    };
+
+    const commitItemReorder = (from, to) => {
+        const prevOrder = items;
+        const next = [...items];
+        const [moved] = next.splice(from, 1);
+        next.splice(to, 0, moved);
+        const reordered = next.map((it, sortIdx) => ({ ...it, sort_order: sortIdx + 1 }));
+
+        setItems(reordered);
+
+        // Rows that are not saved yet have no DB id; their order is persisted by
+        // the regular "Simpan Perubahan" save instead of an immediate request.
+        const allSaved = reordered.every(it => it.id != null && it.id !== '');
+        if (!allSaved) {
+            toast('Urutan item baru akan tersimpan saat Anda klik "Simpan Perubahan".', {
+                icon: '↕️',
+            });
+            return;
+        }
+
+        setIsReordering(true);
+        axios.post(route('quotations.reorder-items', quotation.id), {
+            items: reordered.map(it => Number(it.id)),
+        }, {
+            headers: { 'Accept': 'application/json' },
+        })
+            .then(() => toast.success('Urutan item produk berhasil disimpan!'))
+            .catch(() => {
+                setItems(prevOrder);
+                toast.error('Gagal menyimpan urutan item. Urutan dikembalikan ke semula.');
+            })
+            .finally(() => setIsReordering(false));
+    };
+
     // ─── Terms Templates ──────────────────────────────────────────────────────
     const handleSelectTemplate = (tplId) => {
         const found = termsTemplates.find(t => t.id === tplId);
@@ -898,6 +971,11 @@ const getProductDisplayName = (prod) => {
                     <div className="px-6 py-4 border-b border-surface-100 flex items-center justify-between">
                         <div>
                             <h3 className="text-sm font-bold text-surface-800">Item Produk <span className="text-xs font-normal text-surface-400 ml-1">— pilih produk dari brand manapun</span></h3>
+                            {isReordering && (
+                                <span className="mt-1 inline-flex items-center gap-1.5 text-[11px] font-semibold text-brand-600">
+                                    <Loader2 className="w-3.5 h-3.5 animate-spin" /> Menyimpan urutan item...
+                                </span>
+                            )}
                         </div>
                         <div className="flex items-center gap-2">
                             <button
@@ -951,6 +1029,7 @@ const getProductDisplayName = (prod) => {
                             <table className="w-full text-left border-collapse min-w-[1100px]">
                                 <thead>
                                     <tr className="bg-surface-50 border-b border-surface-200">
+                                        <th className="py-3 px-1.5 w-9"></th>
                                         <th className="py-3 px-3 text-center text-xs font-bold text-surface-400 uppercase w-10">NO</th>
                                         <th className="py-3 px-3 text-left text-xs font-bold text-surface-400 uppercase min-w-[280px]">PRODUK</th>
                                         <th className="py-3 px-3 text-left text-xs font-bold text-surface-400 uppercase w-24">BRAND</th>
@@ -964,7 +1043,32 @@ const getProductDisplayName = (prod) => {
                                 </thead>
                                 <tbody className="divide-y divide-surface-100">
                                     {items.map((item, idx) => (
-                                        <tr key={idx} className="hover:bg-surface-50/50 transition-colors group">
+                                        <tr
+                                            key={idx}
+                                            onDragOver={e => handleRowDragOver(e, idx)}
+                                            onDrop={e => handleRowDrop(e, idx)}
+                                            className={`transition-colors group ${dragItemIdx === idx ? 'opacity-40 bg-brand-50/40' : ''} ${
+                                                dragOverIdx === idx && dragItemIdx !== null && dragItemIdx !== idx
+                                                    ? 'ring-2 ring-inset ring-brand-300 bg-brand-50/60'
+                                                    : ''
+                                            } hover:bg-surface-50/50`}
+                                        >
+                                            {/* Drag handle */}
+                                            <td className="py-2 px-1.5 w-9">
+                                                <span
+                                                    draggable={!isReordering}
+                                                    onDragStart={e => handleDragStart(e, idx)}
+                                                    onDragEnd={handleDragEnd}
+                                                    title="Drag untuk mengubah urutan item"
+                                                    className={`inline-flex items-center justify-center w-6 h-7 rounded-md transition-colors cursor-grab active:cursor-grabbing select-none ${
+                                                        isReordering
+                                                            ? 'opacity-40 cursor-not-allowed'
+                                                            : 'text-surface-300 hover:text-brand-600 hover:bg-brand-50'
+                                                    }`}
+                                                >
+                                                    <GripVertical className="w-4 h-4" />
+                                                </span>
+                                            </td>
                                             <td className="py-2 px-3 text-xs font-bold text-surface-400 text-center">{idx + 1}</td>
 
                                             {/* Product selector */}
