@@ -11,7 +11,7 @@ import { toast } from 'react-hot-toast';
 import { formatMoney, roundMoney } from '@/utils/money';
 import axios from 'axios';
 import { printQuotation } from '@/utils/printQuotation';
-import { getAllTemplatesForUser, getLegacyPersonalTemplates } from '@/utils/termsTemplates';
+import { getAllTemplatesForUser } from '@/utils/termsTemplates';
 import SalesZoneCard from '@/Components/SalesZoneCard';
 
 const brandClasses = (brand) => {
@@ -97,21 +97,6 @@ export default function QuotationEdit({ quotation, customers, products, brands, 
 
     useEffect(() => {
         setTermsTemplates(getAllTemplatesForUser(userId, masterTerms, personalTerms));
-        const migrateLegacyTemplates = async () => {
-            const { key, templates } = getLegacyPersonalTemplates(userId);
-            if (!templates.length) return;
-            try {
-                const response = await axios.post(route('quotation-templates.import-legacy'), { templates });
-                localStorage.removeItem(key);
-                setTermsTemplates(prev => {
-                    const imported = response.data.templates || [];
-                    return [...prev, ...imported.filter(item => !prev.some(existing => existing.name === item.name))];
-                });
-            } catch (error) {
-                console.error('Migrasi template personal lama gagal:', error);
-            }
-        };
-        migrateLegacyTemplates();
     }, [userId, masterTerms, personalTerms]);
 
     const [showSaveTplModal, setShowSaveTplModal] = useState(false);
