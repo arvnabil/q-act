@@ -569,6 +569,9 @@ export default function SalesOrderDetail({ so, costCategories = [], isFinance })
                                     <th className="py-3 px-6 text-xs font-bold text-surface-500 uppercase tracking-wider w-12 text-center">No</th>
                                     <th className="py-3 px-6 text-xs font-bold text-surface-500 uppercase tracking-wider">Nama Produk / Item</th>
                                     <th className="py-3 px-6 text-center text-xs font-bold text-surface-500 uppercase tracking-wider w-24">Qty</th>
+                                    <th className="py-3 px-6 text-right text-xs font-bold text-surface-500 uppercase tracking-wider w-40">Modal (HPP)</th>
+                                    <th className="py-3 px-6 text-right text-xs font-bold text-surface-500 uppercase tracking-wider w-32">Margin</th>
+                                    <th className="py-3 px-6 text-right text-xs font-bold text-surface-500 uppercase tracking-wider w-24">Margin %</th>
                                     <th className="py-3 px-6 text-right text-xs font-bold text-surface-500 uppercase tracking-wider w-40">Harga Jual</th>
                                     <th className="py-3 px-6 text-right text-xs font-bold text-surface-500 uppercase tracking-wider w-40">Total Jual</th>
                                 </tr>
@@ -586,12 +589,19 @@ export default function SalesOrderDetail({ so, costCategories = [], isFinance })
                                             </div>
                                         </td>
                                         <td className="py-3 px-6 text-center text-sm font-bold text-surface-700">{item.qty}</td>
+                                        <td className="py-3 px-6 text-right text-sm text-surface-700">{formatCurrency(item.hpp)}</td>
+                                        <td className={`py-3 px-6 text-right text-sm font-semibold ${item.price - item.hpp < 0 ? 'text-red-600' : 'text-emerald-600'}`}>
+                                            {formatCurrency(item.price - item.hpp)}
+                                        </td>
+                                        <td className={`py-3 px-6 text-right text-sm font-semibold ${item.price - item.hpp < 0 ? 'text-red-600' : 'text-emerald-600'}`}>
+                                            {item.price > 0 ? `${(((item.price - item.hpp) / item.price) * 100).toFixed(1)}%` : '-'}
+                                        </td>
                                         <td className="py-3 px-6 text-right text-sm text-surface-700">{formatCurrency(item.price)}</td>
                                         <td className="py-3 px-6 text-right text-sm font-bold text-surface-900">{formatCurrency(item.qty * item.price)}</td>
                                     </tr>
                                 ))}
                                 {(!so.items || so.items.length === 0) && (
-                                    <tr><td colSpan="5" className="py-8 text-center text-surface-400 text-sm">Tidak ada item</td></tr>
+                                    <tr><td colSpan="8" className="py-8 text-center text-surface-400 text-sm">Tidak ada item</td></tr>
                                 )}
                             </tbody>
                         </table>
