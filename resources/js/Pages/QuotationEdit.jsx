@@ -11,7 +11,7 @@ import { toast } from 'react-hot-toast';
 import { formatMoney, roundMoney } from '@/utils/money';
 import axios from 'axios';
 import { printQuotation } from '@/utils/printQuotation';
-import { getAllTemplatesForUser } from '@/utils/termsTemplates';
+import { getAllTemplatesForUser, getLegacyPersonalTemplates } from '@/utils/termsTemplates';
 import SalesZoneCard from '@/Components/SalesZoneCard';
 
 const brandClasses = (brand) => {
@@ -94,10 +94,41 @@ export default function QuotationEdit({ quotation, customers, products, brands, 
     );
     const userId = currentUser?.id || 'guest';
     const [termsTemplates, setTermsTemplates] = useState(() => getAllTemplatesForUser(userId, masterTerms, personalTerms));
+    const [legacyTemplates, setLegacyTemplates] = useState([]);
+    const [isMigratingLegacy, setIsMigratingLegacy] = useState(false);
 
     useEffect(() => {
         setTermsTemplates(getAllTemplatesForUser(userId, masterTerms, personalTerms));
+        const { templates } = getLegacyPersonalTemplates(userId);
+        setLegacyTemplates(templates);
     }, [userId, masterTerms, personalTerms]);
+
+    const handleMigrateLegacyTemplates = async () => {
+        const { key, templates } = getLegacyPersonalTemplates(userId);
+        if (!templates.length) {
+            toast.success('Tidak ada template lama di browser ini.');
+            setLegacyTemplates([]);
+            return;
+        }
+
+        setIsMigratingLegacy(true);
+        try {
+            await axios.post(route('quotation-templates.import-legacy'), { templates });
+            localStorage.removeItem(key);
+            setLegacyTemplates([]);
+            setTermsTemplates(prev => [
+                ...prev,
+                ...templates
+                    .map(template => ({ ...template, type: 'personal' }))
+                    .filter(template => !prev.some(existing => existing.name === template.name)),
+            ]);
+            toast.success(`${templates.length} template berhasil dipindahkan ke database.`);
+        } catch (error) {
+            toast.error(error.response?.data?.message || 'Migrasi template gagal.');
+        } finally {
+            setIsMigratingLegacy(false);
+        }
+    };
 
     const [showSaveTplModal, setShowSaveTplModal] = useState(false);
     const [newTplName, setNewTplName] = useState('');
@@ -1664,6 +1695,17 @@ const getProductDisplayName = (prod) => {
                         >
                             <BookmarkPlus className="w-3.5 h-3.5" /> Simpan sebagai Template Baru
                         </button>
+                        {legacyTemplates.length > 0 && (
+                            <button
+                                type="button"
+                                onClick={handleMigrateLegacyTemplates}
+                                disabled={isQuotationLocked || isMigratingLegacy}
+                                className="flex items-center gap-1.5 text-xs font-semibold text-amber-700 border border-amber-200 bg-amber-50 hover:bg-amber-100 px-3 py-1.5 rounded-lg transition-colors cursor-pointer disabled:opacity-50"
+                            >
+                                {isMigratingLegacy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <UploadCloud className="w-3.5 h-3.5" />}
+                                Migrasikan Template Lama ({legacyTemplates.length})
+                            </button>
+                        )}
                     </div>
                     <div className="p-5">
                         {termsTemplates.length > 0 && (

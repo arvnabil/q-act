@@ -2,8 +2,6 @@ import React, { useState, useEffect } from 'react';
 import ReactDOM from 'react-dom';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head, usePage, router } from '@inertiajs/react';
-import axios from 'axios';
-import { getLegacyPersonalTemplates } from '@/utils/termsTemplates';
 import { 
   Plus, Edit, Trash2, Star, Building2, CreditCard, Loader2, X, FileText, Wrench, ImageIcon, Globe 
 } from 'lucide-react';
@@ -20,35 +18,6 @@ export default function Settings({
   const user = auth?.user || {};
   const userRole = user.spatie_role || user.role || '';
   const isAdmin = !userRole || ['admin', 'Administrator', 'Sales Manager', 'Manager', 'super-admin'].includes(userRole);
-
-  const [legacyTemplates, setLegacyTemplates] = useState([]);
-  const [isMigratingLegacy, setIsMigratingLegacy] = useState(false);
-
-  useEffect(() => {
-    const { templates } = getLegacyPersonalTemplates(user.id);
-    setLegacyTemplates(templates);
-  }, [user.id]);
-
-  const handleMigrateLegacyTemplates = async () => {
-    const { key, templates } = getLegacyPersonalTemplates(user.id);
-    if (!templates.length) {
-      toast.success('Tidak ada template lama di browser ini.');
-      setLegacyTemplates([]);
-      return;
-    }
-
-    setIsMigratingLegacy(true);
-    try {
-      await axios.post(route('quotation-templates.import-legacy'), { templates });
-      localStorage.removeItem(key);
-      setLegacyTemplates([]);
-      toast.success(`${templates.length} template berhasil dipindahkan ke database.`);
-    } catch (error) {
-      toast.error(error.response?.data?.message || 'Migrasi template gagal.');
-    } finally {
-      setIsMigratingLegacy(false);
-    }
-  };
 
   // Company Info State
   const [company, setCompany] = useState(initialCompanyInfo);
@@ -283,29 +252,6 @@ export default function Settings({
       <div className="py-6 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="max-w-5xl space-y-6">
 
-          {/* Legacy Personal Terms Migration */}
-          <div className="bg-white rounded-xl border border-amber-200 shadow-sm overflow-hidden">
-            <div className="px-6 py-4 border-b border-amber-100 flex items-center justify-between bg-amber-50/50">
-              <div>
-                <h2 className="text-sm font-bold text-gray-800">Migrasi Template Lama</h2>
-                <p className="text-xs text-gray-500 mt-1">
-                  Pindahkan template syarat & ketentuan dari browser ini ke database.
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={handleMigrateLegacyTemplates}
-                disabled={isMigratingLegacy || legacyTemplates.length === 0}
-                className="inline-flex items-center gap-2 rounded-lg bg-amber-500 px-3 py-2 text-xs font-bold text-white transition hover:bg-amber-600 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {isMigratingLegacy && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-                {legacyTemplates.length > 0
-                  ? `Migrasikan ${legacyTemplates.length} Template`
-                  : 'Tidak Ada Template Lama'}
-              </button>
-            </div>
-          </div>
-          
           {/* Company Info */}
           <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
             <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between bg-gray-50/50">
