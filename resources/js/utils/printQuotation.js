@@ -3,15 +3,16 @@ import { format, parseISO, isValid } from 'date-fns';
 import { id as idLocale, enUS as enLocale } from 'date-fns/locale';
 import { getCompanyInfo } from './companyInfo.js';
 import { resolveLogoConfigForEmail } from './domainLogoMap.js';
+import { formatNumberMoney, roundMoney } from './money.js';
 
 function getLogoConfigForQuotation(q, isPdfMode = false) {
   const email = q?.creator?.email || q?.sales?.email || q?.created_by_email || '';
-  return resolveLogoConfigForEmail(email, isPdfMode);
+  return resolveLogoConfigForEmail(email, isPdfMode, q?.domain_logo_map);
 }
 
 const formatCurrencyDecimals = (val) => {
   const num = Number(val) || 0;
-  return new Intl.NumberFormat('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(num);
+  return formatNumberMoney(num);
 };
 
 const formatDateFull = (str, locale = idLocale) => {
@@ -130,7 +131,7 @@ const TRANSLATIONS = {
 export function generateQuotationHTML(q, withImage = false, bankAccount = null, lang = 'id', includePrintScript = true, isPdfMode = false, logoUrl = null) {
   const t = TRANSLATIONS[lang] || TRANSLATIONS.id;
   const dateLocale = lang === 'en' ? enLocale : idLocale;
-  const COMPANY = getCompanyInfo();
+  const COMPANY = getCompanyInfo(q?.company_info);
   const calcTax = q.calc_tax !== false;
   const showTax = q.show_tax !== false;
   const ppnRate = q.ppn_rate || 0.11;
@@ -153,15 +154,15 @@ export function generateQuotationHTML(q, withImage = false, bankAccount = null, 
   const logoMaxWidth = logoConfig.maxWidth;
 
   const items = q.items || [];
-  const baseSubtotal = items.reduce((sum, i) => sum + ((i.qty || 0) * (i.price || 0)), 0);
-  const subtotal = bakeTaxIntoItems ? baseSubtotal * taxMultiplier : baseSubtotal;
-  const ppn = (calcTax && showTax) ? Math.round(subtotal * ppnRate) : 0;
+  const baseSubtotal = roundMoney(items.reduce((sum, i) => sum + ((i.qty || 0) * (i.price || 0)), 0));
+  const subtotal = roundMoney(bakeTaxIntoItems ? baseSubtotal * taxMultiplier : baseSubtotal);
+  const ppn = (calcTax && showTax) ? roundMoney(subtotal * ppnRate) : 0;
   const calcPph = q.calc_pph === true;
   const showPph = q.show_pph === true;
   const pphRate = q.pph_rate || 0.02;
-  const pphBasis = items.filter(i => i.is_pph_applied).reduce((sum, i) => sum + ((i.qty || 0) * (i.price || 0)), 0);
-  const pphAmount = calcPph ? Math.round(pphBasis * pphRate) : 0;
-  const grand = subtotal + ppn + pphAmount;
+  const pphBasis = roundMoney(items.filter(i => i.is_pph_applied).reduce((sum, i) => sum + ((i.qty || 0) * (i.price || 0)), 0));
+  const pphAmount = calcPph ? roundMoney(pphBasis * pphRate) : 0;
+  const grand = roundMoney(subtotal + ppn + pphAmount);
 
   let itemRows = '';
   const colSpanTotal = withImage ? 8 : 7;
@@ -184,7 +185,7 @@ export function generateQuotationHTML(q, withImage = false, bankAccount = null, 
     const desc = translateDynamicText(rawDesc, lang);
     const price = (item.price || 0) * taxMultiplier;
     const qty = item.qty || 1;
-    const itemTotal = qty * price;
+    const itemTotal = roundMoney(qty * price);
     const imageHtml = imageUrl
       ? `<div style="max-width: 75px; max-height: 42px; overflow: hidden; margin: 0 auto; display: flex; align-items: center; justify-content: center;"><img src="${imageUrl}" style="max-width: 100%; max-height: 100%; object-fit: contain;" alt="${productName}" /></div>`
       : `<div style="width: 55px; height: 30px; background: #f3f4f6; border-radius: 4px; display: inline-flex; align-items: center; justify-content: center; color: #9ca3af; font-size: 7px;">${t.noImage}</div>`;
@@ -398,7 +399,7 @@ export function generateQuotationHTML(q, withImage = false, bankAccount = null, 
 export function printQuotation(q, withImage = false, bankAccount = null, lang = 'id') {
   const printWindow = window.open('', '_blank');
   if (!printWindow) {
-    alert('Mohon izinkan pop-up browser untuk mencetak / mendownload PDF Quotation.');
+    toast.error('Mohon izinkan pop-up browser untuk mencetak / mendownload PDF Quotation.');
     return;
   }
   const html = generateQuotationHTML(q, withImage, bankAccount, lang, true, false, null);
@@ -415,7 +416,7 @@ export function downloadQuotationPDF(q, withImage = false, bankAccount = null, l
 
   const printWindow = window.open('', '_blank');
   if (!printWindow) {
-    alert('Mohon izinkan pop-up browser untuk mencetak / mendownload PDF Quotation.');
+    toast.error('Mohon izinkan pop-up browser untuk mencetak / mendownload PDF Quotation.');
     return Promise.resolve();
   }
 
@@ -436,3 +437,4 @@ export function downloadQuotationPDF(q, withImage = false, bankAccount = null, l
   printWindow.document.close();
   return Promise.resolve();
 }
+import { toast } from 'react-hot-toast';

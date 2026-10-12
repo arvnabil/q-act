@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\CostCategory;
+use App\Models\ActivityLog;
 use App\Models\Quotation;
 use App\Models\SalesOrder;
 use App\Models\SalesOrderCost;
@@ -44,10 +45,11 @@ class SalesOrderController extends Controller
 
     public function show(SalesOrder $salesOrder, Request $request): Response
     {
-        $salesOrder->load(['customer', 'sales', 'creator', 'items.product', 'costs', 'quotation.items.product']);
+        $salesOrder->load(['customer', 'sales', 'creator', 'items.product', 'costs', 'quotation.items.product', 'quotation.parentQuotation', 'quotation.revisions', 'quotation.changeRequests.requester', 'quotation.changeRequests.approver']);
 
         $user = $request->user();
-        $isFinance = in_array($user->role, ['Finance', 'admin', 'Administrator', 'Manager', 'Sales Manager']);
+        // Finance action must only be available to the Finance role.
+        $isFinance = $user->role === 'Finance';
 
         $costCategories = CostCategory::orderBy('sort_order')->orderBy('name')->get();
 
@@ -61,6 +63,10 @@ class SalesOrderController extends Controller
                 'id' => $salesOrder->id,
                 'quotation_id' => $salesOrder->quotation_id,
                 'status' => $salesOrder->status,
+                'po_status' => $salesOrder->po_status,
+                'po_number' => $salesOrder->po_number,
+                'po_date' => $salesOrder->po_date?->toDateString(),
+                'po_document_path' => $salesOrder->po_document_path,
                 'date' => $salesOrder->date?->toDateString(),
                 'notes' => $salesOrder->notes,
                 'total_item_value' => $totalItemValue,
@@ -78,6 +84,34 @@ class SalesOrderController extends Controller
                 ] : null,
                 'quotation' => $salesOrder->quotation ? [
                     'id' => $salesOrder->quotation->id,
+                    'status' => $salesOrder->quotation->status,
+                    'parent_quotation_id' => $salesOrder->quotation->parent_quotation_id,
+                    'parent_quotation' => $salesOrder->quotation->parentQuotation ? ['id' => $salesOrder->quotation->parentQuotation->id] : null,
+                    'revisions' => $salesOrder->quotation->revisions->map(fn ($revision) => ['id' => $revision->id, 'status' => $revision->status])->values()->toArray(),
+                    'change_requests' => $salesOrder->quotation->changeRequests->map(fn ($changeRequest) => [
+                        'id' => $changeRequest->id,
+                        'type' => $changeRequest->type,
+                        'status' => $changeRequest->status,
+                        'reason' => $changeRequest->reason,
+                        'manager_comment' => $changeRequest->manager_comment,
+                        'requester' => $changeRequest->requester ? ['name' => $changeRequest->requester->name] : null,
+                        'approver' => $changeRequest->approver ? ['name' => $changeRequest->approver->name] : null,
+                        'created_at' => $changeRequest->created_at,
+                        'resulting_quotation_id' => $changeRequest->resulting_quotation_id,
+                    ])->values()->toArray(),
+                    'timeline' => ActivityLog::where(function ($query) use ($salesOrder) {
+                        $query->where(function ($q) use ($salesOrder) {
+                            $q->where('entity_type', 'QUOTATION')->where('entity_id', $salesOrder->quotation_id);
+                        })->orWhere(function ($q) use ($salesOrder) {
+                            $q->where('entity_type', 'SALES_ORDER')->where('entity_id', $salesOrder->id);
+                        });
+                    })->with('user:id,name')->latest()->get()->map(fn ($log) => [
+                        'id' => $log->id,
+                        'action' => $log->action,
+                        'description' => $log->description,
+                        'created_at' => $log->created_at,
+                        'user' => $log->user ? ['name' => $log->user->name] : null,
+                    ])->values()->toArray(),
                     'calc_tax' => (bool) $salesOrder->quotation->calc_tax,
                     'calc_pph' => (bool) $salesOrder->quotation->calc_pph,
                     'pph_rate' => (float) ($salesOrder->quotation->pph_rate ?? 0.02),
@@ -169,6 +203,44 @@ class SalesOrderController extends Controller
         );
 
         return back()->with('message', 'Sales Order berhasil diperbarui.');
+    }
+
+    public function updatePurchaseOrderMetadata(Request $request, SalesOrder $salesOrder)
+    {
+        $data = $request->validate([
+            'po_number' => 'required|string|max:100',
+            'po_date' => 'required|date',
+            'po_status' => 'required|in:Diterima,Sebagian,Dibatalkan',
+            'po_document' => 'nullable|file|mimes:pdf,jpg,jpeg,png|max:10240',
+        ]);
+
+        if ($request->hasFile('po_document')) {
+            $data['po_document_path'] = $request->file('po_document')->store('po-documents', 'public');
+        }
+        unset($data['po_document']);
+        $salesOrder->update($data);
+
+        if ($salesOrder->quotation) {
+            $quotationData = [
+                'po_number' => $salesOrder->po_number,
+                'po_date' => $salesOrder->po_date,
+                'po_status' => $salesOrder->po_status,
+            ];
+            if ($salesOrder->po_document_path) {
+                $quotationData['po_document_path'] = $salesOrder->po_document_path;
+            }
+            $salesOrder->quotation->update($quotationData);
+        }
+
+        ActivityLog::create([
+            'user_id' => $request->user()->id,
+            'action' => 'PURCHASE_ORDER_METADATA_UPDATED',
+            'entity_type' => 'SALES_ORDER',
+            'entity_id' => $salesOrder->id,
+            'description' => "Data PO historis untuk SO {$salesOrder->id} dilengkapi.",
+        ]);
+
+        return back()->with('message', 'Data PO berhasil dilengkapi.');
     }
 
     public function destroy(SalesOrder $salesOrder, Request $request)

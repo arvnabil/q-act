@@ -17,24 +17,14 @@ const DEFAULT_MAP = [
 ];
 
 export function getDomainLogoMap() {
-  try {
-    const raw = localStorage.getItem(LS_KEY);
-    if (raw) return JSON.parse(raw);
-  } catch (e) {
-    console.error('domainLogoMap: failed to parse localStorage', e);
-  }
   return DEFAULT_MAP;
 }
 
 export function saveDomainLogoMap(map) {
-  try {
-    localStorage.setItem(LS_KEY, JSON.stringify(map));
-  } catch (e) {
-    console.error('domainLogoMap: failed to save to localStorage', e);
-  }
+  return map;
 }
 
-export function resolveLogoConfigForEmail(email = '', isPdfMode = false) {
+export function resolveLogoConfigForEmail(email = '', isPdfMode = false, serverMap = null) {
   const defaultHeight = isPdfMode ? '50px' : '45px';
   const defaultWidth  = isPdfMode ? '180px' : '160px';
 
@@ -43,7 +33,7 @@ export function resolveLogoConfigForEmail(email = '', isPdfMode = false) {
   }
 
   const domain = email.split('@')[1].toLowerCase().trim();
-  const map = getDomainLogoMap();
+  const map = Array.isArray(serverMap) && serverMap.length > 0 ? serverMap : getDomainLogoMap();
   const entry = map.find(e => e.domain.toLowerCase() === domain);
 
   if (!entry) {

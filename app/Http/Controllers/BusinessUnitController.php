@@ -17,7 +17,7 @@ class BusinessUnitController extends Controller
      */
     public function index(): Response
     {
-        $businessUnits = BusinessUnit::with(['members' => function ($query) {
+        $businessUnits = BusinessUnit::with(['members.user', 'members' => function ($query) {
             $query->orderByRaw("FIELD(role_in_bu, 'lead', 'member')");
         }])->orderBy('name')->get()->map(function ($bu) {
             return [
@@ -28,7 +28,7 @@ class BusinessUnitController extends Controller
                 'description' => $bu->description,
                 'is_active'   => $bu->is_active,
                 'members'     => $bu->members->map(function ($m) {
-                    $u = User::find($m->user_id);
+                    $u = $m->user;
                     return [
                         'id'         => $m->id,
                         'user_id'    => $m->user_id,

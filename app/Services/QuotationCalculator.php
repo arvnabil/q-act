@@ -65,9 +65,9 @@ class QuotationCalculator
             $hpp = is_array($item) ? $item['hpp'] : $item->hpp;
             $isPphApplied = is_array($item) ? ($item['is_pph_applied'] ?? false) : $item->is_pph_applied;
             
-            $itemTotal = $qty * $price;
+            $itemTotal = round($qty * $price, 2);
             $subtotal += $itemTotal;
-            $totalHpp += ($qty * $hpp);
+            $totalHpp += round($qty * $hpp, 2);
 
             if ($isPphApplied) {
                 $pphBase += $itemTotal;
@@ -76,15 +76,15 @@ class QuotationCalculator
 
         $ppnAmount = 0;
         if ($quotation->calc_tax) {
-            $ppnAmount = $subtotal * $quotation->ppn_rate;
+            $ppnAmount = round($subtotal * $quotation->ppn_rate, 2);
         }
 
         $pphAmount = 0;
         if ($quotation->calc_pph) {
-            $pphAmount = $pphBase * $quotation->pph_rate;
+            $pphAmount = round($pphBase * $quotation->pph_rate, 2);
         }
 
-        $grandTotal = $subtotal + $ppnAmount - $pphAmount;
+        $grandTotal = round($subtotal + $ppnAmount + $pphAmount, 2);
         $totalMarginAmount = $subtotal - $totalHpp;
         $overallMarginPercentage = $subtotal > 0 ? ($totalMarginAmount / $subtotal) * 100 : 0;
 

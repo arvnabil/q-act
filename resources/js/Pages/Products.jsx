@@ -11,13 +11,11 @@ import {
 import { toast } from 'react-hot-toast';
 import { saveAs } from 'file-saver';
 import axios from 'axios';
+import { formatMoney } from '@/utils/money';
 
 const PAGE_SIZE_OPTIONS = [10, 25, 50, 100];
 
-const formatCurrency = (val) =>
-    new Intl.NumberFormat('id-ID', {
-        style: 'currency', currency: 'IDR', minimumFractionDigits: 0,
-    }).format(val || 0);
+const formatCurrency = (val) => formatMoney(val);
 
 const getImageUrl = (url) => {
     if (!url) return null;

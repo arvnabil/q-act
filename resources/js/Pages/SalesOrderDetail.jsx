@@ -1,15 +1,16 @@
 import React, { useState } from 'react';
+import ReactDOM from 'react-dom';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head, Link, router, usePage } from '@inertiajs/react';
 import {
     ArrowLeft, Plus, Trash2, Loader2, FileText, CheckCircle2, Box,
-    Printer, Tag, FolderPlus, Pencil, Check, X, FileSpreadsheet
+    Printer, Tag, FolderPlus, Pencil, Check, X, FileSpreadsheet, UploadCloud
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { printSimulasiSO, exportSimulasiSOExcel } from '@/utils/printSimulasiSO';
+import { formatMoney } from '@/utils/money';
 
-const formatCurrency = (val) =>
-    new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(val || 0);
+const formatCurrency = (val) => formatMoney(val);
 
 const formatDate = (str) => {
     if (!str) return '-';
@@ -28,6 +29,17 @@ export default function SalesOrderDetail({ so, costCategories = [], isFinance })
     const [newCostAmt, setNewCostAmt] = useState('');
     const [isSubmittingCost, setIsSubmittingCost] = useState(false);
     const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
+    const [activeDetailTab, setActiveDetailTab] = useState('info');
+    const [showSoTimeline, setShowSoTimeline] = useState(false);
+    const [changeRequestType, setChangeRequestType] = useState(null);
+    const [changeRequestReason, setChangeRequestReason] = useState('');
+    const [isSubmittingChangeRequest, setIsSubmittingChangeRequest] = useState(false);
+    const [showPoMetadataModal, setShowPoMetadataModal] = useState(false);
+    const [poNumber, setPoNumber] = useState(so?.po_number || '');
+    const [poDate, setPoDate] = useState(so?.po_date || '');
+    const [poStatus, setPoStatus] = useState(so?.po_status || 'Diterima');
+    const [poDocument, setPoDocument] = useState(null);
+    const [isSavingPoMetadata, setIsSavingPoMetadata] = useState(false);
 
     // Modal state for managing cost categories
     const [showCategoryModal, setShowCategoryModal] = useState(false);
@@ -210,6 +222,43 @@ export default function SalesOrderDetail({ so, costCategories = [], isFinance })
         });
     };
 
+    const handleSavePoMetadata = () => {
+        if (!poNumber.trim() || !poDate || !poStatus) {
+            toast.error('Nomor PO, tanggal PO, dan status PO wajib diisi.');
+            return;
+        }
+        setIsSavingPoMetadata(true);
+        router.post(route('sales-orders.purchase-order-metadata', so.id), {
+            po_number: poNumber,
+            po_date: poDate,
+            po_status: poStatus,
+            ...(poDocument ? { po_document: poDocument } : {}),
+        }, {
+            preserveScroll: true,
+            forceFormData: true,
+            onSuccess: () => { setShowPoMetadataModal(false); toast.success('Data PO berhasil dilengkapi.'); },
+            onError: errors => toast.error(errors.po_number || errors.po_date || errors.po_status || errors.po_document || 'Data PO gagal disimpan.'),
+            onFinish: () => setIsSavingPoMetadata(false),
+        });
+    };
+
+    const openChangeRequest = (type) => {
+        setChangeRequestType(type);
+        setChangeRequestReason('');
+    };
+
+    const handleChangeRequest = (e) => {
+        e.preventDefault();
+        if (!so.quotation_id || !changeRequestReason.trim()) return;
+        setIsSubmittingChangeRequest(true);
+        router.post(route('quotations.change-requests.store', so.quotation_id), { type: changeRequestType, reason: changeRequestReason.trim() }, {
+            preserveScroll: true,
+            onSuccess: () => { setChangeRequestType(null); setChangeRequestReason(''); toast.success('Pengajuan berhasil dikirim ke manager.'); },
+            onError: (errors) => Object.values(errors).forEach(message => toast.error(message)),
+            onFinish: () => setIsSubmittingChangeRequest(false),
+        });
+    };
+
     const buildExportPayload = () => {
         const adjustments = (so.costs || []).map(c => ({
             category: c.category_name || 'Others / Shipping/ Import',
@@ -271,6 +320,48 @@ export default function SalesOrderDetail({ so, costCategories = [], isFinance })
                     </div>
                 )}
 
+                {changeRequestType && (
+                    <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-surface-900/60 backdrop-blur-sm">
+                        <form onSubmit={handleChangeRequest} className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden">
+                            <div className="px-6 py-5 border-b border-surface-100">
+                                <h3 className="text-base font-bold text-surface-900">{changeRequestType === 'revision' ? 'Ajukan Revisi Quotation' : 'Ajukan Cancel PO'}</h3>
+                                <p className="text-xs text-surface-500 mt-1">Tuliskan alasan agar manager dapat meninjau pengajuan ini.</p>
+                            </div>
+                            <div className="p-6">
+                                <label className="block text-xs font-semibold text-surface-700 mb-2">Alasan pengajuan</label>
+                                <textarea value={changeRequestReason} onChange={e => setChangeRequestReason(e.target.value)} rows={5} autoFocus required minLength={5} className="w-full rounded-xl border border-surface-200 text-sm text-surface-800 focus:border-brand-500 focus:ring-brand-500" placeholder={changeRequestType === 'revision' ? 'Contoh: Customer mengurangi item...' : 'Contoh: Customer membatalkan PO...'} />
+                            </div>
+                            <div className="px-6 py-4 bg-surface-50 flex justify-end gap-3">
+                                <button type="button" onClick={() => setChangeRequestType(null)} disabled={isSubmittingChangeRequest} className="px-4 py-2 rounded-lg border border-surface-200 text-xs font-semibold text-surface-700 hover:bg-white">Batal</button>
+                                <button type="submit" disabled={isSubmittingChangeRequest || changeRequestReason.trim().length < 5} className="px-4 py-2 rounded-lg bg-brand-600 text-white text-xs font-bold hover:bg-brand-700 disabled:opacity-50">{isSubmittingChangeRequest ? 'Mengirim...' : 'Kirim Pengajuan'}</button>
+                            </div>
+                        </form>
+                    </div>
+                )}
+
+                {showPoMetadataModal && (
+                    <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-surface-900/60 backdrop-blur-sm">
+                        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
+                            <div className="px-6 py-5 border-b border-surface-100 flex items-start justify-between">
+                                <div>
+                                    <h3 className="text-base font-bold text-surface-900">Lengkapi Data PO Historis</h3>
+                                    <p className="text-xs text-surface-500 mt-1">Data ini melengkapi SO lama dan tidak membuat SO baru.</p>
+                                </div>
+                                <button type="button" onClick={() => setShowPoMetadataModal(false)} className="p-1 text-surface-400 hover:text-surface-700 cursor-pointer"><X className="w-5 h-5" /></button>
+                            </div>
+                            <div className="p-6 space-y-4">
+                                <div><label className="block text-xs font-semibold text-surface-700 mb-1">Nomor PO *</label><input value={poNumber} onChange={e => setPoNumber(e.target.value)} className="w-full rounded-lg border border-surface-200 text-sm" placeholder="Nomor PO customer" /></div>
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div><label className="block text-xs font-semibold text-surface-700 mb-1">Tanggal PO *</label><input type="date" value={poDate} onChange={e => setPoDate(e.target.value)} className="w-full rounded-lg border border-surface-200 text-sm" /></div>
+                                    <div><label className="block text-xs font-semibold text-surface-700 mb-1">Status PO *</label><select value={poStatus} onChange={e => setPoStatus(e.target.value)} className="w-full rounded-lg border border-surface-200 text-sm">{poStatus === 'Sebagian' && <option value="Sebagian">Sebagian (data lama)</option>}<option>Diterima</option><option>Dibatalkan</option></select></div>
+                                </div>
+                                <div><label className="block text-xs font-semibold text-surface-700 mb-1">Dokumen PO (opsional)</label><input type="file" accept=".pdf,.jpg,.jpeg,.png" onChange={e => setPoDocument(e.target.files?.[0] || null)} className="w-full text-xs" /></div>
+                            </div>
+                            <div className="px-6 py-4 border-t border-surface-100 flex justify-end gap-3"><button type="button" onClick={() => setShowPoMetadataModal(false)} className="px-4 py-2.5 text-xs font-semibold bg-surface-100 rounded-xl cursor-pointer">Batal</button><button type="button" onClick={handleSavePoMetadata} disabled={isSavingPoMetadata} className="px-4 py-2.5 text-xs font-bold text-white bg-brand-600 rounded-xl cursor-pointer disabled:opacity-50">{isSavingPoMetadata ? 'Menyimpan...' : 'Simpan Data PO'}</button></div>
+                        </div>
+                    </div>
+                )}
+
                 {/* Top Bar */}
                 <div className="flex flex-wrap items-center justify-between gap-3 mb-5">
                     <Link
@@ -315,11 +406,17 @@ export default function SalesOrderDetail({ so, costCategories = [], isFinance })
                             </p>
                         </div>
                         <div className="flex items-center gap-3">
-                            <div className={`px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-2 ${so.status === 'Ditambahkan Finance' ? 'bg-emerald-100 text-emerald-700 border border-emerald-200' : 'bg-blue-100 text-blue-700 border border-blue-200'}`}>
-                                {so.status === 'Ditambahkan Finance' && <CheckCircle2 className="w-4 h-4" />}
-                                {so.status}
-                            </div>
-
+                            {(!so.po_number || !so.po_date || !so.po_document_path) && (
+                                <button type="button" onClick={() => setShowPoMetadataModal(true)} className="flex items-center gap-2 px-4 py-2 text-xs font-bold bg-amber-50 text-amber-700 border border-amber-200 rounded-lg hover:bg-amber-100 cursor-pointer">
+                                    <UploadCloud className="w-4 h-4" /> Lengkapi Data PO
+                                </button>
+                            )}
+                            {so.quotation_id && ['approved', 'sent'].includes(so.quotation?.status) && (
+                                <>
+                                    <button type="button" onClick={() => openChangeRequest('revision')} className="px-4 py-2 text-xs font-bold border border-amber-200 text-amber-700 bg-amber-50 rounded-lg hover:bg-amber-100">Ajukan Revisi</button>
+                                    <button type="button" onClick={() => openChangeRequest('cancellation')} className="px-4 py-2 text-xs font-bold border border-red-200 text-red-600 bg-red-50 rounded-lg hover:bg-red-100">Ajukan Cancel PO</button>
+                                </>
+                            )}
                             {isFinance && so.status !== 'Ditambahkan Finance' && (
                                 <button
                                     onClick={handleMarkProcessed}
@@ -334,7 +431,7 @@ export default function SalesOrderDetail({ so, costCategories = [], isFinance })
                     </div>
 
                     {/* Customer Info */}
-                    <div className="px-6 py-5 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
+                    <div className="px-6 py-5 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-6">
                         <div>
                             <label className="text-xs font-semibold text-surface-600 block mb-1">Customer</label>
                             <div className="text-sm font-semibold text-surface-900">{so.customer?.name || '-'}</div>
@@ -348,8 +445,111 @@ export default function SalesOrderDetail({ so, costCategories = [], isFinance })
                             <label className="text-xs font-semibold text-surface-600 block mb-1">Tanggal Order</label>
                             <div className="text-sm text-surface-900">{formatDate(so.date)}</div>
                         </div>
+                        <div>
+                            <label className="text-xs font-semibold text-surface-600 block mb-1">Status</label>
+                            <span className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-bold ${so.status === 'Ditambahkan Finance' ? 'border-emerald-200 bg-emerald-100 text-emerald-700' : 'border-blue-200 bg-blue-100 text-blue-700'}`}>
+                                {so.status === 'Ditambahkan Finance' && <CheckCircle2 className="h-3.5 w-3.5" />}
+                                {so.status || '-'}
+                            </span>
+                        </div>
                     </div>
                 </div>
+
+                <div className="bg-white rounded-2xl border border-surface-200 shadow-sm mb-6 p-1.5 flex gap-1">
+                    <button type="button" onClick={() => setActiveDetailTab('info')} className={`flex-1 rounded-xl px-4 py-2.5 text-xs font-bold transition-colors ${activeDetailTab === 'info' ? 'bg-brand-50 text-brand-700' : 'text-surface-500 hover:bg-surface-50'}`}>Informasi SO</button>
+                    <button type="button" onClick={() => setActiveDetailTab('po')} className={`flex-1 rounded-xl px-4 py-2.5 text-xs font-bold transition-colors ${activeDetailTab === 'po' ? 'bg-brand-50 text-brand-700' : 'text-surface-500 hover:bg-surface-50'}`}>Informasi PO</button>
+                    <button type="button" onClick={() => setActiveDetailTab('timeline')} className={`flex-1 rounded-xl px-4 py-2.5 text-xs font-bold transition-colors ${activeDetailTab === 'timeline' ? 'bg-brand-50 text-brand-700' : 'text-surface-500 hover:bg-surface-50'}`}>Timeline Quotation & SO</button>
+                </div>
+
+                {activeDetailTab === 'po' && (
+                    <div className="mb-6 rounded-2xl border border-surface-200 bg-white p-6 shadow-sm">
+                        <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
+                            <div>
+                                <div className="flex items-center gap-2">
+                                    <FileText className="h-5 w-5 text-brand-600" />
+                                    <h3 className="text-base font-bold text-surface-900">Informasi Purchase Order</h3>
+                                </div>
+                                <p className="mt-1 text-xs text-surface-500">Data PO customer yang digunakan sebagai dasar Sales Order ini.</p>
+                            </div>
+                            {(!so.po_number || !so.po_date || !so.po_document_path) && (
+                                <button type="button" onClick={() => setShowPoMetadataModal(true)} className="inline-flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3.5 py-2 text-xs font-bold text-amber-700 hover:bg-amber-100">
+                                    <UploadCloud className="h-4 w-4" /> Lengkapi Data PO
+                                </button>
+                            )}
+                        </div>
+                        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                            <div className="rounded-xl border border-surface-100 bg-surface-50 p-4">
+                                <div className="mb-1 text-xs font-semibold text-surface-500">Nomor PO</div>
+                                <div className="font-semibold text-surface-900">{so.po_number || '-'}</div>
+                            </div>
+                            <div className="rounded-xl border border-surface-100 bg-surface-50 p-4">
+                                <div className="mb-1 text-xs font-semibold text-surface-500">Tanggal PO</div>
+                                <div className="text-sm text-surface-900">{formatDate(so.po_date)}</div>
+                            </div>
+                            <div className="rounded-xl border border-surface-100 bg-surface-50 p-4">
+                                <div className="mb-1 text-xs font-semibold text-surface-500">Status PO</div>
+                                <span className="inline-flex rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-700">{so.po_status || 'Belum dilengkapi'}</span>
+                            </div>
+                            <div className="rounded-xl border border-surface-100 bg-surface-50 p-4">
+                                <div className="mb-1 text-xs font-semibold text-surface-500">Dokumen PO</div>
+                                {so.po_document_path ? (
+                                    <a href={`/storage/${so.po_document_path}`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 text-xs font-bold text-brand-600 hover:underline">
+                                        <FileText className="h-4 w-4" /> Lihat / Buka File PO
+                                    </a>
+                                ) : (
+                                    <span className="text-xs text-surface-400">Belum di-upload</span>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {so.quotation && activeDetailTab === 'timeline' && (
+                    <div className="bg-white rounded-2xl border border-surface-200 shadow-sm p-6 mb-6">
+                        <div className="flex items-center justify-between gap-4">
+                            <div>
+                                <h3 className="text-sm font-bold text-surface-800">Timeline Quotation & SO</h3>
+                                <p className="mt-1 text-xs text-surface-400">Riwayat lengkap tersedia dalam timeline.</p>
+                            </div>
+                            <button type="button" onClick={() => setShowSoTimeline(true)} className="shrink-0 rounded-lg border border-brand-200 bg-brand-50 px-3.5 py-2 text-xs font-bold text-brand-700 transition-colors hover:bg-brand-100">
+                                Lihat Timeline
+                            </button>
+                        </div>
+                        <div className="mt-4 flex flex-wrap gap-2 text-[11px] font-semibold text-surface-600">
+                            <span className="rounded-full bg-surface-50 px-2.5 py-1">{so.quotation.revisions?.length || 0} sub/revisi</span>
+                            <span className="rounded-full bg-surface-50 px-2.5 py-1">{so.quotation.change_requests?.length || 0} pengajuan</span>
+                            <span className="rounded-full bg-surface-50 px-2.5 py-1">{so.quotation.timeline?.length || 0} aktivitas</span>
+                        </div>
+                    </div>
+                )}
+
+                {showSoTimeline && ReactDOM.createPortal(
+                    <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-surface-900/60 p-4 backdrop-blur-sm">
+                        <div className="flex max-h-[85vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
+                            <div className="flex items-start justify-between border-b border-surface-100 px-6 py-5">
+                                <div>
+                                    <h3 className="text-base font-bold text-surface-900">Timeline Quotation & SO</h3>
+                                    <p className="mt-1 text-xs text-surface-500">Riwayat sub quotation, revisi, persetujuan, dan aktivitas SO.</p>
+                                </div>
+                                <button type="button" onClick={() => setShowSoTimeline(false)} className="rounded-lg p-1.5 text-surface-400 transition-colors hover:bg-surface-100 hover:text-surface-700" aria-label="Tutup timeline">
+                                    <X className="h-5 w-5" />
+                                </button>
+                            </div>
+                            <div className="space-y-3 overflow-y-auto p-6 text-xs">
+                                <div className="rounded-lg bg-surface-50 p-3">
+                                    <span className="text-surface-500">Quotation aktif:</span>{' '}
+                                    <Link href={route('quotations.show', so.quotation.id)} className="font-bold text-brand-600">{so.quotation.id}</Link>
+                                </div>
+                                {so.quotation.parent_quotation && <div className="rounded-lg bg-surface-50 p-3">Quotation sebelumnya: <Link href={route('quotations.show', so.quotation.parent_quotation.id)} className="font-bold text-brand-600">{so.quotation.parent_quotation.id}</Link></div>}
+                                {so.quotation.revisions?.map(revision => <div key={revision.id} className="rounded-lg bg-surface-50 p-3">Quotation hasil revisi: <Link href={route('quotations.show', revision.id)} className="font-bold text-brand-600">{revision.id}</Link> · {revision.status}</div>)}
+                                {so.quotation.change_requests?.map(changeRequest => <div key={changeRequest.id} className="border-l-4 border-brand-300 py-1 pl-3"><div className="font-semibold">{changeRequest.type === 'revision' ? 'Pengajuan revisi' : 'Pengajuan cancel PO'} · <span className="uppercase">{changeRequest.status}</span></div><div className="text-surface-500">{changeRequest.reason}</div>{changeRequest.manager_comment && <div className="mt-1 text-surface-600">Catatan manager: {changeRequest.manager_comment}</div>}</div>)}
+                                {so.quotation.timeline?.map(event => <div key={event.id} className="border-l-4 border-surface-200 py-1 pl-3"><div className="font-semibold text-surface-800">{event.description}</div><div className="text-surface-400">{event.user?.name || 'Sistem'} · {event.created_at ? new Date(event.created_at).toLocaleString('id-ID') : '-'}</div></div>)}
+                                {(!so.quotation.parent_quotation && !so.quotation.revisions?.length && !so.quotation.change_requests?.length && !so.quotation.timeline?.length) && <div className="text-surface-400">Belum ada riwayat.</div>}
+                            </div>
+                        </div>
+                    </div>,
+                    document.body
+                )}
 
                 {/* ITEMS TABLE */}
                 <div className="bg-white rounded-2xl border border-surface-200 shadow-sm overflow-hidden mb-6">

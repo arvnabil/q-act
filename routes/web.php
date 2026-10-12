@@ -3,6 +3,7 @@
 use App\Http\Controllers\AnalyticsController;
 use App\Http\Controllers\BrandController;
 use App\Http\Controllers\BusinessUnitController;
+use App\Http\Controllers\ChangeRequestController;
 use App\Http\Controllers\CostCategoryController;
 use App\Http\Controllers\CustomerController;
 use App\Http\Controllers\DashboardController;
@@ -33,6 +34,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // Customers
     Route::get('/customers', [CustomerController::class, 'index'])->name('customers.index');
     Route::post('/customers', [CustomerController::class, 'store'])->name('customers.store');
+    Route::post('/customers/{customer}/pics', [CustomerController::class, 'storePic'])->name('customers.pics.store');
     Route::put('/customers/{customer}', [CustomerController::class, 'update'])->name('customers.update');
     Route::delete('/customers/{customer}', [CustomerController::class, 'destroy'])->name('customers.destroy');
     Route::delete('/customers', [CustomerController::class, 'bulkDestroy'])->name('customers.bulk-destroy');
@@ -62,6 +64,16 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::put('/quotations/{quotation}', [QuotationController::class, 'update'])->name('quotations.update');
     Route::post('/quotations/{quotation}/reorder-items', [QuotationController::class, 'reorderItems'])->name('quotations.reorder-items');
     Route::post('/quotations/{quotation}/duplicate', [QuotationController::class, 'duplicate'])->name('quotations.duplicate');
+    Route::post('/quotations/{quotation}/sub-quotation', [QuotationController::class, 'createSubQuotation'])->name('quotations.sub-quotation.store');
+    Route::post('/quotations/{quotation}/items/{item}/move', [QuotationController::class, 'moveItemToSubQuotation'])->name('quotations.items.move');
+    Route::post('/quotations/{quotation}/purchase-orders', [QuotationController::class, 'addPurchaseOrder'])->name('quotations.purchase-orders.store');
+    Route::post('/quotations/{quotation}/bulk-purchase-orders', [QuotationController::class, 'bulkPurchaseOrder'])->name('quotations.bulk-purchase-orders.store');
+    Route::post('/quotations/import-legacy', [QuotationController::class, 'importLegacy'])->name('quotations.import-legacy');
+    Route::post('/quotations/{quotation}/change-requests', [ChangeRequestController::class, 'store'])->name('quotations.change-requests.store');
+    Route::post('/quotations/{quotation}/new-from-cancelled', [ChangeRequestController::class, 'createFromCancelled'])->name('quotations.new-from-cancelled');
+    Route::post('/quotation-templates', [SettingController::class, 'storePersonalTermsTemplate'])->name('quotation-templates.store');
+    Route::post('/quotation-templates/import-legacy', [SettingController::class, 'importLegacyPersonalTermsTemplates'])->name('quotation-templates.import-legacy');
+    Route::delete('/quotation-templates/{template}', [SettingController::class, 'destroyPersonalTermsTemplate'])->name('quotation-templates.destroy');
     Route::delete('/quotations/{quotation}', [QuotationController::class, 'destroy'])->name('quotations.destroy');
 
     // Quotation Sales Notes (Sales Zone)
@@ -74,6 +86,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('/sales-orders/bulk-destroy', [SalesOrderController::class, 'bulkDestroy'])->name('sales-orders.bulk-destroy');
     Route::get('/sales-orders/{salesOrder}', [SalesOrderController::class, 'show'])->name('sales-orders.show');
     Route::put('/sales-orders/{salesOrder}', [SalesOrderController::class, 'update'])->name('sales-orders.update');
+    Route::post('/sales-orders/{salesOrder}/purchase-order-metadata', [SalesOrderController::class, 'updatePurchaseOrderMetadata'])->name('sales-orders.purchase-order-metadata');
     Route::delete('/sales-orders/{salesOrder}', [SalesOrderController::class, 'destroy'])->name('sales-orders.destroy');
     Route::post('/sales-orders/{salesOrder}/costs', [SalesOrderController::class, 'storeCost'])->name('sales-orders.costs.store');
     Route::delete('/sales-orders/{salesOrder}/costs/{cost}', [SalesOrderController::class, 'destroyCost'])->name('sales-orders.costs.destroy');
@@ -85,19 +98,21 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::put('/cost-categories/{costCategory}', [CostCategoryController::class, 'update'])->name('cost-categories.update');
     Route::delete('/cost-categories/{costCategory}', [CostCategoryController::class, 'destroy'])->name('cost-categories.destroy');
 
-    // Users (admin only)
-    Route::get('/users', [UserController::class, 'index'])->name('users.index');
-    Route::post('/users', [UserController::class, 'store'])->name('users.store');
-    Route::put('/users/{id}', [UserController::class, 'update'])->name('users.update');
-    Route::delete('/users/{id}', [UserController::class, 'destroy'])->name('users.destroy');
+    Route::middleware('permission:user_management')->group(function () {
+        Route::get('/users', [UserController::class, 'index'])->name('users.index');
+        Route::post('/users', [UserController::class, 'store'])->name('users.store');
+        Route::put('/users/{id}', [UserController::class, 'update'])->name('users.update');
+        Route::delete('/users/{id}', [UserController::class, 'destroy'])->name('users.destroy');
+    });
 
-    // Business Units (admin only)
-    Route::get('/business-units', [BusinessUnitController::class, 'index'])->name('business-units.index');
-    Route::post('/business-units', [BusinessUnitController::class, 'store'])->name('business-units.store');
-    Route::put('/business-units/{businessUnit}', [BusinessUnitController::class, 'update'])->name('business-units.update');
-    Route::delete('/business-units/{businessUnit}', [BusinessUnitController::class, 'destroy'])->name('business-units.destroy');
-    Route::post('/business-units/{businessUnit}/members', [BusinessUnitController::class, 'addMember'])->name('business-units.members.store');
-    Route::delete('/business-units/{businessUnit}/members/{userId}', [BusinessUnitController::class, 'removeMember'])->name('business-units.members.destroy');
+    Route::middleware('permission:manage_business_units')->group(function () {
+        Route::get('/business-units', [BusinessUnitController::class, 'index'])->name('business-units.index');
+        Route::post('/business-units', [BusinessUnitController::class, 'store'])->name('business-units.store');
+        Route::put('/business-units/{businessUnit}', [BusinessUnitController::class, 'update'])->name('business-units.update');
+        Route::delete('/business-units/{businessUnit}', [BusinessUnitController::class, 'destroy'])->name('business-units.destroy');
+        Route::post('/business-units/{businessUnit}/members', [BusinessUnitController::class, 'addMember'])->name('business-units.members.store');
+        Route::delete('/business-units/{businessUnit}/members/{userId}', [BusinessUnitController::class, 'removeMember'])->name('business-units.members.destroy');
+    });
 
     // Profile
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
@@ -114,22 +129,30 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::delete('/notifications/{id}', [NotificationController::class, 'destroy'])->name('notifications.destroy');
 
     // Manager View & Trash Management
-    Route::get('/manager', [ManagerController::class, 'index'])->name('manager');
-    Route::post('/manager/quotations/batch-restore', [ManagerController::class, 'batchRestore'])->name('manager.quotations.batch-restore');
-    Route::post('/manager/quotations/batch-force-delete', [ManagerController::class, 'batchForceDelete'])->name('manager.quotations.batch-force-delete');
-    Route::post('/manager/quotations/{id}/restore', [ManagerController::class, 'restore'])->name('manager.quotations.restore');
-    Route::delete('/manager/quotations/{id}/force-delete', [ManagerController::class, 'forceDelete'])->name('manager.quotations.force-delete');
-    Route::get('/roles', [RoleController::class, 'index'])->name('roles.index');
-    Route::put('/roles', [RoleController::class, 'update'])->name('roles.update');
-    Route::get('/settings', [SettingController::class, 'index'])->name('settings');
-    Route::post('/settings/company-info', [SettingController::class, 'updateCompanyInfo'])->name('settings.company-info');
-    Route::post('/settings/bank-accounts', [SettingController::class, 'storeBankAccount'])->name('settings.bank-accounts.store');
-    Route::put('/settings/bank-accounts/{id}', [SettingController::class, 'updateBankAccount'])->name('settings.bank-accounts.update');
-    Route::post('/settings/bank-accounts/{id}/default', [SettingController::class, 'setDefaultBankAccount'])->name('settings.bank-accounts.default');
-    Route::delete('/settings/bank-accounts/{id}', [SettingController::class, 'destroyBankAccount'])->name('settings.bank-accounts.destroy');
-    Route::post('/settings/master-terms', [SettingController::class, 'updateMasterTerms'])->name('settings.master-terms');
-    Route::post('/settings/domain-logo', [SettingController::class, 'updateDomainLogoMap'])->name('settings.domain-logo');
-    Route::post('/settings/maintenance-mode', [SettingController::class, 'updateMaintenanceMode'])->name('settings.maintenance-mode');
+    Route::middleware('permission:manager_view')->group(function () {
+        Route::get('/manager', [ManagerController::class, 'index'])->name('manager');
+        Route::post('/manager/quotations/batch-restore', [ManagerController::class, 'batchRestore'])->name('manager.quotations.batch-restore');
+        Route::post('/manager/quotations/batch-force-delete', [ManagerController::class, 'batchForceDelete'])->name('manager.quotations.batch-force-delete');
+        Route::post('/manager/quotations/{id}/restore', [ManagerController::class, 'restore'])->name('manager.quotations.restore');
+        Route::delete('/manager/quotations/{id}/force-delete', [ManagerController::class, 'forceDelete'])->name('manager.quotations.force-delete');
+        Route::post('/change-requests/{changeRequest}/approve', [ChangeRequestController::class, 'approve'])->name('change-requests.approve');
+        Route::post('/change-requests/{changeRequest}/reject', [ChangeRequestController::class, 'reject'])->name('change-requests.reject');
+    });
+    Route::middleware('permission:manage_roles')->group(function () {
+        Route::get('/roles', [RoleController::class, 'index'])->name('roles.index');
+        Route::put('/roles', [RoleController::class, 'update'])->name('roles.update');
+    });
+    Route::middleware('permission:manage_settings')->group(function () {
+        Route::get('/settings', [SettingController::class, 'index'])->name('settings');
+        Route::post('/settings/company-info', [SettingController::class, 'updateCompanyInfo'])->name('settings.company-info');
+        Route::post('/settings/bank-accounts', [SettingController::class, 'storeBankAccount'])->name('settings.bank-accounts.store');
+        Route::put('/settings/bank-accounts/{id}', [SettingController::class, 'updateBankAccount'])->name('settings.bank-accounts.update');
+        Route::post('/settings/bank-accounts/{id}/default', [SettingController::class, 'setDefaultBankAccount'])->name('settings.bank-accounts.default');
+        Route::delete('/settings/bank-accounts/{id}', [SettingController::class, 'destroyBankAccount'])->name('settings.bank-accounts.destroy');
+        Route::post('/settings/master-terms', [SettingController::class, 'updateMasterTerms'])->name('settings.master-terms');
+        Route::post('/settings/domain-logo', [SettingController::class, 'updateDomainLogoMap'])->name('settings.domain-logo');
+        Route::post('/settings/maintenance-mode', [SettingController::class, 'updateMaintenanceMode'])->name('settings.maintenance-mode');
+    });
 });
 
 require __DIR__.'/auth.php';

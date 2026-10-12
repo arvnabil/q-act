@@ -64,19 +64,6 @@ class RoleController extends Controller
      */
     public function index(): Response
     {
-        // Ensure all permissions exist in DB
-        foreach (SYSTEM_PERMISSIONS as $perm) {
-            Permission::firstOrCreate(['name' => $perm, 'guard_name' => 'web']);
-        }
-
-        // Ensure default roles exist in DB and have default permissions if empty or incomplete
-        foreach (STANDARD_ROLES as $roleName) {
-            $role = Role::firstOrCreate(['name' => $roleName, 'guard_name' => 'web']);
-            if (($role->permissions()->count() < count(DEFAULT_ROLE_PERMISSIONS[$roleName])) && isset(DEFAULT_ROLE_PERMISSIONS[$roleName])) {
-                $role->syncPermissions(DEFAULT_ROLE_PERMISSIONS[$roleName]);
-            }
-        }
-
         // Load roles with their permissions ordered by standard order
         $roles = Role::with('permissions')->get()->sortBy(function ($role) {
             $idx = array_search($role->name, STANDARD_ROLES);

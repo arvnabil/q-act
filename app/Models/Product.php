@@ -19,10 +19,10 @@ class Product extends Model
     ];
 
     protected $casts = [
-        'price' => 'integer',
-        'pricelist_distributor' => 'integer',
+        'price' => 'float',
+        'pricelist_distributor' => 'float',
         'diskon_distributor' => 'float',
-        'modal' => 'integer',
+        'modal' => 'float',
         'margin_sales' => 'float',
         'is_active' => 'boolean',
     ];

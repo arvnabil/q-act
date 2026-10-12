@@ -14,15 +14,17 @@ class Quotation extends Model
 
     protected $fillable = [
         'id', 'customer_id', 'pic_id', 'sales_id', 'bu_id', 'bank_account_id',
-        'status', 'date', 'expired', 'calc_tax', 'show_tax', 'ppn_rate',
+        'status', 'po_status', 'po_number', 'po_date', 'po_document_path', 'date', 'expired', 'calc_tax', 'show_tax', 'ppn_rate',
         'calc_pph', 'show_pph', 'pph_rate', 'notes', 'terms',
         'subtotal', 'tax_amount', 'grand_total',
         'is_deleted', 'deleted_at', 'created_by', 'updated_by',
+        'parent_quotation_id', 'source_sales_order_id', 'revision_no', 'relation_type',
     ];
 
     protected $casts = [
         'date' => 'date',
         'expired' => 'date',
+        'po_date' => 'date',
         'deleted_at' => 'datetime',
         'calc_tax' => 'boolean',
         'show_tax' => 'boolean',
@@ -31,6 +33,9 @@ class Quotation extends Model
         'is_deleted' => 'boolean',
         'ppn_rate' => 'float',
         'pph_rate' => 'float',
+        'subtotal' => 'float',
+        'tax_amount' => 'float',
+        'grand_total' => 'float',
         'terms' => 'array',
     ];
 
@@ -91,6 +96,17 @@ class Quotation extends Model
     {
         return $this->belongsTo(User::class, 'updated_by');
     }
+
+    public function parentQuotation(): BelongsTo { return $this->belongsTo(self::class, 'parent_quotation_id'); }
+    public function sourceSalesOrder(): BelongsTo { return $this->belongsTo(SalesOrder::class, 'source_sales_order_id'); }
+    public function revisions(): HasMany
+    {
+        return $this->hasMany(self::class, 'parent_quotation_id')
+            ->where('is_deleted', false);
+    }
+    public function changeRequests(): HasMany { return $this->hasMany(ChangeRequest::class); }
+    public function salesOrders(): HasMany { return $this->hasMany(SalesOrder::class); }
+    public function purchaseOrders(): HasMany { return $this->hasMany(QuotationPurchaseOrder::class); }
 
     public function getSubtotalAttribute($value)
     {

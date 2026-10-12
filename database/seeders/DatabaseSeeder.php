@@ -16,6 +16,8 @@ class DatabaseSeeder extends Seeder
 {
     public function run(): void
     {
+        $this->call(RoleAndPermissionSeeder::class);
+
         // Reset cached roles and permissions
         app()[PermissionRegistrar::class]->forgetCachedPermissions();
 
@@ -30,24 +32,8 @@ class DatabaseSeeder extends Seeder
         ]);
 
         // 2. Create Permissions & Roles
-        $adminRole = Role::firstOrCreate(['name' => 'Administrator', 'guard_name' => 'web']);
-        $salesRole = Role::firstOrCreate(['name' => 'Sales', 'guard_name' => 'web']);
-
-        $permissions = [
-            'manage_users', 'manage_roles', 'manage_business_units',
-            'manage_products', 'manage_customers', 'manage_quotations',
-            'manage_sales_orders', 'view_dashboard', 'view_reports',
-            'view_customers', 'view_products'
-        ];
-
-        foreach ($permissions as $perm) {
-            Permission::firstOrCreate(['name' => $perm, 'guard_name' => 'web']);
-        }
-
-        $adminRole->syncPermissions(Permission::all());
-        $salesRole->syncPermissions([
-            'manage_quotations', 'view_customers', 'view_products', 'view_dashboard'
-        ]);
+        $adminRole = Role::findByName('Administrator', 'web');
+        $salesRole = Role::findByName('Sales', 'web');
 
         // 3. Create Admin User
         $admin = User::create([

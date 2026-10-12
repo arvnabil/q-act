@@ -3,7 +3,9 @@ import ReactDOM from 'react-dom';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import Pagination from '@/Components/Pagination';
 import { Head, Link, router, usePage } from '@inertiajs/react';
-import { Search, Eye, Download, Copy, Trash2, Loader2, FileText, Plus, AlertTriangle, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
+import { Search, Eye, Download, Copy, Trash2, Loader2, FileText, Plus, AlertTriangle, ArrowUpDown, ArrowUp, ArrowDown, UploadCloud, X } from 'lucide-react';
+import { formatMoney } from '@/utils/money';
+import { toast } from 'react-hot-toast';
 
 const PAGE_SIZE = 8;
 
@@ -33,8 +35,7 @@ const statusLabel = (s) => {
     return s ? s.charAt(0).toUpperCase() + s.slice(1) : '-';
 };
 
-const formatCurrency = (val) =>
-    new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(val || 0);
+const formatCurrency = (val) => formatMoney(val);
 
 const formatDate = (str) => {
     if (!str) return '-';
@@ -109,6 +110,11 @@ export default function Quotations({ quotations, isFinance }) {
     const [isDeleting, setIsDeleting] = useState(false);
     const [duplicateTarget, setDuplicateTarget] = useState(null);
     const [isDuplicating, setIsDuplicating] = useState(false);
+    const [showLegacyImport, setShowLegacyImport] = useState(false);
+    const [legacyFile, setLegacyFile] = useState(null);
+    const [legacyPreview, setLegacyPreview] = useState(null);
+    const [isImportingLegacy, setIsImportingLegacy] = useState(false);
+    const [legacyImportErrors, setLegacyImportErrors] = useState([]);
 
     // Sorting state
     const [sortKey, setSortKey] = useState('date');
@@ -261,6 +267,127 @@ export default function Quotations({ quotations, isFinance }) {
         });
     };
 
+    const downloadLegacyTemplate = async () => {
+        const { utils, writeFile } = await import('xlsx');
+        const wb = utils.book_new();
+        utils.book_append_sheet(wb, utils.json_to_sheet([
+            {
+                legacy_quotation_no: 'Q-LAMA-2026-001',
+                quotation_date: '2026-01-15',
+                customer_name: 'PT Samudra Teknologi Indonesia',
+                sales_email: 'sales@actv.co.id',
+                quotation_status: 'approved',
+                notes: 'Quotation lama - PO sudah diterima customer',
+            },
+            {
+                legacy_quotation_no: 'Q-LAMA-2026-002',
+                quotation_date: '2026-02-03',
+                customer_name: 'PT Nusantara Maritim Sejahtera',
+                sales_email: 'sales@actv.co.id',
+                quotation_status: 'sent',
+                notes: 'Quotation lama tanpa item untuk dilengkapi kemudian',
+            },
+        ]), 'Quotation');
+        utils.book_append_sheet(wb, utils.json_to_sheet([
+            {
+                legacy_quotation_no: 'Q-LAMA-2026-001',
+                item_no: 1,
+                sku: 'PAR1-PRO-BASE-NH1Y',
+                product_name: 'Zoom Workplace Pro Annual',
+                brand: 'Zoom',
+                qty: 94,
+                hpp: 2573000,
+                unit_price: 3325501.02,
+                description: 'Lisensi Zoom Workplace Pro Annual',
+            },
+            {
+                legacy_quotation_no: 'Q-LAMA-2026-001',
+                item_no: 2,
+                sku: 'Z1-ENTP-50-1YP',
+                product_name: 'Zoom Enterprise Plus',
+                brand: 'Zoom',
+                qty: 57,
+                hpp: 4825980,
+                unit_price: 6159995.07,
+                description: 'Lisensi Zoom Enterprise Plus',
+            },
+        ]), 'Quotation Items');
+        utils.book_append_sheet(wb, utils.json_to_sheet([
+            {
+                legacy_quotation_no: 'Q-LAMA-2026-001',
+                sub_po_no: 1,
+                po_number: 'PO/SMTI/001/2026',
+                po_date: '2026-02-10',
+                po_status: 'Diterima',
+                so_number: 'SO.Q-LAMA-2026-001',
+                so_date: '2026-02-11',
+                item_no: 1,
+            },
+            {
+                legacy_quotation_no: 'Q-LAMA-2026-001',
+                sub_po_no: 2,
+                po_number: 'PO/SMTI/002/2026',
+                po_date: '2026-02-17',
+                po_status: 'Diterima',
+                so_number: 'SO.Q-LAMA-2026-001-2',
+                so_date: '2026-02-18',
+                item_no: 2,
+            },
+        ]), 'Purchase Orders');
+        utils.book_append_sheet(wb, utils.json_to_sheet([
+            { bagian: 'Quotation', keterangan: 'Wajib. Satu baris untuk satu quotation lama.' },
+            { bagian: 'legacy_quotation_no', keterangan: 'Nomor quotation lama harus unik dan menjadi ID di sistem.' },
+            { bagian: 'customer_name', keterangan: 'Nama customer harus sudah terdaftar di menu Customers.' },
+            { bagian: 'sales_email', keterangan: 'Email user sales yang sudah terdaftar. Boleh dikosongkan.' },
+            { bagian: 'quotation_status', keterangan: 'Gunakan created, sent, approved, cancelled, expired, atau rejected.' },
+            { bagian: 'Quotation Items', keterangan: 'Opsional. Bisa dikosongkan jika quotation lama belum memiliki data item.' },
+            { bagian: 'sku', keterangan: 'SKU harus sudah terdaftar di menu Products.' },
+            { bagian: 'Purchase Orders', keterangan: 'Opsional. Satu baris dapat mewakili item pada satu PO.' },
+            { bagian: 'po_status', keterangan: 'Gunakan Diterima, Sebagian, atau Dibatalkan.' },
+            { bagian: 'item_no', keterangan: 'Nomor item mengikuti urutan item pada sheet Quotation Items.' },
+        ]), 'Petunjuk');
+        writeFile(wb, 'Template_Import_Quotation_Lama.xlsx');
+    };
+
+    const handleLegacyFile = async (file) => {
+        if (!file) return;
+        try {
+            const { read, utils } = await import('xlsx');
+            const wb = read(await file.arrayBuffer(), { type: 'array', cellDates: true });
+            const readSheet = (name) => wb.Sheets[name] ? utils.sheet_to_json(wb.Sheets[name], { defval: '' }) : [];
+            const quotationsRows = readSheet('Quotation');
+            const itemsRows = readSheet('Quotation Items');
+            const poRows = readSheet('Purchase Orders');
+            if (!quotationsRows.length) throw new Error('Sheet Quotation wajib tersedia. Sheet Quotation Items boleh dikosongkan atau tidak disertakan.');
+            setLegacyFile(file);
+            setLegacyPreview({ quotations: quotationsRows, items: itemsRows, purchase_orders: poRows });
+        } catch (error) {
+            toast.error(error.message || 'File Excel tidak dapat dibaca.');
+            setLegacyFile(null);
+            setLegacyPreview(null);
+        }
+    };
+
+    const submitLegacyImport = () => {
+        if (!legacyPreview || isImportingLegacy) return;
+        setIsImportingLegacy(true);
+        setLegacyImportErrors([]);
+        router.post(route('quotations.import-legacy'), legacyPreview, {
+            preserveScroll: true,
+            onSuccess: () => { setShowLegacyImport(false); setLegacyFile(null); setLegacyPreview(null); setLegacyImportErrors([]); },
+            onError: errors => {
+                const messages = Object.entries(errors || {}).flatMap(([field, value]) => {
+                    const values = Array.isArray(value) ? value : [value];
+                    return values.map(message => `${field}: ${message}`);
+                });
+                const shown = messages.length ? messages : ['Import gagal. Periksa data Excel.'];
+                setLegacyImportErrors(shown);
+                toast.error(shown[0]);
+            },
+            onFinish: () => setIsImportingLegacy(false),
+        });
+    };
+
     const handleExportExcel = async () => {
         try {
             const [{ utils, writeFile }] = await Promise.all([import('xlsx')]);
@@ -281,7 +408,7 @@ export default function Quotations({ quotations, isFinance }) {
             writeFile(wb, `Quotations_${new Date().toISOString().slice(0,10)}.xlsx`);
         } catch (err) {
             console.error('Export failed:', err);
-            alert('Export gagal. Pastikan package xlsx tersedia.');
+            toast.error('Export gagal. Pastikan package xlsx tersedia.');
         }
     };
 
@@ -349,6 +476,11 @@ export default function Quotations({ quotations, isFinance }) {
                         </div>
 
                         <div className="flex items-center gap-2 w-full sm:w-auto mt-2 lg:mt-0">
+                            {!isFinance && ['Administrator', 'Sales Manager', 'Manager'].includes(user?.role) && (
+                                <button onClick={() => setShowLegacyImport(true)} className="flex items-center justify-center gap-2 px-4 py-2 text-xs font-bold bg-white text-brand-700 border border-brand-200 rounded-lg hover:bg-brand-50 transition-all shadow-sm w-full sm:w-auto cursor-pointer">
+                                    <UploadCloud className="w-4 h-4" /> Import Legacy
+                                </button>
+                            )}
                             <button onClick={handleExportExcel} className="flex items-center justify-center gap-2 px-4 py-2 text-xs font-bold bg-white text-surface-700 border border-surface-200 rounded-lg hover:bg-surface-50 transition-all shadow-sm w-full sm:w-auto cursor-pointer">
                                 <Download className="w-4 h-4" />
                                 Export Excel
@@ -523,6 +655,38 @@ export default function Quotations({ quotations, isFinance }) {
                 )}
 
                 {/* Duplicate Confirmation Modal */}
+                {showLegacyImport && ReactDOM.createPortal(
+                    <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-surface-900/60 backdrop-blur-sm">
+                        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden">
+                            <div className="px-6 py-5 border-b border-surface-100 flex items-start justify-between">
+                                <div>
+                                    <h3 className="text-base font-bold text-surface-900">Import Quotation Lama</h3>
+                                    <p className="text-xs text-surface-500 mt-1">Sheet Quotation wajib. Quotation Items dan Purchase Orders bersifat opsional.</p>
+                                </div>
+                                <button type="button" onClick={() => { setShowLegacyImport(false); setLegacyFile(null); setLegacyPreview(null); }} className="p-1 text-surface-400 hover:text-surface-700 cursor-pointer"><X className="w-5 h-5" /></button>
+                            </div>
+                            <div className="p-6 space-y-4">
+                                <button type="button" onClick={downloadLegacyTemplate} className="text-xs font-semibold text-brand-700 hover:underline">Download template Excel</button>
+                                <label className="flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-surface-200 bg-surface-50 px-5 py-8 text-center cursor-pointer hover:border-brand-300">
+                                    <UploadCloud className="w-8 h-8 text-brand-500" />
+                                    <span className="text-sm font-semibold text-surface-700">Pilih file Excel</span>
+                                    <span className="text-xs text-surface-400">.xlsx dengan sheet sesuai template</span>
+                                    <input type="file" accept=".xlsx,.xls" className="hidden" onChange={e => handleLegacyFile(e.target.files?.[0])} />
+                                </label>
+                                {legacyFile && <div className="text-xs text-surface-600">File: <strong>{legacyFile.name}</strong></div>}
+                                {legacyPreview && <div className="rounded-xl bg-emerald-50 border border-emerald-100 px-4 py-3 text-xs text-emerald-800">Preview siap: {legacyPreview.quotations.length} quotation, {legacyPreview.items.length} item, {legacyPreview.purchase_orders.length} PO.</div>}
+                                {legacyImportErrors.length > 0 && <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-xs text-red-700"><div className="mb-1 font-bold">Import belum berhasil:</div><ul className="list-disc space-y-1 pl-4">{legacyImportErrors.map((message, index) => <li key={index}>{message}</li>)}</ul></div>}
+                                <p className="text-[11px] leading-relaxed text-surface-500">Nomor quotation lama harus unik. Sistem tidak membuat SO baru untuk baris tanpa nomor SO.</p>
+                            </div>
+                            <div className="px-6 py-4 border-t border-surface-100 flex justify-end gap-3">
+                                <button type="button" onClick={() => setShowLegacyImport(false)} className="px-4 py-2.5 text-xs font-semibold bg-surface-100 rounded-xl text-surface-700 cursor-pointer">Batal</button>
+                                <button type="button" onClick={submitLegacyImport} disabled={!legacyPreview || isImportingLegacy} className="px-4 py-2.5 text-xs font-bold bg-brand-600 text-white rounded-xl cursor-pointer disabled:opacity-50">{isImportingLegacy ? 'Mengimpor...' : 'Import Data'}</button>
+                            </div>
+                        </div>
+                    </div>,
+                    document.body
+                )}
+
                 {duplicateTarget && ReactDOM.createPortal(
                     <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-surface-900/60 backdrop-blur-sm animate-fade-in">
                         <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden p-6 text-center animate-scale-in">

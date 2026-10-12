@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\CompanyBankAccount;
 use App\Models\SystemSetting;
+use App\Models\UserTermsTemplate;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -153,6 +154,62 @@ class SettingController extends Controller
         );
 
         return back()->with('message', 'Master Template Syarat & Ketentuan berhasil diperbarui!');
+    }
+
+    public function storePersonalTermsTemplate(Request $request)
+    {
+        $data = $request->validate([
+            'name' => 'required|string|max:255',
+            'terms' => 'required|array|min:1',
+            'terms.*' => 'required|string|max:2000',
+        ]);
+
+        $template = UserTermsTemplate::create([
+            'user_id' => $request->user()->id,
+            'name' => trim($data['name']),
+            'terms' => array_values(array_filter(array_map('trim', $data['terms']))),
+        ]);
+
+        return response()->json(['template' => [
+            'id' => $template->id,
+            'name' => $template->name,
+            'type' => 'personal',
+            'terms' => $template->terms,
+        ]]);
+    }
+
+    public function destroyPersonalTermsTemplate(Request $request, UserTermsTemplate $template)
+    {
+        abort_unless($template->user_id === $request->user()->id, 403);
+        $template->delete();
+
+        return response()->json(['success' => true]);
+    }
+
+    public function importLegacyPersonalTermsTemplates(Request $request)
+    {
+        $data = $request->validate([
+            'templates' => 'required|array',
+            'templates.*.name' => 'required|string|max:255',
+            'templates.*.terms' => 'required|array|min:1',
+            'templates.*.terms.*' => 'required|string|max:2000',
+        ]);
+
+        $imported = [];
+        foreach ($data['templates'] as $legacy) {
+            $template = UserTermsTemplate::firstOrCreate(
+                ['user_id' => $request->user()->id, 'name' => trim($legacy['name'])],
+                ['terms' => array_values(array_filter(array_map('trim', $legacy['terms'])))]
+            );
+            $imported[] = [
+                'id' => $template->id,
+                'name' => $template->name,
+                'type' => 'personal',
+                'terms' => $template->terms,
+            ];
+        }
+
+        return response()->json(['templates' => $imported]);
     }
 
     public function updateDomainLogoMap(Request $request)

@@ -5,12 +5,13 @@ import { Head, Link, router, usePage } from '@inertiajs/react';
 import {
     ArrowLeft, Plus, Trash2, Save, Loader2, Info, ChevronDown,
     Check, Search, X, FileText, BookmarkPlus, AlertTriangle, Edit3,
-    Box, UploadCloud, GripVertical,
+    Box, UploadCloud, GripVertical, CircleHelp, Layers, ArrowRightLeft,
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
+import { formatMoney, roundMoney } from '@/utils/money';
 import axios from 'axios';
 import { printQuotation } from '@/utils/printQuotation';
-import { getAllTemplatesForUser, savePersonalTemplate, deletePersonalTemplate } from '@/utils/termsTemplates';
+import { getAllTemplatesForUser, getLegacyPersonalTemplates } from '@/utils/termsTemplates';
 import SalesZoneCard from '@/Components/SalesZoneCard';
 
 const brandClasses = (brand) => {
@@ -24,7 +25,7 @@ const brandClasses = (brand) => {
 };
 
 const formatCurrency = (val) =>
-    new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(val || 0);
+    formatMoney(val);
 
 const formatBrandName = (brand) => {
     if (!brand) return '';
@@ -39,7 +40,7 @@ const DEFAULT_TERMS = [
     'Pengiriman dilakukan setelah konfirmasi pembayaran diterima.',
 ];
 
-const EditableCurrencyInput = ({ value, onChange, className, placeholder }) => {
+const EditableCurrencyInput = ({ value, onChange, className, placeholder, disabled = false }) => {
     const [isFocused, setIsFocused] = useState(false);
     return (
         <input
@@ -49,22 +50,32 @@ const EditableCurrencyInput = ({ value, onChange, className, placeholder }) => {
             value={isFocused ? (value ?? '') : (value ? formatCurrency(value) : (placeholder || ''))}
             onFocus={() => setIsFocused(true)}
             onChange={e => onChange(e.target.value)}
+            disabled={disabled}
             onBlur={() => setIsFocused(false)}
             className={className}
         />
     );
 };
 
-export default function QuotationEdit({ quotation, customers, products, brands, bankAccounts, currentUser, masterTerms = [] }) {
+export default function QuotationEdit({ quotation, customers, products, brands, bankAccounts, currentUser, masterTerms = [], personalTerms = [] }) {
     const { flash } = usePage().props;
 
     // ─── State ────────────────────────────────────────────────────────────────
     const [status, setStatus] = useState(quotation?.status || 'created');
+    const [poStatus, setPoStatus] = useState(quotation?.po_status || 'Diterima');
+    const [poNumber, setPoNumber] = useState(quotation?.po_number || '');
+    const [poDate, setPoDate] = useState(quotation?.po_date || new Date().toISOString().slice(0, 10));
+    const [poDocument, setPoDocument] = useState(null);
+    const [poFormErrors, setPoFormErrors] = useState({});
     const [customerId, setCustomerId] = useState(quotation?.customer_id || '');
     const [picId, setPicId] = useState(quotation?.pic_id ? String(quotation.pic_id) : '');
     const [expiryDays, setExpiryDays] = useState(7);
     const [bankAccountId, setBankAccountId] = useState(quotation?.bank_account_id || '');
     const [customerSearch, setCustomerSearch] = useState('');
+    const [showAddPicModal, setShowAddPicModal] = useState(false);
+    const [isSavingPic, setIsSavingPic] = useState(false);
+    const [newPic, setNewPic] = useState({ name: '', email: '', phone: '', is_primary: false });
+    const [addedCustomerPics, setAddedCustomerPics] = useState([]);
 
     // Tax settings
     const [calcTax, setCalcTax] = useState(quotation?.calc_tax !== false);
@@ -82,11 +93,26 @@ export default function QuotationEdit({ quotation, customers, products, brands, 
             : DEFAULT_TERMS.join('\n')
     );
     const userId = currentUser?.id || 'guest';
-    const [termsTemplates, setTermsTemplates] = useState(() => getAllTemplatesForUser(userId, masterTerms));
+    const [termsTemplates, setTermsTemplates] = useState(() => getAllTemplatesForUser(userId, masterTerms, personalTerms));
 
     useEffect(() => {
-        setTermsTemplates(getAllTemplatesForUser(userId, masterTerms));
-    }, [userId, masterTerms]);
+        setTermsTemplates(getAllTemplatesForUser(userId, masterTerms, personalTerms));
+        const migrateLegacyTemplates = async () => {
+            const { key, templates } = getLegacyPersonalTemplates(userId);
+            if (!templates.length) return;
+            try {
+                const response = await axios.post(route('quotation-templates.import-legacy'), { templates });
+                localStorage.removeItem(key);
+                setTermsTemplates(prev => {
+                    const imported = response.data.templates || [];
+                    return [...prev, ...imported.filter(item => !prev.some(existing => existing.name === item.name))];
+                });
+            } catch (error) {
+                console.error('Migrasi template personal lama gagal:', error);
+            }
+        };
+        migrateLegacyTemplates();
+    }, [userId, masterTerms, personalTerms]);
 
     const [showSaveTplModal, setShowSaveTplModal] = useState(false);
     const [newTplName, setNewTplName] = useState('');
@@ -397,6 +423,56 @@ export default function QuotationEdit({ quotation, customers, products, brands, 
     const [isSaving, setIsSaving] = useState(false);
     const [showDraftModal, setShowDraftModal] = useState(false);
     const [showSOConfirmModal, setShowSOConfirmModal] = useState(false);
+    const [showSubQuotationModal, setShowSubQuotationModal] = useState(false);
+    const [showBulkPoModal, setShowBulkPoModal] = useState(false);
+    const [bulkPoRows, setBulkPoRows] = useState([]);
+    const [bulkPoErrors, setBulkPoErrors] = useState({});
+    const [isSavingBulkPo, setIsSavingBulkPo] = useState(false);
+    const [selectedSubItemIds, setSelectedSubItemIds] = useState([]);
+    const [subQuotationError, setSubQuotationError] = useState('');
+    const [isCreatingSubQuotation, setIsCreatingSubQuotation] = useState(false);
+    const [itemToMove, setItemToMove] = useState(null);
+    const [showMoveItemModal, setShowMoveItemModal] = useState(false);
+    const [isMovingItem, setIsMovingItem] = useState(false);
+    const allocatedSplitItemIds = (quotation?.allocated_split_item_ids || []).map(Number);
+    const isQuotationLocked = quotation?.status === 'approved';
+    const quotationStructure = quotation?.quotation_structure || { root: null, children: [], current_id: quotation?.id };
+    const moveTargets = (quotationStructure.children || []).filter(child => child.id !== quotation?.id && ['created', 'revision_draft'].includes(child.status));
+    const canReturnItemToMain = quotation?.relation_type === 'split';
+
+    const openBulkPoModal = () => {
+        const fallbackUnits = [
+            { id: quotation.id, label: 'Quotation Utama', relation_type: 'main', po_status: quotation.po_status, po_number: quotation.po_number, po_date: quotation.po_date, po_document_path: quotation.po_document_path, items_count: quotation.items?.length || 0, grand_total: quotation.grand_total },
+            ...(quotation.revisions || []).filter((revision) => revision.relation_type === 'split').map((revision) => ({ ...revision, label: 'Sub Quotation', items_count: 0 })),
+        ];
+        const units = quotation.po_units?.length ? quotation.po_units : fallbackUnits;
+        setBulkPoRows(units.map((unit) => ({ ...unit, status: unit.po_status || 'Diterima', po_number: unit.po_number || '', po_date: unit.po_date || '', po_document: null })));
+        setBulkPoErrors({});
+        setShowBulkPoModal(true);
+    };
+
+    const updateBulkPoRow = (id, field, value) => setBulkPoRows((rows) => rows.map((row) => row.id === id ? { ...row, [field]: value } : row));
+
+    const submitBulkPo = (event) => {
+        event.preventDefault();
+        if (isSavingBulkPo || !bulkPoRows.length) return;
+        const formData = new FormData();
+        bulkPoRows.forEach((row, index) => {
+            formData.append(`entries[${index}][quotation_id]`, row.id);
+            formData.append(`entries[${index}][status]`, row.status);
+            formData.append(`entries[${index}][po_number]`, row.po_number);
+            formData.append(`entries[${index}][po_date]`, row.po_date);
+            if (row.po_document) formData.append(`entries[${index}][po_document]`, row.po_document);
+        });
+        setIsSavingBulkPo(true);
+        setBulkPoErrors({});
+        router.post(route('quotations.bulk-purchase-orders.store', quotation.id), formData, {
+            forceFormData: true,
+            onSuccess: () => setShowBulkPoModal(false),
+            onError: (errors) => setBulkPoErrors(errors || {}),
+            onFinish: () => setIsSavingBulkPo(false),
+        });
+    };
 
     // Low margin alert
     const MARGIN_MIN = 12;
@@ -406,7 +482,7 @@ export default function QuotationEdit({ quotation, customers, products, brands, 
     useEffect(() => {
         if (quotation?.items) {
             setItems(
-                quotation.items
+                [...quotation.items]
                     .sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0))
                     .map(i => {
                         const prod = i.product || null;
@@ -448,7 +524,7 @@ export default function QuotationEdit({ quotation, customers, products, brands, 
             const def = bankAccounts.find(b => b.is_default) || bankAccounts[0];
             setBankAccountId(def.id);
         }
-    }, []);
+    }, [quotation?.id]);
 
     // Auto-select primary PIC when customer changes
     useEffect(() => {
@@ -466,11 +542,11 @@ export default function QuotationEdit({ quotation, customers, products, brands, 
     }, [customerId]);
 
     // ─── Calculations ─────────────────────────────────────────────────────────
-    const subtotal = items.reduce((sum, i) => sum + ((Number(i.qty) || 0) * (Number(i.price) || 0)), 0);
-    const ppnAmount = (calcTax && showTax) ? Math.round(subtotal * ppnRate) : 0;
-    const pphBasis = items.filter(i => i.is_pph_applied).reduce((sum, i) => sum + ((Number(i.qty) || 0) * (Number(i.price) || 0)), 0);
-    const pphAmount = calcPph ? Math.round(pphBasis * pphRate) : 0;
-    const grandTotal = subtotal + ppnAmount + pphAmount;
+    const subtotal = roundMoney(items.reduce((sum, i) => sum + ((Number(i.qty) || 0) * (Number(i.price) || 0)), 0));
+    const ppnAmount = (calcTax && showTax) ? roundMoney(subtotal * ppnRate) : 0;
+    const pphBasis = roundMoney(items.filter(i => i.is_pph_applied).reduce((sum, i) => sum + ((Number(i.qty) || 0) * (Number(i.price) || 0)), 0));
+    const pphAmount = calcPph ? roundMoney(pphBasis * pphRate) : 0;
+    const grandTotal = roundMoney(subtotal + ppnAmount + pphAmount);
 
     // Brand summary
     const activeBrands = Array.from(new Set(items.map(i => formatBrandName(i.brand)).filter(Boolean)));
@@ -523,7 +599,7 @@ const getProductDisplayName = (prod) => {
             }
             if (field === 'margin') {
                 const marginPct = Number(value) || 0;
-                updated.price = marginPct >= 100 ? item.price : (marginPct > 0 ? Math.round(hpp / (1 - marginPct / 100)) : hpp);
+                updated.price = marginPct >= 100 ? item.price : (marginPct > 0 ? roundMoney(hpp / (1 - marginPct / 100)) : hpp);
                 updated.margin_value = Math.max(0, updated.price - hpp);
             }
             if (field === 'margin_value') {
@@ -538,7 +614,7 @@ const getProductDisplayName = (prod) => {
                     updated.margin = updated.price > 0 ? Math.round(((updated.price - hpp) / updated.price) * 100) : 0;
                 } else {
                     const marginPct = Number(item.margin) || 0;
-                    updated.price = marginPct >= 100 ? item.price : (marginPct > 0 ? Math.round(hpp / (1 - marginPct / 100)) : hpp);
+                    updated.price = marginPct >= 100 ? item.price : (marginPct > 0 ? roundMoney(hpp / (1 - marginPct / 100)) : hpp);
                     updated.margin_value = Math.max(0, updated.price - hpp);
                 }
             }
@@ -649,21 +725,32 @@ const getProductDisplayName = (prod) => {
         }
     };
 
-    const handleSaveTemplate = () => {
+    const handleSaveTemplate = async () => {
         if (!newTplName.trim()) { toast.error('Masukkan nama template!'); return; }
-        savePersonalTemplate(userId, newTplName.trim(), termsText);
-        setTermsTemplates(getAllTemplatesForUser(userId));
-        setShowSaveTplModal(false);
-        setNewTplName('');
-        toast.success('Template personal berhasil disimpan!');
+        try {
+            const response = await axios.post(route('quotation-templates.store'), {
+                name: newTplName.trim(),
+                terms: termsText.split('\n').map(t => t.trim()).filter(Boolean),
+            });
+            setTermsTemplates(prev => [...prev, response.data.template]);
+            setShowSaveTplModal(false);
+            setNewTplName('');
+            toast.success('Template personal berhasil disimpan ke database.');
+        } catch (error) {
+            toast.error(error.response?.data?.message || 'Gagal menyimpan template personal.');
+        }
     };
 
-    const handleDeleteTemplate = () => {
+    const handleDeleteTemplate = async () => {
         if (!deleteTargetTemplate) return;
-        deletePersonalTemplate(userId, deleteTargetTemplate.id);
-        setTermsTemplates(getAllTemplatesForUser(userId));
-        toast.success(`Template "${deleteTargetTemplate.name}" berhasil dihapus.`);
-        setDeleteTargetTemplate(null);
+        try {
+            await axios.delete(route('quotation-templates.destroy', deleteTargetTemplate.id));
+            setTermsTemplates(prev => prev.filter(template => template.id !== deleteTargetTemplate.id));
+            toast.success(`Template "${deleteTargetTemplate.name}" berhasil dihapus.`);
+            setDeleteTargetTemplate(null);
+        } catch (error) {
+            toast.error(error.response?.data?.message || 'Gagal menghapus template personal.');
+        }
     };
 
     // ─── Save ─────────────────────────────────────────────────────────────────
@@ -679,7 +766,81 @@ const getProductDisplayName = (prod) => {
         }
     };
 
+    const handleApproveSubmit = () => {
+        const errors = {};
+        if (!poStatus) errors.po_status = 'Status PO wajib dipilih.';
+        if (!poNumber.trim()) errors.po_number = 'Nomor PO wajib diisi.';
+        if (!poDate) errors.po_date = 'Tanggal PO wajib diisi.';
+        if (!poDocument && !quotation?.po_document_path) errors.po_document = 'Dokumen PO wajib diunggah.';
+        setPoFormErrors(errors);
+        if (Object.keys(errors).length > 0) {
+            Object.values(errors).forEach(message => toast.error(message));
+            return;
+        }
+        executeSave('approved');
+    };
+
+    const openSubQuotationModal = () => {
+        setSelectedSubItemIds([]);
+        setSubQuotationError('');
+        setShowSubQuotationModal(true);
+    };
+
+    const handleCreateSubQuotation = () => {
+        if (!selectedSubItemIds.length) {
+            setSubQuotationError('Pilih minimal satu item untuk sub quotation.');
+            return;
+        }
+
+        setIsCreatingSubQuotation(true);
+        router.post(route('quotations.sub-quotation.store', quotation.id), {
+            item_ids: selectedSubItemIds,
+        }, {
+            preserveScroll: true,
+            onSuccess: () => {
+                setShowSubQuotationModal(false);
+                setSelectedSubItemIds([]);
+                setSubQuotationError('');
+                toast.success('Sub quotation berhasil dibuat.');
+            },
+            onError: (errors) => {
+                const message = errors.item_ids || 'Sub quotation gagal dibuat.';
+                setSubQuotationError(message);
+                toast.error(message);
+            },
+            onFinish: () => setIsCreatingSubQuotation(false),
+        });
+    };
+
+    const openMoveItemModal = (item) => {
+        setItemToMove(item);
+        setShowMoveItemModal(true);
+    };
+
+    const handleMoveItem = (targetQuotationId) => {
+        if (!itemToMove || !targetQuotationId) return;
+        setIsMovingItem(true);
+        router.post(route('quotations.items.move', { quotation: quotation.id, item: itemToMove.id }), {
+            target_quotation_id: targetQuotationId,
+        }, {
+            preserveScroll: true,
+            onSuccess: () => {
+                setShowMoveItemModal(false);
+                setItemToMove(null);
+                toast.success('Item berhasil dipindahkan ke sub quotation.');
+            },
+            onError: errors => toast.error(errors.target_quotation_id || errors.item || 'Item gagal dipindahkan.'),
+            onFinish: () => setIsMovingItem(false),
+        });
+    };
+
     const executeSave = (targetStatus) => {
+        const editableItems = items.filter(i => i.name || i.sku);
+        if (editableItems.length === 0) {
+            toast.error('Quotation harus memiliki minimal 1 item produk sebelum disimpan.');
+            return;
+        }
+
         setShowDraftModal(false);
         setShowSOConfirmModal(false);
         setIsSaving(true);
@@ -692,6 +853,10 @@ const getProductDisplayName = (prod) => {
             customer_id: customerId || quotation.customer_id,
             pic_id: picId && picId !== '' && picId !== '0' ? picId : null,
             status: targetStatus,
+            po_status: targetStatus === 'approved' ? poStatus : quotation?.po_status || null,
+            po_number: targetStatus === 'approved' ? poNumber : quotation?.po_number || null,
+            po_date: targetStatus === 'approved' ? poDate : quotation?.po_date || null,
+            ...(poDocument ? { po_document: poDocument } : {}),
             calc_tax: calcTax,
             show_tax: showTax,
             ppn_rate: ppnRate,
@@ -705,7 +870,7 @@ const getProductDisplayName = (prod) => {
             subtotal,
             tax_amount: ppnAmount,
             grand_total: grandTotal,
-            items: items.filter(i => i.name || i.sku).map((i, sortIdx) => ({
+            items: editableItems.map((i, sortIdx) => ({
                 id: i.id != null ? String(i.id) : null,
                 product_id: i.product_id != null ? String(i.product_id) : null,
                 sku: i.sku || null,
@@ -722,12 +887,27 @@ const getProductDisplayName = (prod) => {
             })),
         };
 
-        router.put(route('quotations.update', quotation.id), payload, {
+        const saveOptions = {
             preserveScroll: true,
             onSuccess: () => toast.success('Quotation berhasil disimpan!'),
-            onError: (errors) => Object.values(errors).forEach(msg => toast.error(msg)),
+            onError: (errors) => {
+                if (targetStatus === 'approved') setShowSOConfirmModal(true);
+                Object.values(errors).forEach(msg => toast.error(msg));
+            },
             onFinish: () => setIsSaving(false),
-        });
+        };
+
+        // Laravel/PHP does not reliably parse nested multipart fields on PUT.
+        // Use POST + method spoofing when the PO document is uploaded so the
+        // document and quotation items arrive in the same request.
+        if (poDocument) {
+            router.post(route('quotations.update', quotation.id), { ...payload, _method: 'put' }, {
+                ...saveOptions,
+                forceFormData: true,
+            });
+        } else {
+            router.put(route('quotations.update', quotation.id), payload, saveOptions);
+        }
     };
 
     // ─── Filtered data ────────────────────────────────────────────────────────
@@ -736,7 +916,30 @@ const getProductDisplayName = (prod) => {
     );
 
     const selectedCustomer = customers?.find(c => String(c.id) === String(customerId));
-    const customerPics = selectedCustomer?.pics || [];
+    const customerPics = [...(selectedCustomer?.pics || []), ...addedCustomerPics.filter(pic => !(selectedCustomer?.pics || []).some(existing => String(existing.id) === String(pic.id)))];
+
+    const handleSavePic = async (event) => {
+        event.preventDefault();
+        if (!customerId || !newPic.name.trim() || isSavingPic) return;
+        setIsSavingPic(true);
+        try {
+            const response = await axios.post(route('customers.pics.store', customerId), {
+                ...newPic,
+                name: newPic.name.trim(),
+            }, { headers: { Accept: 'application/json' } });
+            const createdPic = response.data.pic;
+            setAddedCustomerPics(prev => [...prev, createdPic]);
+            setPicId(String(createdPic.id));
+            setShowAddPicModal(false);
+            setNewPic({ name: '', email: '', phone: '', is_primary: false });
+            toast.success('PIC customer berhasil ditambahkan.');
+        } catch (error) {
+            const message = Object.values(error.response?.data?.errors || {}).flat()[0] || error.response?.data?.message || 'PIC customer gagal ditambahkan.';
+            toast.error(message);
+        } finally {
+            setIsSavingPic(false);
+        }
+    };
 
     const filteredProducts = (products || []).filter(p => {
         if (!productSearch || !productSearch.trim()) return true;
@@ -761,6 +964,59 @@ const getProductDisplayName = (prod) => {
                     Batal &amp; Kembali
                 </Link>
 
+                {/* ─── Quotation structure ─────────────────────────────── */}
+                <div className="mb-6 rounded-2xl border border-brand-100 bg-brand-50/50 px-5 py-4 shadow-sm">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                        <div>
+                            <div className="flex items-center gap-2 text-sm font-bold text-surface-800">
+                                <Layers className="h-4 w-4 text-brand-600" />
+                                Struktur Quotation
+                            </div>
+                            <p className="mt-1 text-xs text-surface-500">
+                                {quotation?.relation_type === 'split'
+                                    ? 'Dokumen ini adalah sub quotation dari quotation utama.'
+                                    : 'Dokumen ini adalah quotation utama dan dapat memiliki beberapa sub quotation.'}
+                            </p>
+                        </div>
+                        <span className="inline-flex w-fit rounded-full border border-brand-200 bg-white px-2.5 py-1 text-[11px] font-bold text-brand-700">
+                            {quotation?.relation_type === 'split' ? 'SUB QUOTATION' : 'QUOTATION UTAMA'}
+                        </span>
+                    </div>
+
+                    <div className="mt-4 flex flex-wrap items-center gap-2 text-xs">
+                        {quotationStructure.root && (
+                            <Link
+                                href={route('quotations.edit', quotationStructure.root.id)}
+                                className={`rounded-lg border px-3 py-2 font-bold transition-colors ${
+                                    quotationStructure.current_id === quotationStructure.root.id
+                                        ? 'border-brand-500 bg-brand-600 text-white'
+                                        : 'border-brand-200 bg-white text-brand-700 hover:bg-brand-100'
+                                }`}
+                            >
+                                {quotationStructure.root.id} <span className="ml-1 font-normal">(Utama)</span>
+                            </Link>
+                        )}
+
+                        {quotationStructure.children.map((child) => (
+                            <Link
+                                key={child.id}
+                                href={route('quotations.edit', child.id)}
+                                className={`rounded-lg border px-3 py-2 font-bold transition-colors ${
+                                    quotationStructure.current_id === child.id
+                                        ? 'border-brand-500 bg-brand-600 text-white'
+                                        : 'border-surface-200 bg-white text-surface-700 hover:border-brand-300 hover:bg-brand-50'
+                                }`}
+                            >
+                                {child.id}
+                            </Link>
+                        ))}
+
+                        {quotationStructure.children.length === 0 && (
+                            <span className="text-surface-400">Belum ada sub quotation.</span>
+                        )}
+                    </div>
+                </div>
+
                 {/* ─── Main card ──────────────────────────────── */}
                 <div className="bg-white rounded-2xl border border-surface-200 shadow-sm mb-6">
 
@@ -768,7 +1024,7 @@ const getProductDisplayName = (prod) => {
                     <div className="px-6 py-5 border-b border-surface-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                         <div>
                             <h2 className="text-xl font-bold text-surface-900">Edit Quotation: <span className="font-mono text-brand-600">{quotation?.id}</span></h2>
-                            <p className="text-xs text-surface-400 mt-0.5">Ubah item produk, kalkulasi margin, dan ketentuan penawaran</p>
+                            <p className="text-xs text-surface-400 mt-0.5">{isQuotationLocked ? 'Quotation sudah menjadi PO/SO dan terkunci.' : 'Ubah item produk, kalkulasi margin, dan ketentuan penawaran'}</p>
                         </div>
                         <div className="flex items-center gap-3">
                             <Link
@@ -778,14 +1034,39 @@ const getProductDisplayName = (prod) => {
                                 Batal
                             </Link>
                             <button
+                                type="button"
+                                onClick={openSubQuotationModal}
+                                disabled={isQuotationLocked || quotation?.relation_type === 'split' || !items.some(item => item.id != null && (item.name || item.sku)) || isSaving}
+                                className="flex items-center gap-2 px-4 py-2 text-xs font-bold text-brand-700 bg-brand-50 border border-brand-200 rounded-lg hover:bg-brand-100 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                <Layers className="w-4 h-4" />
+                                Buat Sub Quotation
+                            </button>
+                            {quotation?.relation_type !== 'split' && (
+                                <button
+                                    type="button"
+                                    onClick={openBulkPoModal}
+                                    className="flex items-center gap-2 rounded-lg border border-brand-200 bg-brand-50 px-4 py-2 text-xs font-bold text-brand-700 transition-all hover:bg-brand-100"
+                                >
+                                    <UploadCloud className="h-4 w-4" />
+                                    Input PO & Generate SO
+                                </button>
+                            )}
+                            <button
                                 onClick={handleSaveClick}
-                                disabled={isSaving}
+                                disabled={isQuotationLocked || isSaving}
                                 className="flex items-center gap-2 px-5 py-2 text-xs font-bold bg-brand-500 text-white rounded-lg hover:bg-brand-600 transition-all shadow-sm cursor-pointer disabled:opacity-60"
                             >
                                 {isSaving ? <><Loader2 className="w-4 h-4 animate-spin" /> Menyimpan...</> : <><Save className="w-4 h-4" /> Simpan Perubahan</>}
                             </button>
                         </div>
                     </div>
+
+                    {isQuotationLocked && (
+                        <div className="mx-6 my-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-800">
+                            Dokumen ini dikunci karena sudah menjadi PO/SO. Untuk mengubah item atau harga, kembali ke detail quotation dan gunakan <strong>Ajukan Revisi</strong>.
+                        </div>
+                    )}
 
                     {/* ── Customer, PIC, Status, Expiry ─────── */}
                     <div className="px-6 py-5 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 border-b border-surface-100">
@@ -794,8 +1075,8 @@ const getProductDisplayName = (prod) => {
                             <label className="text-xs font-semibold text-surface-600 block mb-1">Customer</label>
                             <div className="relative">
                                 <div
-                                    className="w-full bg-surface-50 border border-surface-200 rounded-lg px-3 py-2.5 text-sm text-surface-700 outline-none cursor-pointer flex items-center justify-between hover:border-brand-400 transition-colors"
-                                    onClick={() => setShowCustomerDropdown(v => !v)}
+                                    className={`w-full bg-surface-50 border border-surface-200 rounded-lg px-3 py-2.5 text-sm text-surface-700 outline-none flex items-center justify-between transition-colors ${isQuotationLocked ? 'cursor-not-allowed opacity-60' : 'cursor-pointer hover:border-brand-400'}`}
+                                    onClick={() => { if (!isQuotationLocked) setShowCustomerDropdown(v => !v); }}
                                 >
                                     <span className={selectedCustomer ? 'text-surface-900 font-semibold truncate' : 'text-surface-400'}>
                                         {selectedCustomer?.name || '-- Pilih Customer --'}
@@ -846,10 +1127,14 @@ const getProductDisplayName = (prod) => {
 
                         {/* PIC */}
                         <div>
-                            <label className="text-xs font-semibold text-surface-600 block mb-1">PIC Customer</label>
+                            <div className="mb-1 flex items-center justify-between gap-2">
+                                <label className="text-xs font-semibold text-surface-600">PIC Customer</label>
+                                <button type="button" onClick={() => { setNewPic({ name: '', email: '', phone: '', is_primary: customerPics.length === 0 }); setShowAddPicModal(true); }} disabled={isQuotationLocked || !customerId} className="text-[11px] font-bold text-brand-700 hover:underline disabled:cursor-not-allowed disabled:opacity-50">+ Tambah PIC</button>
+                            </div>
                             <select
                                 value={picId}
                                 onChange={e => setPicId(e.target.value)}
+                                disabled={isQuotationLocked}
                                 className="w-full bg-surface-50 border border-surface-200 rounded-lg px-3 py-2.5 text-sm text-surface-700 outline-none focus:border-brand-500 cursor-pointer"
                             >
                                 <option value="">-- Pilih PIC --</option>
@@ -867,6 +1152,7 @@ const getProductDisplayName = (prod) => {
                             <select
                                 value={status}
                                 onChange={e => setStatus(e.target.value)}
+                                disabled={isQuotationLocked}
                                 className="w-full bg-surface-50 border border-surface-200 rounded-lg px-3 py-2.5 text-sm text-surface-700 outline-none focus:border-brand-500 cursor-pointer font-semibold"
                             >
                                 <option value="created">Created</option>
@@ -884,6 +1170,7 @@ const getProductDisplayName = (prod) => {
                                 type="number"
                                 value={expiryDays}
                                 onChange={e => setExpiryDays(Number(e.target.value))}
+                                disabled={isQuotationLocked}
                                 min="1" max="90"
                                 className="w-full bg-surface-50 border border-surface-200 rounded-lg px-3 py-2.5 text-sm text-surface-700 outline-none focus:border-brand-500"
                             />
@@ -896,11 +1183,11 @@ const getProductDisplayName = (prod) => {
                             <span className="text-xs font-bold text-surface-700 w-32 shrink-0">Pengaturan PPN:</span>
                             <div className="flex flex-wrap items-center gap-5">
                                 <label className="flex items-center gap-2 text-sm font-medium text-surface-600 cursor-pointer select-none">
-                                    <input type="checkbox" checked={calcTax} onChange={e => setCalcTax(e.target.checked)} className="w-4 h-4 rounded text-brand-500 accent-brand-500 cursor-pointer" />
+                                    <input type="checkbox" checked={calcTax} onChange={e => setCalcTax(e.target.checked)} disabled={isQuotationLocked} className="w-4 h-4 rounded text-brand-500 accent-brand-500 cursor-pointer" />
                                     Hitung PPN 11%
                                 </label>
                                 <label className={`flex items-center gap-2 text-sm font-medium text-surface-600 cursor-pointer select-none ${!calcTax ? 'opacity-50 pointer-events-none' : ''}`}>
-                                    <input type="checkbox" checked={showTax} onChange={e => setShowTax(e.target.checked)} disabled={!calcTax} className="w-4 h-4 rounded text-brand-500 accent-brand-500 cursor-pointer" />
+                                    <input type="checkbox" checked={showTax} onChange={e => setShowTax(e.target.checked)} disabled={isQuotationLocked || !calcTax} className="w-4 h-4 rounded text-brand-500 accent-brand-500 cursor-pointer" />
                                     Tampilkan Baris PPN di PDF
                                 </label>
                             </div>
@@ -909,19 +1196,21 @@ const getProductDisplayName = (prod) => {
                             <span className="text-xs font-bold text-surface-700 w-32 shrink-0">Pengaturan PPh:</span>
                             <div className="flex flex-wrap items-center gap-5">
                                 <label className="flex items-center gap-2 text-sm font-medium text-surface-600 cursor-pointer select-none">
-                                    <input type="checkbox" checked={calcPph} onChange={e => setCalcPph(e.target.checked)} className="w-4 h-4 rounded text-brand-500 accent-brand-500 cursor-pointer" />
+                                    <input type="checkbox" checked={calcPph} onChange={e => setCalcPph(e.target.checked)} disabled={isQuotationLocked} className="w-4 h-4 rounded text-brand-500 accent-brand-500 cursor-pointer" />
                                     Hitung PPh (2%)
                                 </label>
                                 <label className={`flex items-center gap-2 text-sm font-medium text-surface-600 cursor-pointer select-none ${!calcPph ? 'opacity-50 pointer-events-none' : ''}`}>
-                                    <input type="checkbox" checked={showPph} onChange={e => setShowPph(e.target.checked)} disabled={!calcPph} className="w-4 h-4 rounded text-brand-500 accent-brand-500 cursor-pointer" />
+                                    <input type="checkbox" checked={showPph} onChange={e => setShowPph(e.target.checked)} disabled={isQuotationLocked || !calcPph} className="w-4 h-4 rounded text-brand-500 accent-brand-500 cursor-pointer" />
                                     Tampilkan Baris PPh di PDF
                                 </label>
                                 <button
                                     type="button"
                                     onClick={() => {
+                                        if (isQuotationLocked) return;
                                         if (!calcPph) setCalcPph(true);
                                         setShowPphModal(true);
                                     }}
+                                    disabled={isQuotationLocked}
                                     className="px-3 py-1 text-xs font-bold text-emerald-700 border border-emerald-300 bg-emerald-50 hover:bg-emerald-100 rounded-lg transition-colors cursor-pointer flex items-center gap-1.5 shadow-2xs"
                                 >
                                     Atur PPh Jasa
@@ -938,6 +1227,7 @@ const getProductDisplayName = (prod) => {
                                 <select
                                     value={bankAccountId}
                                     onChange={e => setBankAccountId(e.target.value)}
+                                    disabled={isQuotationLocked}
                                     className="w-full max-w-sm bg-white border border-surface-200 rounded-lg px-3 py-1.5 text-sm text-surface-700 outline-none focus:border-brand-500 cursor-pointer"
                                 >
                                     <option value="">-- Pilih Rekening --</option>
@@ -981,6 +1271,7 @@ const getProductDisplayName = (prod) => {
                             <button
                                 type="button"
                                 onClick={() => {
+                                    if (isQuotationLocked) return;
                                     setNewProductData({
                                         sku: '',
                                         brand: '',
@@ -994,6 +1285,7 @@ const getProductDisplayName = (prod) => {
                                     });
                                     setShowAddProductModal(true);
                                 }}
+                                disabled={isQuotationLocked}
                                 className="flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold bg-white text-surface-700 border border-surface-300 rounded-lg hover:bg-surface-50 transition-all cursor-pointer shadow-2xs"
                             >
                                 <Plus className="w-3.5 h-3.5 text-surface-500" />
@@ -1002,6 +1294,7 @@ const getProductDisplayName = (prod) => {
                             <button
                                 type="button"
                                 onClick={handleAddItemRow}
+                                disabled={isQuotationLocked}
                                 className="flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold bg-brand-50 text-brand-700 border border-brand-200 rounded-lg hover:bg-brand-100 transition-all cursor-pointer"
                             >
                                 <Plus className="w-3.5 h-3.5" />
@@ -1056,8 +1349,8 @@ const getProductDisplayName = (prod) => {
                                             {/* Drag handle */}
                                             <td className="py-2 px-1.5 w-9">
                                                 <span
-                                                    draggable={!isReordering}
-                                                    onDragStart={e => handleDragStart(e, idx)}
+                                                    draggable={!isReordering && !isQuotationLocked}
+                                                    onDragStart={e => { if (!isQuotationLocked) handleDragStart(e, idx); }}
                                                     onDragEnd={handleDragEnd}
                                                     title="Drag untuk mengubah urutan item"
                                                     className={`inline-flex items-center justify-center w-6 h-7 rounded-md transition-colors cursor-grab active:cursor-grabbing select-none ${
@@ -1105,7 +1398,7 @@ const getProductDisplayName = (prod) => {
                                                     ) : (
                                                         <div
                                                             className="flex flex-col min-w-0 flex-1 cursor-pointer justify-center"
-                                                            onClick={() => setOpenDropdownIdx(idx)}
+                                                            onClick={() => { if (!isQuotationLocked) setOpenDropdownIdx(idx); }}
                                                         >
                                                             <div className={`text-sm font-bold truncate flex items-center gap-2 ${item.name ? 'text-surface-900' : 'text-surface-400'}`}>
                                                                 <span className="truncate">{item.name || 'Pilih / cari produk...'}</span>
@@ -1128,9 +1421,11 @@ const getProductDisplayName = (prod) => {
                                                             <button
                                                                 type="button"
                                                                 onClick={(e) => {
+                                                                    if (isQuotationLocked) return;
                                                                     e.stopPropagation();
                                                                     openEditCustomItem(idx);
                                                                 }}
+                                                                disabled={isQuotationLocked}
                                                                 title="Edit detail item produk"
                                                                 className="p-1 hover:text-brand-600 hover:bg-brand-50 rounded transition-colors cursor-pointer"
                                                             >
@@ -1140,9 +1435,11 @@ const getProductDisplayName = (prod) => {
                                                         <button
                                                             type="button"
                                                             onClick={(e) => {
+                                                                if (isQuotationLocked) return;
                                                                 e.stopPropagation();
                                                                 setOpenDropdownIdx(openDropdownIdx === idx ? null : idx);
                                                             }}
+                                                            disabled={isQuotationLocked}
                                                             className="p-1 hover:text-surface-600 transition-colors cursor-pointer"
                                                         >
                                                             <ChevronDown className="w-3.5 h-3.5" />
@@ -1200,6 +1497,7 @@ const getProductDisplayName = (prod) => {
                                                         type="text"
                                                         value={item.brand}
                                                         onChange={e => handleItemChange(idx, 'brand', e.target.value)}
+                                                        disabled={isQuotationLocked}
                                                         placeholder="Brand"
                                                         className="w-full text-xs border border-surface-200 rounded-lg px-2 py-1.5 outline-none focus:border-brand-500 bg-surface-50"
                                                     />
@@ -1213,6 +1511,7 @@ const getProductDisplayName = (prod) => {
                                                     min="1"
                                                     value={item.qty ?? 1}
                                                     onChange={e => handleItemChange(idx, 'qty', Number(e.target.value))}
+                                                    disabled={isQuotationLocked}
                                                     className="w-14 text-center text-xs font-bold text-surface-900 border border-surface-200 rounded-lg px-1 py-1.5 outline-none focus:border-brand-500 bg-white shadow-xs mx-auto block [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                                                 />
                                             </td>
@@ -1222,6 +1521,7 @@ const getProductDisplayName = (prod) => {
                                                 <EditableCurrencyInput
                                                     value={item.hpp}
                                                     onChange={val => { handleItemChange(idx, 'hpp', Number(val)); }}
+                                                    disabled={isQuotationLocked}
                                                     className="w-full text-right text-xs font-mono border border-surface-200 rounded-lg px-2 py-1.5 outline-none focus:border-brand-500 bg-surface-50"
                                                     placeholder="0"
                                                 />
@@ -1233,6 +1533,7 @@ const getProductDisplayName = (prod) => {
                                                     <button
                                                         type="button"
                                                         onClick={() => toggleMarginMode(idx)}
+                                                        disabled={isQuotationLocked}
                                                         title={item.margin_mode === 'rp' ? 'Klik untuk ubah ke mode Persentase (%)' : 'Klik untuk ubah ke mode Nominal (Rp)'}
                                                         className={`px-2 py-1 text-xs font-bold rounded-md shrink-0 select-none cursor-pointer transition-colors ${
                                                             item.margin_mode === 'rp'
@@ -1247,6 +1548,7 @@ const getProductDisplayName = (prod) => {
                                                         <EditableCurrencyInput
                                                             value={item.margin_value}
                                                             onChange={val => handleItemChange(idx, 'margin_value', Number(val))}
+                                                            disabled={isQuotationLocked}
                                                             onBlur={() => handleItemBlur(idx)}
                                                             className={`w-28 text-right text-xs font-mono font-bold border rounded-lg px-2 py-1.5 outline-none focus:border-brand-500 ${
                                                                 item.margin < MARGIN_MIN && item.price > 0 ? 'border-red-300 bg-red-50 text-red-700' : 'border-surface-200 bg-surface-50 text-surface-700'
@@ -1258,6 +1560,7 @@ const getProductDisplayName = (prod) => {
                                                             type="number"
                                                             value={item.margin ?? 0}
                                                             onChange={e => handleItemChange(idx, 'margin', Number(e.target.value))}
+                                                            disabled={isQuotationLocked}
                                                             onBlur={() => handleItemBlur(idx)}
                                                             className={`w-16 text-center text-xs font-bold border rounded-lg px-2 py-1.5 outline-none focus:border-brand-500 ${
                                                                 item.margin < MARGIN_MIN && item.price > 0 ? 'border-red-300 bg-red-50 text-red-700' : 'border-surface-200 bg-surface-50 text-surface-700'
@@ -1273,6 +1576,7 @@ const getProductDisplayName = (prod) => {
                                                 <EditableCurrencyInput
                                                     value={item.price}
                                                     onChange={val => { handleItemChange(idx, 'price', Number(val)); }}
+                                                    disabled={isQuotationLocked}
                                                     className="w-full text-right text-xs font-mono border border-surface-200 rounded-lg px-2 py-1.5 outline-none focus:border-brand-500 bg-surface-50"
                                                     placeholder="0"
                                                 />
@@ -1285,9 +1589,21 @@ const getProductDisplayName = (prod) => {
 
                                             {/* Delete */}
                                             <td className="py-2 px-3 text-center">
+                                                {!isQuotationLocked && (moveTargets.length > 0 || canReturnItemToMain) && (quotation?.relation_type === 'split' || !allocatedSplitItemIds.includes(Number(item.id))) && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => openMoveItemModal(item)}
+                                                        className="mb-1 inline-flex h-7 items-center justify-center gap-1 rounded-md border border-brand-200 px-2 text-[10px] font-semibold text-brand-600 transition-colors hover:bg-brand-50"
+                                                        title="Pindahkan item ke sub quotation lain"
+                                                    >
+                                                        <ArrowRightLeft className="h-3 w-3" />
+                                                        Pindahkan
+                                                    </button>
+                                                )}
                                                 <button
                                                     type="button"
                                                     onClick={() => handleRemoveItemRow(idx)}
+                                                    disabled={isQuotationLocked}
                                                     className="w-7 h-7 rounded-md flex items-center justify-center text-surface-300 hover:text-red-500 hover:bg-red-50 transition-colors cursor-pointer mx-auto"
                                                 >
                                                     <Trash2 className="w-3.5 h-3.5" />
@@ -1317,7 +1633,7 @@ const getProductDisplayName = (prod) => {
                                 {calcPph && (
                                     <div className="flex items-center gap-8 text-xs text-surface-600">
                                         <span className="w-32 text-right">PPh ({Math.round(pphRate * 100)}%)</span>
-                                        <span className="font-bold text-surface-800 w-36 text-right">- {formatCurrency(pphAmount)}</span>
+                                        <span className="font-bold text-surface-800 w-36 text-right">{formatCurrency(pphAmount)}</span>
                                     </div>
                                 )}
                                 <div className="w-44 h-px bg-surface-200 ml-auto" />
@@ -1342,6 +1658,7 @@ const getProductDisplayName = (prod) => {
                         items: items,
                     }}
                     currentUser={currentUser}
+                    disabled={isQuotationLocked}
                 />
 
                 {/* ─── Syarat & Ketentuan Card ─────────────── */}
@@ -1357,6 +1674,7 @@ const getProductDisplayName = (prod) => {
                         <button
                             type="button"
                             onClick={() => setShowSaveTplModal(true)}
+                            disabled={isQuotationLocked}
                             className="flex items-center gap-1.5 text-xs font-semibold text-brand-600 border border-brand-200 bg-brand-50 hover:bg-brand-100 px-3 py-1.5 rounded-lg transition-colors cursor-pointer"
                         >
                             <BookmarkPlus className="w-3.5 h-3.5" /> Simpan sebagai Template Baru
@@ -1368,6 +1686,7 @@ const getProductDisplayName = (prod) => {
                                 <label className="text-xs font-semibold text-surface-500 block mb-1">Template Preset:</label>
                                 <select
                                     onChange={e => { if (e.target.value) handleSelectTemplate(e.target.value); e.target.value = ''; }}
+                                    disabled={isQuotationLocked}
                                     className="text-xs border border-surface-200 rounded-lg px-2 py-1.5 bg-surface-50 text-surface-700 outline-none focus:border-brand-500 cursor-pointer max-w-full"
                                     defaultValue=""
                                 >
@@ -1392,6 +1711,7 @@ const getProductDisplayName = (prod) => {
                         <textarea
                             value={termsText}
                             onChange={e => setTermsText(e.target.value)}
+                            disabled={isQuotationLocked}
                             rows={6}
                             placeholder="Masukkan syarat & ketentuan (satu per baris)..."
                             className="w-full bg-surface-50 border border-surface-200 rounded-lg px-3 py-2.5 text-sm text-surface-700 outline-none focus:border-brand-500 transition-colors resize-y"
@@ -1410,13 +1730,60 @@ const getProductDisplayName = (prod) => {
                     </Link>
                     <button
                         onClick={handleSaveClick}
-                        disabled={isSaving}
+                        disabled={isQuotationLocked || isSaving}
                         className="flex items-center gap-2 px-6 py-2.5 text-sm font-bold bg-brand-500 text-white rounded-xl hover:bg-brand-600 shadow-sm transition-all cursor-pointer disabled:opacity-60"
                     >
                         {isSaving ? <><Loader2 className="w-4 h-4 animate-spin" /> Menyimpan...</> : <><Save className="w-4 h-4" /> Simpan Perubahan</>}
                     </button>
                 </div>
             </div>
+
+            {/* ─── Add Customer PIC Modal ─────── */}
+            {showAddPicModal && ReactDOM.createPortal(
+                <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-surface-900/60 p-4 backdrop-blur-sm">
+                    <form onSubmit={handleSavePic} className="w-full max-w-md overflow-hidden rounded-2xl bg-white shadow-2xl">
+                        <div className="flex items-start justify-between border-b border-surface-100 px-6 py-5"><div><h3 className="text-base font-bold text-surface-900">Tambah PIC Customer</h3><p className="mt-1 text-xs text-surface-500">PIC akan ditambahkan ke {selectedCustomer?.name || 'customer ini'}.</p></div><button type="button" onClick={() => setShowAddPicModal(false)} disabled={isSavingPic} className="rounded-lg p-1.5 text-surface-400 hover:bg-surface-100"><X className="h-5 w-5" /></button></div>
+                        <div className="space-y-3 p-6">
+                            <label className="block text-xs font-semibold text-surface-700">Nama PIC <span className="text-red-500">*</span><input autoFocus required value={newPic.name} onChange={e => setNewPic(prev => ({ ...prev, name: e.target.value }))} className="mt-1.5 w-full rounded-lg border border-surface-200 px-3 py-2.5 text-sm font-normal" placeholder="Nama kontak customer" /></label>
+                            <label className="block text-xs font-semibold text-surface-700">Email<input type="email" value={newPic.email} onChange={e => setNewPic(prev => ({ ...prev, email: e.target.value }))} className="mt-1.5 w-full rounded-lg border border-surface-200 px-3 py-2.5 text-sm font-normal" placeholder="email@customer.co.id" /></label>
+                            <label className="block text-xs font-semibold text-surface-700">Nomor Telepon<input value={newPic.phone} onChange={e => setNewPic(prev => ({ ...prev, phone: e.target.value }))} className="mt-1.5 w-full rounded-lg border border-surface-200 px-3 py-2.5 text-sm font-normal" placeholder="08xxxxxxxxxx" /></label>
+                            <label className="flex items-center gap-2 text-xs font-semibold text-surface-700"><input type="checkbox" checked={newPic.is_primary} onChange={e => setNewPic(prev => ({ ...prev, is_primary: e.target.checked }))} className="h-4 w-4 accent-brand-600" /> Jadikan PIC utama</label>
+                        </div>
+                        <div className="flex justify-end gap-3 border-t border-surface-100 bg-surface-50 px-6 py-4"><button type="button" onClick={() => setShowAddPicModal(false)} disabled={isSavingPic} className="rounded-lg border border-surface-200 bg-white px-4 py-2 text-xs font-semibold">Batal</button><button type="submit" disabled={isSavingPic || !newPic.name.trim()} className="rounded-lg bg-brand-600 px-4 py-2 text-xs font-bold text-white disabled:opacity-50">{isSavingPic ? 'Menyimpan...' : 'Simpan PIC'}</button></div>
+                    </form>
+                </div>,
+                document.body
+            )}
+
+            {/* ─── Bulk PO Modal ─────── */}
+            {showBulkPoModal && ReactDOM.createPortal(
+                <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-surface-900/60 p-4 backdrop-blur-sm">
+                    <form onSubmit={submitBulkPo} className="flex max-h-[90vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
+                        <div className="flex items-start justify-between border-b border-surface-100 px-6 py-5">
+                            <div><h3 className="text-base font-bold text-surface-900">Input PO Utama & Sub Quotation</h3><p className="mt-1 text-xs text-surface-500">Satu kali simpan untuk quotation utama dan seluruh sub quotation.</p></div>
+                            <button type="button" onClick={() => setShowBulkPoModal(false)} disabled={isSavingBulkPo} className="rounded-lg p-1.5 text-surface-400 hover:bg-surface-100"><X className="h-5 w-5" /></button>
+                        </div>
+                        {Object.keys(bulkPoErrors).length > 0 && <div className="mx-6 mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-xs text-red-700">Periksa kembali data PO dan dokumen yang wajib diisi.</div>}
+                        <div className="space-y-4 overflow-y-auto p-6">
+                            {bulkPoRows.map((row, index) => {
+                                const documentUrl = row.po_document_path ? (row.po_document_path.startsWith('http') ? row.po_document_path : `/storage/${row.po_document_path}`) : null;
+                                return <div key={row.id} className="rounded-xl border border-surface-200 bg-surface-50/50 p-4">
+                                    <div className="mb-3 flex flex-wrap items-center justify-between gap-2"><div><div className="text-sm font-bold text-surface-900">{row.label} · <span className="font-mono text-brand-700">{row.id}</span></div><div className="mt-0.5 text-xs text-surface-500">{row.items_count || 0} item · {formatCurrency(row.grand_total || 0)}</div></div>{row.po_status && <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-[10px] font-bold text-emerald-700">Data PO tersimpan</span>}</div>
+                                    <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
+                                        <label className="text-xs font-semibold text-surface-700">Status PO <span className="text-red-500">*</span><select value={row.status} onChange={(e) => updateBulkPoRow(row.id, 'status', e.target.value)} className="mt-1.5 w-full rounded-lg border border-surface-200 bg-white px-3 py-2 text-sm font-normal" required><option value="Diterima">Diterima</option><option value="Dibatalkan">Dibatalkan</option></select></label>
+                                        <label className="text-xs font-semibold text-surface-700">Nomor PO <span className="text-red-500">*</span><input value={row.po_number} onChange={(e) => updateBulkPoRow(row.id, 'po_number', e.target.value)} className="mt-1.5 w-full rounded-lg border border-surface-200 bg-white px-3 py-2 text-sm font-normal" placeholder="Nomor PO customer" required /></label>
+                                        <label className="text-xs font-semibold text-surface-700">Tanggal PO <span className="text-red-500">*</span><input type="date" value={row.po_date} onChange={(e) => updateBulkPoRow(row.id, 'po_date', e.target.value)} className="mt-1.5 w-full rounded-lg border border-surface-200 bg-white px-3 py-2 text-sm font-normal" required /></label>
+                                        <label className="text-xs font-semibold text-surface-700">Dokumen PO <span className="text-red-500">*</span><input type="file" accept=".pdf,.jpg,.jpeg,.png" onChange={(e) => updateBulkPoRow(row.id, 'po_document', e.target.files?.[0] || null)} className="mt-1.5 block w-full rounded-lg border border-surface-200 bg-white px-2 py-1.5 text-xs font-normal" required={!row.po_document_path} />{documentUrl && !row.po_document && <a href={documentUrl} target="_blank" rel="noreferrer" className="mt-1 block text-[11px] font-semibold text-brand-700 hover:underline">Lihat dokumen tersimpan</a>}</label>
+                                    </div>
+                                    {bulkPoErrors[`entries.${index}.po_document`] && <div className="mt-2 text-xs text-red-600">{bulkPoErrors[`entries.${index}.po_document`]}</div>}
+                                </div>;
+                            })}
+                        </div>
+                        <div className="flex justify-end gap-3 border-t border-surface-100 bg-surface-50 px-6 py-4"><button type="button" onClick={() => setShowBulkPoModal(false)} disabled={isSavingBulkPo} className="rounded-lg border border-surface-200 bg-white px-4 py-2 text-xs font-semibold">Batal</button><button type="submit" disabled={isSavingBulkPo} className="flex items-center gap-2 rounded-lg bg-brand-600 px-4 py-2 text-xs font-bold text-white disabled:opacity-50">{isSavingBulkPo ? <Loader2 className="h-4 w-4 animate-spin" /> : <UploadCloud className="h-4 w-4" />}{isSavingBulkPo ? 'Menyimpan...' : 'Simpan Semua & Generate SO'}</button></div>
+                    </form>
+                </div>,
+                document.body
+            )}
 
             {/* ─── Draft Confirmation Modal ─────── */}
             {showDraftModal && ReactDOM.createPortal(
@@ -1440,6 +1807,132 @@ const getProductDisplayName = (prod) => {
                 document.body
             )}
 
+            {/* ─── Sub Quotation Modal ───── */}
+            {showSubQuotationModal && ReactDOM.createPortal(
+                <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-surface-900/60 backdrop-blur-sm animate-fade-in">
+                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden animate-scale-in">
+                        <div className="px-6 py-5 border-b border-surface-100 flex items-start justify-between gap-4">
+                            <div>
+                                <div className="flex items-center gap-2">
+                                    <div className="p-2 rounded-lg bg-brand-50 text-brand-600"><Layers className="w-5 h-5" /></div>
+                                    <h3 className="text-base font-bold text-surface-900">Buat Sub Quotation</h3>
+                                </div>
+                                <p className="text-xs text-surface-500 mt-2 leading-relaxed">
+                                    Pilih item yang masuk ke sub quotation baru. Item yang tidak dipilih tetap berada di quotation utama.
+                                </p>
+                            </div>
+                            <button type="button" onClick={() => setShowSubQuotationModal(false)} className="p-1.5 text-surface-400 hover:text-surface-700 rounded-lg hover:bg-surface-100 cursor-pointer">
+                                <X className="w-5 h-5" />
+                            </button>
+                        </div>
+
+                        <div className="px-6 py-4 max-h-[45vh] overflow-y-auto space-y-2">
+                            {items.filter(item => item.id != null && (item.name || item.sku)).map((item, idx) => {
+                                const itemId = item.id;
+                                const alreadyAllocated = allocatedSplitItemIds.includes(Number(itemId));
+                                const checked = selectedSubItemIds.includes(itemId);
+                                return (
+                                    <label key={itemId ?? idx} className={`flex items-center gap-3 rounded-xl border p-3 transition-colors ${alreadyAllocated ? 'border-surface-100 bg-surface-50 opacity-60 cursor-not-allowed' : `cursor-pointer ${checked ? 'border-brand-300 bg-brand-50/60' : 'border-surface-200 hover:bg-surface-50'}`}`}>
+                                        <input
+                                            type="checkbox"
+                                            checked={checked}
+                                            disabled={alreadyAllocated}
+                                            onChange={() => setSelectedSubItemIds(prev => checked ? prev.filter(id => id !== itemId) : [...prev, itemId])}
+                                            className="w-4 h-4 accent-brand-600"
+                                        />
+                                        <span className="w-6 text-xs font-bold text-surface-400">{idx + 1}</span>
+                                        <span className="min-w-0 flex-1">
+                                            <span className="block text-sm font-semibold text-surface-800 truncate">{item.name || item.sku}</span>
+                                            <span className="block text-xs text-surface-500 mt-0.5">{alreadyAllocated ? 'Sudah dialokasikan ke sub quotation lain' : `${item.sku || 'SKU belum diisi'} · Qty ${item.qty}`}</span>
+                                        </span>
+                                        <span className="text-xs font-semibold text-surface-500">{formatCurrency(Number(item.qty || 0) * Number(item.price || 0))}</span>
+                                    </label>
+                                );
+                            })}
+                            {items.some(item => item.id == null && (item.name || item.sku)) && (
+                                <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
+                                    Item baru yang belum tersimpan belum bisa dipilih. Simpan quotation terlebih dahulu, lalu buka kembali modal ini.
+                                </p>
+                            )}
+                            {!items.some(item => item.id != null && (item.name || item.sku)) && (
+                                <p className="text-xs text-surface-500 py-4 text-center">Belum ada item tersimpan yang dapat dipisahkan.</p>
+                            )}
+                            {subQuotationError && <p className="text-xs text-red-600 pt-2">{subQuotationError}</p>}
+                        </div>
+
+                        <div className="px-6 py-4 border-t border-surface-100 flex items-center justify-between gap-3">
+                            <span className="text-xs text-surface-500">{selectedSubItemIds.length} item dipilih</span>
+                            <div className="flex items-center gap-3">
+                                <button type="button" onClick={() => setShowSubQuotationModal(false)} disabled={isCreatingSubQuotation} className="px-4 py-2.5 text-xs font-semibold text-surface-600 bg-surface-100 rounded-xl hover:bg-surface-200 cursor-pointer disabled:opacity-50">Batal</button>
+                                <button type="button" onClick={handleCreateSubQuotation} disabled={isCreatingSubQuotation} className="px-4 py-2.5 text-xs font-bold text-white bg-brand-500 rounded-xl hover:bg-brand-600 cursor-pointer disabled:opacity-60 flex items-center gap-2">
+                                    {isCreatingSubQuotation ? <Loader2 className="w-4 h-4 animate-spin" /> : <Layers className="w-4 h-4" />}
+                                    Buat Draft Sub Quotation
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>,
+                document.body
+            )}
+
+            {/* ─── Move Item Modal ───── */}
+            {showMoveItemModal && itemToMove && ReactDOM.createPortal(
+                <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-surface-900/60 p-4 backdrop-blur-sm animate-fade-in">
+                    <div className="w-full max-w-md overflow-hidden rounded-2xl bg-white shadow-2xl animate-scale-in">
+                        <div className="flex items-start justify-between border-b border-surface-100 px-6 py-5">
+                            <div>
+                                <div className="flex items-center gap-2">
+                                    <div className="rounded-lg bg-brand-50 p-2 text-brand-600"><ArrowRightLeft className="h-5 w-5" /></div>
+                                    <h3 className="text-base font-bold text-surface-900">Pindahkan Item</h3>
+                                </div>
+                                <p className="mt-2 text-xs leading-relaxed text-surface-500">
+                                    Pilih sub quotation tujuan untuk item <strong>{itemToMove.name || itemToMove.sku}</strong>.
+                                </p>
+                            </div>
+                            <button type="button" onClick={() => { if (!isMovingItem) { setShowMoveItemModal(false); setItemToMove(null); } }} className="rounded-lg p-1.5 text-surface-400 hover:bg-surface-100 hover:text-surface-700">
+                                <X className="h-5 w-5" />
+                            </button>
+                        </div>
+                        <div className="space-y-2 p-6">
+                            {moveTargets.map(target => (
+                                <button
+                                    key={target.id}
+                                    type="button"
+                                    disabled={isMovingItem}
+                                    onClick={() => handleMoveItem(target.id)}
+                                    className="flex w-full items-center justify-between rounded-xl border border-surface-200 px-4 py-3 text-left transition-colors hover:border-brand-300 hover:bg-brand-50 disabled:cursor-not-allowed disabled:opacity-60"
+                                >
+                                    <span>
+                                        <span className="block text-sm font-bold text-surface-800">{target.id}</span>
+                                        <span className="mt-0.5 block text-xs text-surface-500">Status: {target.status || 'created'}</span>
+                                    </span>
+                                    <ArrowRightLeft className="h-4 w-4 text-brand-600" />
+                                </button>
+                            ))}
+                            {canReturnItemToMain && (
+                                <button
+                                    type="button"
+                                    disabled={isMovingItem}
+                                    onClick={() => handleMoveItem('__main__')}
+                                    className="flex w-full items-center justify-between rounded-xl border border-amber-200 bg-amber-50/50 px-4 py-3 text-left transition-colors hover:bg-amber-50 disabled:cursor-not-allowed disabled:opacity-60"
+                                >
+                                    <span>
+                                        <span className="block text-sm font-bold text-amber-800">Quotation Utama</span>
+                                        <span className="mt-0.5 block text-xs text-amber-700">Kembalikan item dan lepaskan alokasinya</span>
+                                    </span>
+                                    <ArrowRightLeft className="h-4 w-4 text-amber-600" />
+                                </button>
+                            )}
+                            {moveTargets.length === 0 && <p className="py-3 text-center text-xs text-surface-500">Belum ada sub quotation tujuan yang tersedia.</p>}
+                        </div>
+                        <div className="flex justify-end border-t border-surface-100 px-6 py-4">
+                            <button type="button" onClick={() => { setShowMoveItemModal(false); setItemToMove(null); }} disabled={isMovingItem} className="rounded-xl bg-surface-100 px-4 py-2.5 text-xs font-semibold text-surface-600 hover:bg-surface-200 disabled:opacity-50">Batal</button>
+                        </div>
+                    </div>
+                </div>,
+                document.body
+            )}
+
             {/* ─── PO / SO Confirmation Modal ───── */}
             {showSOConfirmModal && ReactDOM.createPortal(
                 <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-surface-900/60 backdrop-blur-sm animate-fade-in">
@@ -1456,6 +1949,43 @@ const getProductDisplayName = (prod) => {
                             Sistem akan secara otomatis <strong>men-generate dokumen Sales Order (SO)</strong> berdasarkan quotation ini. Lanjutkan?
                         </p>
 
+                        <div className="space-y-3 mb-5">
+                            <div>
+                                <label className="flex items-center gap-1.5 text-xs font-semibold text-surface-700 mb-1">
+                                    <span>Status PO <span className="text-red-500">*</span></span>
+                                    <span className="relative group inline-flex">
+                                        <CircleHelp className="w-3.5 h-3.5 text-surface-400 hover:text-brand-600 cursor-help" />
+                                        <span className="pointer-events-none absolute left-5 top-1/2 z-20 hidden w-64 -translate-y-1/2 rounded-lg bg-surface-900 px-3 py-2 text-[11px] font-normal leading-relaxed text-white shadow-lg group-hover:block">
+                                            Gunakan sub quotation untuk membagi item ke beberapa PO. Dibatalkan = PO customer dibatalkan.
+                                        </span>
+                                    </span>
+                                </label>
+                                <select value={poStatus} onChange={e => { setPoStatus(e.target.value); setPoFormErrors(prev => ({ ...prev, po_status: null })); }} className={`w-full rounded-lg border text-sm ${poFormErrors.po_status ? 'border-red-400' : 'border-surface-200'}`}>
+                                    {poStatus === 'Sebagian' && <option value="Sebagian">Sebagian (data lama)</option>}
+                                    <option value="Diterima">Diterima</option>
+                                    <option value="Dibatalkan">Dibatalkan</option>
+                                </select>
+                                {poFormErrors.po_status && <p className="mt-1 text-[11px] text-red-600">{poFormErrors.po_status}</p>}
+                            </div>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                <div>
+                                    <label className="block text-xs font-semibold text-surface-700 mb-1">Nomor PO <span className="text-red-500">*</span></label>
+                                    <input value={poNumber} onChange={e => { setPoNumber(e.target.value); setPoFormErrors(prev => ({ ...prev, po_number: null })); }} placeholder="Nomor PO customer" className={`w-full rounded-lg border text-sm ${poFormErrors.po_number ? 'border-red-400' : 'border-surface-200'}`} />
+                                    {poFormErrors.po_number && <p className="mt-1 text-[11px] text-red-600">{poFormErrors.po_number}</p>}
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-semibold text-surface-700 mb-1">Tanggal PO <span className="text-red-500">*</span></label>
+                                    <input type="date" value={poDate} onChange={e => { setPoDate(e.target.value); setPoFormErrors(prev => ({ ...prev, po_date: null })); }} className={`w-full rounded-lg border text-sm ${poFormErrors.po_date ? 'border-red-400' : 'border-surface-200'}`} />
+                                    {poFormErrors.po_date && <p className="mt-1 text-[11px] text-red-600">{poFormErrors.po_date}</p>}
+                                </div>
+                            </div>
+                            <div>
+                                <label className="block text-xs font-semibold text-surface-700 mb-1">Dokumen PO <span className="text-red-500">*</span> <span className="font-normal text-surface-500">(PDF/JPG/PNG, maks. 10 MB)</span></label>
+                                <input type="file" accept=".pdf,.jpg,.jpeg,.png" onChange={e => { setPoDocument(e.target.files?.[0] || null); setPoFormErrors(prev => ({ ...prev, po_document: null })); }} className={`w-full text-xs ${poFormErrors.po_document ? 'text-red-600' : ''}`} />
+                                {poFormErrors.po_document && <p className="mt-1 text-[11px] text-red-600">{poFormErrors.po_document}</p>}
+                            </div>
+                        </div>
+
                         <div className="flex items-center justify-end gap-3 pt-4 border-t border-surface-100">
                             <button
                                 type="button"
@@ -1467,7 +1997,7 @@ const getProductDisplayName = (prod) => {
                             </button>
                             <button
                                 type="button"
-                                onClick={() => executeSave('approved')}
+                                onClick={handleApproveSubmit}
                                 className="px-5 py-2.5 text-xs font-bold text-white bg-emerald-600 rounded-xl hover:bg-emerald-700 transition-all shadow-sm flex items-center gap-2 cursor-pointer"
                                 disabled={isSaving}
                             >

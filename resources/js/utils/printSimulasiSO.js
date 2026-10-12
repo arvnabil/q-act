@@ -903,7 +903,7 @@ export function populateSimulasiSOTemplate(workbook, q, adjustments = [], curren
 // Template asset URL resolved at build/runtime. Kept inside the function so the
 // PDF path (printSimulasiSO) never depends on ExcelJS or the template asset.
 function templateFileUrl() {
-    return new URL('../templates/SO_Analysis_Template.xlsx', import.meta.url);
+    return '/templates/SO_Analysis_Template.xlsx';
 }
 
 export async function exportSimulasiSOExcel(q, adjustments = [], currentUser = null) {

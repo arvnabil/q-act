@@ -25,6 +25,7 @@ class UserFactory extends Factory
     public function definition(): array
     {
         return [
+            'sales_code' => 'TST-'.fake()->unique()->numberBetween(10000, 99999),
             'name' => fake()->name(),
             'email' => fake()->unique()->safeEmail(),
             'email_verified_at' => now(),

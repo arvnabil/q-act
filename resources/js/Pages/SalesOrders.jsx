@@ -2,9 +2,9 @@ import React, { useState } from 'react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head, Link, router, usePage } from '@inertiajs/react';
 import { Search, FileStack, CheckCircle2, Trash2 } from 'lucide-react';
+import { formatMoney } from '@/utils/money';
 
-const formatCurrency = (val) =>
-    new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(val || 0);
+const formatCurrency = (val) => formatMoney(val);
 
 const formatDate = (str) => {
     if (!str) return '-';

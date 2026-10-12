@@ -14,7 +14,8 @@ class SalesOrder extends Model
 
     protected $fillable = [
         'id', 'quotation_id', 'customer_id', 'sales_id', 'bu_id',
-        'date', 'po_number', 'po_date', 'status',
+        'parent_sales_order_id',
+        'date', 'po_number', 'po_date', 'po_status', 'po_document_path', 'status',
         'total_item_value', 'total_cost', 'grand_total',
     ];
 
@@ -63,4 +64,7 @@ class SalesOrder extends Model
     {
         return $this->hasMany(SalesOrderCost::class, 'so_id');
     }
+
+    public function parentSalesOrder(): BelongsTo { return $this->belongsTo(self::class, 'parent_sales_order_id'); }
+    public function revisedSalesOrders(): HasMany { return $this->hasMany(self::class, 'parent_sales_order_id'); }
 }

@@ -46,12 +46,16 @@ class AnalyticsController extends Controller
 
             $qInMonth = $quotations->filter(fn($q) => $q->created_at && $q->created_at >= $mStart && $q->created_at <= $mEnd);
             $approvedInMonth = $qInMonth->where('status', 'approved');
+            $poInMonth = $approved->filter(function ($q) use ($mStart, $mEnd) {
+                $poDate = $q->po_date ?: $q->created_at;
+                return $poDate && Carbon::parse($poDate)->betweenIncluded($mStart, $mEnd);
+            });
 
             $monthlyTrend[] = [
                 'month'      => $monthDate->locale('id')->translatedFormat('M'),
-                'revenue'    => (float) $approvedInMonth->sum('grand_total'),
+                'revenue'    => (float) $poInMonth->sum('grand_total'),
                 'quotations' => $qInMonth->count(),
-                'approved'   => $approvedInMonth->count(),
+                'approved'   => $poInMonth->count(),
             ];
         }
 

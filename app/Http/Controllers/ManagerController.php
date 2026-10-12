@@ -6,6 +6,7 @@ use App\Models\Quotation;
 use App\Models\BusinessUnit;
 use App\Models\User;
 use App\Models\ActivityLog;
+use App\Models\ChangeRequest;
 use App\Models\Notification;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -55,11 +56,23 @@ class ManagerController extends Controller
             ])->values()->toArray(),
         ]);
 
+        $pendingChangeRequests = ChangeRequest::with(['quotation.customer', 'salesOrder', 'requester'])
+            ->where('status', 'pending')->latest()->get()->map(fn ($cr) => [
+                'id' => $cr->id,
+                'type' => $cr->type,
+                'reason' => $cr->reason,
+                'created_at' => $cr->created_at?->toIso8601String(),
+                'quotation' => $cr->quotation ? ['id' => $cr->quotation->id, 'status' => $cr->quotation->status, 'customer' => $cr->quotation->customer?->name] : null,
+                'sales_order' => $cr->salesOrder ? ['id' => $cr->salesOrder->id, 'status' => $cr->salesOrder->status] : null,
+                'requester' => $cr->requester ? ['id' => $cr->requester->id, 'name' => $cr->requester->name] : null,
+            ]);
+
         return Inertia::render('Manager', [
             'activeQuotations' => $activeQuotations,
             'trashQuotations'  => $trashQuotations,
             'salesUsers'       => $salesUsers,
             'businessUnits'    => $businessUnits,
+            'pendingChangeRequests' => $pendingChangeRequests,
         ]);
     }
 

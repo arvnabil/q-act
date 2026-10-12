@@ -5,6 +5,7 @@ import { Head, usePage, router } from '@inertiajs/react';
 import { 
   Plus, Edit, Trash2, Star, Building2, CreditCard, Loader2, X, FileText, Wrench, ImageIcon, Globe 
 } from 'lucide-react';
+import { toast } from 'react-hot-toast';
 
 export default function Settings({ 
   companyInfo: initialCompanyInfo = {}, 
@@ -61,7 +62,7 @@ export default function Settings({
   const handleSaveBank = (e) => {
     e.preventDefault();
     if (!bankForm.bank_name.trim() || !bankForm.account_number.trim() || !bankForm.account_name.trim()) {
-      alert('Semua kolom wajib diisi.');
+      toast.error('Semua kolom wajib diisi.');
       return;
     }
     setIsSavingBank(true);
@@ -127,7 +128,7 @@ export default function Settings({
   const handleSaveMaster = (e) => {
     e.preventDefault();
     if (!masterForm.name.trim() || !masterForm.termsText.trim()) {
-      alert('Nama dan isi syarat & ketentuan wajib diisi!');
+      toast.error('Nama dan isi syarat & ketentuan wajib diisi!');
       return;
     }
 
@@ -172,7 +173,7 @@ export default function Settings({
     e.preventDefault();
     const d = domainForm.domain.trim().toLowerCase().replace(/^@/, '');
     const l = domainForm.logoPath.trim();
-    if (!d || !l) { alert('Domain dan path logo wajib diisi!'); return; }
+    if (!d || !l) { toast.error('Domain dan path logo wajib diisi!'); return; }
 
     let updated;
     if (editingDomainEntry) {
@@ -190,7 +191,7 @@ export default function Settings({
       );
     } else {
       if (domainMapList.some(e => e.domain.toLowerCase() === d)) {
-        alert(`Domain @${d} sudah terdaftar!`);
+        toast.error(`Domain @${d} sudah terdaftar!`);
         return;
       }
       updated = [...domainMapList, { 

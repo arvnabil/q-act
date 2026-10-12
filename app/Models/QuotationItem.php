@@ -10,14 +10,14 @@ class QuotationItem extends Model
     public $timestamps = false;
 
     protected $fillable = [
-        'quotation_id', 'product_id', 'sku', 'name', 'brand', 'description', 'image_url',
+        'quotation_id', 'source_quotation_item_id', 'product_id', 'sku', 'name', 'brand', 'description', 'image_url',
         'qty', 'hpp', 'price', 'margin', 'is_pph_applied', 'sort_order',
     ];
 
     protected $casts = [
         'qty'            => 'integer',
-        'hpp'            => 'integer',
-        'price'          => 'integer',
+        'hpp'            => 'float',
+        'price'          => 'float',
         'margin'         => 'float',
         'is_pph_applied' => 'boolean',
         'sort_order'     => 'integer',
@@ -34,7 +34,7 @@ class QuotationItem extends Model
         return $this->belongsTo(Product::class, 'sku', 'sku');
     }
 
-    public function getSubtotalAttribute(): int
+    public function getSubtotalAttribute(): float
     {
         return ($this->qty ?? 0) * ($this->price ?? 0);
     }

@@ -100,10 +100,10 @@ return new class extends Migration
             $table->foreignId('brand_id')->nullable()->constrained('brands')->nullOnDelete();
             $table->string('name');
             $table->text('description')->nullable();
-            $table->bigInteger('price')->default(0);
-            $table->bigInteger('pricelist_distributor')->default(0);
+            $table->decimal('price', 18, 2)->default(0);
+            $table->decimal('pricelist_distributor', 18, 2)->default(0);
             $table->decimal('diskon_distributor', 8, 2)->default(0);
-            $table->bigInteger('modal')->default(0);
+            $table->decimal('modal', 18, 2)->default(0);
             $table->decimal('margin_sales', 8, 2)->default(0);
             $table->text('image_url')->nullable();
             $table->boolean('is_active')->default(true);
@@ -170,8 +170,8 @@ return new class extends Migration
             $table->string('quotation_id', 30);
             $table->string('sku', 50)->nullable();
             $table->integer('qty')->default(1);
-            $table->bigInteger('hpp')->default(0);
-            $table->bigInteger('price')->default(0);
+            $table->decimal('hpp', 18, 2)->default(0);
+            $table->decimal('price', 18, 2)->default(0);
             $table->decimal('margin', 8, 2)->default(0);
             $table->boolean('is_pph_applied')->default(false);
             $table->integer('sort_order')->default(0);

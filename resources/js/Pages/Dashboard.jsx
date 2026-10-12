@@ -4,7 +4,7 @@ import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head } from '@inertiajs/react';
 import {
     FileText, DollarSign, TrendingUp, CheckCircle2, ChevronRight,
-    Users, Target, Filter, Calendar, ChevronDown, Pencil, X
+    Users, Target, Filter, Calendar, ChevronDown, Pencil, X, AlertTriangle
 } from 'lucide-react';
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -32,6 +32,7 @@ const PERIOD_PRESETS = [
     { key: '3m',     label: '3 Bln',  months: 3 },
     { key: '6m',     label: '6 Bln',  months: 6 },
     { key: '12m',    label: '12 Bln', months: 12 },
+    { key: 'quarter', label: 'Quarter', months: null },
     { key: 'custom', label: 'Custom', months: null },
 ];
 
@@ -77,6 +78,7 @@ export default function Dashboard({ stats, salesUsers, filters, auth }) {
     const isManagerOrAdmin = ['Administrator', 'Sales Manager', 'Manager'].includes(user?.spatie_role || user?.role);
 
     const [period, setPeriod] = useState(filters?.period || '6m');
+    const [basis, setBasis] = useState(filters?.basis || 'quotation');
     const [salesFilter, setSalesFilter] = useState(filters?.salesFilter || 'all');
     const [customStart, setCustomStart] = useState(filters?.customStart || '');
     const [customEnd, setCustomEnd] = useState(filters?.customEnd || '');
@@ -91,7 +93,11 @@ export default function Dashboard({ stats, salesUsers, filters, auth }) {
         chartMonths = [],
         topCustomers = [],
         salesPerf = [],
+        missingPoDateCount = 0,
     } = stats || {};
+
+    const isPoDashboard = basis === 'po';
+    const dashboardTitle = isPoDashboard ? 'Dashboard PO' : 'Dashboard Quotation';
 
     const [editingSales, setEditingSales] = useState(null);
     const [targetInputVal, setTargetInputVal] = useState('');
@@ -138,6 +144,7 @@ export default function Dashboard({ stats, salesUsers, filters, auth }) {
     const applyFilters = (overrides = {}) => {
         const params = {
             period: overrides.period ?? period,
+            basis: overrides.basis ?? basis,
             sales_filter: overrides.salesFilter ?? salesFilter,
             custom_start: overrides.customStart ?? customStart,
             custom_end: overrides.customEnd ?? customEnd,
@@ -153,6 +160,11 @@ export default function Dashboard({ stats, salesUsers, filters, auth }) {
     const handleSalesFilterChange = (val) => {
         setSalesFilter(val);
         applyFilters({ salesFilter: val });
+    };
+
+    const handleBasisChange = (key) => {
+        setBasis(key);
+        applyFilters({ basis: key });
     };
 
     // Donut chart
@@ -177,9 +189,46 @@ export default function Dashboard({ stats, salesUsers, filters, auth }) {
 
     return (
         <AuthenticatedLayout>
-            <Head title="Dashboard" />
+            <Head title={dashboardTitle} />
 
             <div className="animate-fade-in-up space-y-6">
+
+                {/* ── Reporting basis tabs ──────────────────────────────────── */}
+                <div className="bg-white rounded-xl border border-surface-200 p-1.5 shadow-sm inline-flex gap-1">
+                    <button
+                        type="button"
+                        onClick={() => handleBasisChange('quotation')}
+                        className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${
+                            !isPoDashboard ? 'bg-brand-600 text-white shadow-sm' : 'text-surface-600 hover:bg-surface-50'
+                        }`}
+                    >
+                        Dashboard Quotation
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => handleBasisChange('po')}
+                        className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${
+                            isPoDashboard ? 'bg-brand-600 text-white shadow-sm' : 'text-surface-600 hover:bg-surface-50'
+                        }`}
+                    >
+                        Dashboard PO
+                    </button>
+                </div>
+
+                {isPoDashboard && missingPoDateCount > 0 && (
+                    <div className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 shadow-sm">
+                        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+                        <div className="flex-1">
+                            <div className="font-bold">{missingPoDateCount} data PO belum memiliki tanggal PO</div>
+                            <div className="mt-0.5 text-xs text-amber-700">
+                                Data tersebut belum dihitung dalam Dashboard PO. Lengkapi tanggal PO dari detail Sales Order agar masuk ke laporan.
+                            </div>
+                        </div>
+                        <Link href="/sales-orders" className="shrink-0 text-xs font-bold text-amber-800 underline underline-offset-2 hover:text-amber-950">
+                            Lihat SO
+                        </Link>
+                    </div>
+                )}
 
                 {/* ── Filter Bar ─────────────────────────────────────────────── */}
                 <div className="bg-white rounded-xl border border-surface-200 px-5 py-4 flex flex-wrap items-center gap-3 shadow-sm">
@@ -259,35 +308,35 @@ export default function Dashboard({ stats, salesUsers, filters, auth }) {
                     <KpiCard
                         icon={FileText} iconBg="bg-blue-50" iconColor="text-blue-600"
                         value={<span>{totalQ}</span>}
-                        label="Total Quotation"
-                        sub="Dalam periode terpilih"
+                        label={isPoDashboard ? 'Total PO' : 'Total Quotation'}
+                        sub={isPoDashboard ? 'Berdasarkan tanggal PO' : 'Berdasarkan tanggal quotation'}
                     />
                     <KpiCard
                         icon={DollarSign} iconBg="bg-violet-50" iconColor="text-violet-600"
                         value={formatShort(totalAllValue)}
-                        label="Value All Quotation"
-                        sub={<span title={formatFull(totalAllValue)}>Total semua penawaran</span>}
+                        label={isPoDashboard ? 'Value All PO' : 'Value All Quotation'}
+                        sub={<span title={formatFull(totalAllValue)}>{isPoDashboard ? 'Total nilai PO' : 'Total semua penawaran'}</span>}
                         subColor="text-violet-600"
                     />
                     <div className="bg-white rounded-xl border border-surface-200 p-5 hover:shadow-md hover:border-surface-300 transition-all duration-200 flex flex-col gap-2">
                         <div className="w-10 h-10 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center">
                             <CheckCircle2 className="w-5 h-5" />
                         </div>
-                        <div className="text-2xl font-extrabold text-surface-900 leading-tight">{formatShort(totalPOValue)}</div>
-                        <div className="text-sm text-surface-500">PO Status</div>
-                        <div className="text-xs font-medium text-emerald-600">{approvedCount} PO • {formatFull(totalPOValue)}</div>
+                        <div className="text-2xl font-extrabold text-surface-900 leading-tight">{isPoDashboard ? approvedCount : formatShort(totalPOValue)}</div>
+                        <div className="text-sm text-surface-500">{isPoDashboard ? 'Quotation Menjadi PO' : 'Quotation Menjadi PO'}</div>
+                        <div className="text-xs font-medium text-emerald-600">{isPoDashboard ? 'Sumber data PO pada periode ini' : `${approvedCount} PO • ${formatFull(totalPOValue)}`}</div>
                     </div>
                     <div className="bg-white rounded-xl border border-surface-200 p-5 hover:shadow-md hover:border-surface-300 transition-all duration-200 flex flex-col gap-2">
                         <div className="flex items-start justify-between">
                             <div className="w-10 h-10 rounded-lg bg-purple-50 text-purple-600 flex items-center justify-center">
                                 <TrendingUp className="w-5 h-5" />
                             </div>
-                            <ConversionRing pct={conversionRate} />
+                            {isPoDashboard ? <span className="text-xs font-bold text-purple-600 bg-purple-50 rounded-full px-2 py-1">PO</span> : <ConversionRing pct={conversionRate} />}
                         </div>
-                        <div className="text-2xl font-extrabold text-surface-900 leading-tight">{conversionRate}%</div>
-                        <div className="text-sm text-surface-500">Conversion Rate</div>
+                        <div className="text-2xl font-extrabold text-surface-900 leading-tight">{isPoDashboard ? formatShort(totalQ > 0 ? totalPOValue / totalQ : 0) : `${conversionRate}%`}</div>
+                        <div className="text-sm text-surface-500">{isPoDashboard ? 'Rata-rata Nilai PO' : 'Conversion Rate'}</div>
                         <div className={`text-xs font-medium ${conversionRate >= 30 ? 'text-emerald-600' : conversionRate >= 15 ? 'text-amber-600' : 'text-red-500'}`}>
-                            {conversionRate >= 30 ? '🔥 Excellent' : conversionRate >= 15 ? '⚡ On Track' : '⚠️ Needs Push'} · {approvedCount}/{totalQ} PO
+                            {isPoDashboard ? 'Rata-rata dari PO pada periode terpilih' : `${conversionRate >= 30 ? '🔥 Excellent' : conversionRate >= 15 ? '⚡ On Track' : '⚠️ Needs Push'} · ${approvedCount}/${totalQ} PO`}
                         </div>
                     </div>
                 </div>
@@ -298,15 +347,15 @@ export default function Dashboard({ stats, salesUsers, filters, auth }) {
                     {/* Revenue Comparison Chart */}
                     <div className="lg:col-span-8 bg-white rounded-xl border border-surface-200 p-5 shadow-sm">
                         <div className="flex items-center justify-between pb-4 border-b border-surface-100">
-                            <h2 className="text-sm font-bold text-surface-800">Revenue Quotation</h2>
+                            <h2 className="text-sm font-bold text-surface-800">{isPoDashboard ? 'Revenue PO' : 'Revenue Quotation'}</h2>
                             <div className="flex items-center gap-4 text-xs text-surface-500">
-                                <span className="flex items-center gap-1.5">
+                                {!isPoDashboard && <span className="flex items-center gap-1.5">
                                     <span className="w-2.5 h-2.5 rounded-sm bg-blue-200 inline-block" />
                                     Non-PO
-                                </span>
+                                </span>}
                                 <span className="flex items-center gap-1.5">
                                     <span className="w-2.5 h-2.5 rounded-sm bg-emerald-500 inline-block" />
-                                    PO
+                                    {isPoDashboard ? 'PO berdasarkan tanggal PO' : 'PO'}
                                 </span>
                             </div>
                         </div>
@@ -321,7 +370,7 @@ export default function Dashboard({ stats, salesUsers, filters, auth }) {
                                     {chartMonths.map((m, idx) => {
                                         const totalVal = m.revPO + m.revNonPO;
                                         const hPO = maxChartVal > 0 ? Math.round((m.revPO / maxChartVal) * 130) : 0;
-                                        const hNonPO = maxChartVal > 0 ? Math.round((m.revNonPO / maxChartVal) * 130) : 0;
+                                        const hNonPO = !isPoDashboard && maxChartVal > 0 ? Math.round((m.revNonPO / maxChartVal) * 130) : 0;
                                         return (
                                             <div key={idx} className="flex flex-col items-center gap-1 flex-1 min-w-[60px]">
                                                 <div className="text-[10px] font-semibold text-surface-600 whitespace-nowrap">
@@ -351,9 +400,9 @@ export default function Dashboard({ stats, salesUsers, filters, auth }) {
                     {/* Status Donut */}
                     <div className="lg:col-span-4 bg-white rounded-xl border border-surface-200 p-5 shadow-sm flex flex-col">
                         <div className="pb-3 border-b border-surface-100 flex items-center justify-between">
-                            <h2 className="text-sm font-bold text-surface-800">Status Quotation</h2>
+                            <h2 className="text-sm font-bold text-surface-800">{isPoDashboard ? 'Status PO' : 'Status Quotation'}</h2>
                             {isManagerOrAdmin && (
-                                <span className="text-[10px] text-surface-400 bg-surface-50 border border-surface-100 rounded px-2 py-0.5">Klik untuk filter</span>
+                                <span className="text-[10px] text-surface-400 bg-surface-50 border border-surface-100 rounded px-2 py-0.5">{isPoDashboard ? 'Berdasarkan tanggal PO' : 'Klik untuk filter'}</span>
                             )}
                         </div>
 
@@ -404,9 +453,9 @@ export default function Dashboard({ stats, salesUsers, filters, auth }) {
                     {/* Top 5 Customer by PO Value */}
                     <div className="lg:col-span-5 bg-white rounded-xl border border-surface-200 p-5 shadow-sm">
                         <div className="flex items-center justify-between pb-3 border-b border-surface-100 mb-3">
-                            <h2 className="text-sm font-bold text-surface-800 flex items-center gap-2">
+                                <h2 className="text-sm font-bold text-surface-800 flex items-center gap-2">
                                 <Users className="w-4 h-4 text-brand-500" />
-                                Top 5 Customer (PO)
+                                Top 5 Customer ({isPoDashboard ? 'PO' : 'Quotation'})
                             </h2>
                             <Link href="/customers" className="text-xs font-semibold text-brand-600 hover:text-brand-700 flex items-center gap-1">
                                 Lihat Semua <ChevronRight className="w-3.5 h-3.5" />
@@ -414,7 +463,7 @@ export default function Dashboard({ stats, salesUsers, filters, auth }) {
                         </div>
 
                         {topCustomers.length === 0 ? (
-                            <div className="text-center py-10 text-xs text-surface-400">Belum ada data PO.</div>
+                            <div className="text-center py-10 text-xs text-surface-400">Belum ada data {isPoDashboard ? 'PO' : 'quotation'}.</div>
                         ) : (
                             <div className="space-y-1">
                                 {topCustomers.map((c, i) => {
@@ -438,7 +487,7 @@ export default function Dashboard({ stats, salesUsers, filters, auth }) {
                                             </div>
                                             <div className="text-right shrink-0">
                                                 <div className="text-sm font-bold text-surface-800">{formatShort(c.poValue)}</div>
-                                                <div className="text-[10px] text-surface-400">{c.poCount} PO</div>
+                                                <div className="text-[10px] text-surface-400">{c.poCount} {isPoDashboard ? 'PO' : 'Quotation'}</div>
                                             </div>
                                         </div>
                                     );

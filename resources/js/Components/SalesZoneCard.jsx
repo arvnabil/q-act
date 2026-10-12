@@ -46,7 +46,7 @@ function marginColor(pct, isNegative) {
 }
 
 // ─── Main component ────────────────────────────────────────────────────────────
-export default function SalesZoneCard({ items = [], quotationId, quotation = null, currentUser = null }) {
+export default function SalesZoneCard({ items = [], quotationId, quotation = null, currentUser = null, disabled = false }) {
     const [isOpen, setIsOpen] = useState(false);
     const [adjustments, setAdjustments] = useState([]);
     const [saveStatus, setSaveStatus] = useState('idle'); // idle | dirty | saving | saved | error
@@ -327,6 +327,7 @@ const CATEGORY_OPTIONS = [
                                     <button
                                         type="button"
                                         onClick={handleAddAdjustment}
+                                        disabled={disabled}
                                         className="flex items-center gap-1 text-xs font-semibold text-violet-600 bg-violet-100 border border-violet-200 px-2.5 py-1 rounded-lg hover:bg-violet-200 transition-colors"
                                     >
                                         <Plus className="w-3 h-3" /> Tambah
@@ -345,6 +346,7 @@ const CATEGORY_OPTIONS = [
                                                     value={adj.category || 'Transport & Accommodation'}
                                                     onChange={e => handleChangeAdjustment(adj.id, 'category', e.target.value)}
                                                     onBlur={handleBlurAdjustment}
+                                                    disabled={disabled}
                                                     className="w-full sm:w-48 text-xs border border-violet-200 bg-white rounded-lg px-2.5 py-1.5 text-surface-700 outline-none focus:border-violet-400 font-medium"
                                                 >
                                                     {CATEGORY_OPTIONS.map(cat => (
@@ -357,6 +359,7 @@ const CATEGORY_OPTIONS = [
                                                     value={adj.label || ''}
                                                     onChange={e => handleChangeAdjustment(adj.id, 'label', e.target.value)}
                                                     onBlur={handleBlurAdjustment}
+                                                    disabled={disabled}
                                                     className="flex-1 min-w-0 text-xs border border-violet-200 bg-white rounded-lg px-3 py-1.5 text-surface-700 outline-none focus:outline-none focus:ring-0 focus:border-violet-400 placeholder-surface-300"
                                                 />
                                                 <div className="flex items-center bg-white border border-violet-200 rounded-lg px-2 py-1.5 gap-1 w-full sm:w-36 shrink-0 focus-within:border-violet-400">
@@ -367,12 +370,14 @@ const CATEGORY_OPTIONS = [
                                                         value={adj.amount}
                                                         onChange={e => handleChangeAdjustment(adj.id, 'amount', e.target.value)}
                                                         onBlur={handleBlurAdjustment}
+                                                        disabled={disabled}
                                                         className="w-full text-xs text-right bg-transparent border-none outline-none focus:outline-none focus:ring-0 text-surface-800 font-mono [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                                                     />
                                                 </div>
                                                 <button
                                                     type="button"
                                                     onClick={() => handleDeleteAdjustment(adj.id)}
+                                                    disabled={disabled}
                                                     className="w-7 h-7 shrink-0 flex items-center justify-center text-surface-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
                                                     title="Hapus"
                                                 >

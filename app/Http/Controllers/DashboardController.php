@@ -21,13 +21,16 @@ class DashboardController extends Controller
 
         // Period defaults to last 6 months
         $period = $request->get('period', '6m');
+        $basis = in_array($request->get('basis', 'quotation'), ['quotation', 'po'], true)
+            ? $request->get('basis', 'quotation')
+            : 'quotation';
         $customStart = $request->get('custom_start');
         $customEnd = $request->get('custom_end');
         $salesFilter = $request->get('sales_filter', 'all');
 
         [$periodStart, $periodEnd] = $this->getPeriodRange($period, $customStart, $customEnd);
 
-        // Base query - fetch active quotations in period for dashboard metrics
+        // Quotation pipeline follows quotation creation date.
         $quotationQuery = Quotation::active()
             ->with(['customer', 'sales', 'items'])
             ->whereBetween('created_at', [$periodStart, $periodEnd]);
@@ -41,39 +44,84 @@ class DashboardController extends Controller
 
         $quotations = $quotationQuery->get();
 
+        // PO revenue follows the manually entered PO date. This allows a
+        // quotation created in an earlier period to be reported in the quarter
+        // where the customer actually issued the PO.
+        $approvedPoQuery = Quotation::active()
+            ->with(['customer', 'sales', 'items'])
+            ->where('status', 'approved')
+            ->whereBetween('po_date', [$periodStart->toDateString(), $periodEnd->toDateString()]);
+
+        if ($salesFilter !== 'all') {
+            $approvedPoQuery->where(function ($q) use ($salesFilter) {
+                $q->where('sales_id', $salesFilter)->orWhere('created_by', $salesFilter);
+            });
+        }
+
+        $approvedPoQuotations = $approvedPoQuery->get();
+
+        // Existing approved records without PO date are intentionally excluded
+        // from PO reporting until their metadata is completed from the SO.
+        $missingPoDateQuery = Quotation::active()
+            ->where('status', 'approved')
+            ->whereNull('po_date');
+        if ($salesFilter !== 'all') {
+            $missingPoDateQuery->where(function ($q) use ($salesFilter) {
+                $q->where('sales_id', $salesFilter)->orWhere('created_by', $salesFilter);
+            });
+        }
+        $missingPoDateCount = $missingPoDateQuery->count();
+        $approvedQuotationQuotations = $quotations->where('status', 'approved');
+
+        // The selected dashboard tab is the reporting source of truth. The
+        // quotation tab uses created_at; the PO tab uses the manually entered
+        // PO date and excludes records where that date is still missing.
+        $reportQuotations = $basis === 'po' ? $approvedPoQuotations : $quotations;
+        $approvedReportQuotations = $basis === 'po' ? $approvedPoQuotations : $approvedQuotationQuotations;
+
         // KPIs
-        $totalQ = $quotations->count();
-        $approvedQ = $quotations->where('status', 'approved');
-        $approvedCount = $approvedQ->count();
-        $totalAllValue = $quotations->sum('grand_total');
-        $totalPOValue = $approvedQ->sum('grand_total');
-        $conversionRate = $totalQ > 0 ? round(($approvedCount / $totalQ) * 100) : 0;
+        $totalQ = $reportQuotations->count();
+        $totalAllValue = $reportQuotations->sum('grand_total');
+        $totalPOValue = $approvedReportQuotations->sum('grand_total');
+        $approvedCount = $approvedReportQuotations->count();
+        $conversionRate = $quotations->count() > 0 ? round(($approvedCount / $quotations->count()) * 100) : 0;
 
         // Status counts
         $statusCounts = [
-            'approved' => $quotations->where('status', 'approved')->count(),
-            'sent' => $quotations->where('status', 'sent')->count(),
-            'created' => $quotations->whereIn('status', ['created', 'draft'])->count(),
-            'rejected' => $quotations->where('status', 'rejected')->count(),
-            'expired' => $quotations->where('status', 'expired')->count(),
+            'approved' => $approvedCount,
+            'sent' => $basis === 'po' ? 0 : $reportQuotations->where('status', 'sent')->count(),
+            'created' => $basis === 'po' ? 0 : $reportQuotations->whereIn('status', ['created', 'draft'])->count(),
+            'rejected' => $basis === 'po' ? 0 : $reportQuotations->where('status', 'rejected')->count(),
+            'expired' => $basis === 'po' ? 0 : $reportQuotations->where('status', 'expired')->count(),
         ];
 
         // Revenue chart — monthly
-        $chartMonths = $this->buildChartMonths($quotations, $periodStart, $periodEnd);
+        $chartMonths = $basis === 'po'
+            ? $this->buildChartMonths(collect(), $approvedReportQuotations, $periodStart, $periodEnd, true)
+            : $this->buildChartMonths($quotations, $approvedReportQuotations, $periodStart, $periodEnd, false);
 
         // Top 5 customers by PO value
         $customerMap = [];
-        foreach ($quotations as $q) {
+        foreach ($reportQuotations as $q) {
             $cid = $q->customer_id ?? 'unknown';
             $name = $q->customer?->name ?? 'Customer';
             if (!isset($customerMap[$cid])) {
                 $customerMap[$cid] = ['name' => $name, 'poValue' => 0, 'poCount' => 0, 'totalQ' => 0];
             }
             $customerMap[$cid]['totalQ']++;
-            if ($q->status === 'approved') {
+            if ($basis === 'quotation') {
                 $customerMap[$cid]['poValue'] += $q->grand_total ?? 0;
                 $customerMap[$cid]['poCount']++;
             }
+        }
+        foreach ($basis === 'po' ? $approvedReportQuotations : collect() as $q) {
+            $cid = $q->customer_id ?? 'unknown';
+            $name = $q->customer?->name ?? 'Customer';
+            if (!isset($customerMap[$cid])) {
+                $customerMap[$cid] = ['name' => $name, 'poValue' => 0, 'poCount' => 0, 'totalQ' => 0];
+            }
+            $customerMap[$cid]['poValue'] += $q->grand_total ?? 0;
+            $customerMap[$cid]['poCount']++;
         }
         usort($customerMap, fn($a, $b) => $b['poValue'] <=> $a['poValue']);
         $topCustomers = array_slice(array_values($customerMap), 0, 5);
@@ -86,14 +134,13 @@ class DashboardController extends Controller
         // Build salesPerf (all active quotations in system)
         $allQuotations = Quotation::active()->with('items')->get();
 
-        $salesPerf = $salesUsers->map(function ($s) use ($allQuotations, $salesTargets, $defaultTarget, $periodStart, $periodEnd) {
+        $salesPerf = $salesUsers->map(function ($s) use ($allQuotations, $salesTargets, $defaultTarget, $periodStart, $periodEnd, $basis) {
             $userQ = $allQuotations->filter(fn($q) =>
                 $q->sales_id === $s->id || $q->created_by === $s->id
             );
-            $periodQ = $userQ->filter(fn($q) =>
-                $q->created_at && $q->created_at >= $periodStart && $q->created_at <= $periodEnd
-            );
-            $achieved = $periodQ->where('status', 'approved')->sum('grand_total');
+            $achieved = $basis === 'po'
+                ? $userQ->filter(fn($q) => $q->status === 'approved' && $this->poDateInRange($q, $periodStart, $periodEnd))->sum('grand_total')
+                : $userQ->filter(fn($q) => $q->created_at && Carbon::parse($q->created_at)->betweenIncluded($periodStart, $periodEnd))->sum('grand_total');
             $target = $salesTargets[$s->id] ?? $defaultTarget;
 
             return [
@@ -116,6 +163,8 @@ class DashboardController extends Controller
                 'chartMonths' => $chartMonths,
                 'topCustomers' => $topCustomers,
                 'salesPerf' => $salesPerf,
+                'basis' => $basis,
+                'missingPoDateCount' => $missingPoDateCount,
             ],
             'salesUsers' => $salesUsers->map(fn($u) => ['id' => $u->id, 'name' => $u->name])->values(),
             'filters' => [
@@ -125,6 +174,7 @@ class DashboardController extends Controller
                 'customEnd' => $customEnd,
                 'periodStart' => $periodStart->toDateString(),
                 'periodEnd' => $periodEnd->toDateString(),
+                'basis' => $basis,
             ],
         ]);
     }
@@ -135,6 +185,13 @@ class DashboardController extends Controller
         if ($period === 'custom' && $customStart && $customEnd) {
             return [Carbon::parse($customStart)->startOfDay(), Carbon::parse($customEnd)->endOfDay()];
         }
+        if ($period === 'quarter') {
+            $quarterStartMonth = (int) (floor(($now->month - 1) / 3) * 3) + 1;
+            return [
+                $now->copy()->month($quarterStartMonth)->startOfMonth(),
+                $now->copy()->month($quarterStartMonth + 2)->endOfMonth(),
+            ];
+        }
         $months = match ($period) {
             '1m' => 1, '3m' => 3, '6m' => 6, '12m' => 12, default => 6,
         };
@@ -144,7 +201,7 @@ class DashboardController extends Controller
         ];
     }
 
-    private function buildChartMonths($quotations, Carbon $start, Carbon $end): array
+    private function buildChartMonths($quotations, $approvedReportQuotations, Carbon $start, Carbon $end, bool $usePoDate): array
     {
         $months = [];
         $cur = $start->copy()->startOfMonth();
@@ -155,12 +212,21 @@ class DashboardController extends Controller
             $inMonth = $quotations->filter(fn($q) =>
                 $q->created_at && $q->created_at >= $mStart && $q->created_at <= $mEnd
             );
-            $revPO = $inMonth->where('status', 'approved')->sum('grand_total');
+            $revPO = $approvedReportQuotations->filter(fn($q) => $usePoDate
+                ? $this->poDateInRange($q, $mStart, $mEnd)
+                : $q->created_at && Carbon::parse($q->created_at)->betweenIncluded($mStart, $mEnd)
+            )->sum('grand_total');
             $revNonPO = $inMonth->where('status', '!=', 'approved')->sum('grand_total');
             $months[] = ['label' => $label, 'revPO' => $revPO, 'revNonPO' => $revNonPO];
             $cur->addMonth();
         }
         return $months;
+    }
+
+    private function poDateInRange(Quotation $quotation, Carbon $start, Carbon $end): bool
+    {
+        $date = $quotation->po_date;
+        return $date && Carbon::parse($date)->betweenIncluded($start, $end);
     }
 
     private function getInitials(string $name): string

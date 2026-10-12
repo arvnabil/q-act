@@ -5,6 +5,7 @@ import { Head, router } from '@inertiajs/react';
 import { 
   Plus, Edit, Trash2, Users, Loader2, X, Building2, UserPlus, UserMinus, ChevronDown, ChevronUp, Shield, CheckCircle2 
 } from 'lucide-react';
+import { toast } from 'react-hot-toast';
 
 const ROLE_BADGE = {
   lead:   'bg-brand-50 text-brand-700 border border-brand-200',
@@ -57,7 +58,7 @@ export default function BusinessUnits({
   const handleCreate = (e) => {
     e.preventDefault();
     if (!createForm.name.trim() || !createForm.code.trim()) {
-      alert('Nama dan Kode BU wajib diisi.');
+      toast.error('Nama dan Kode BU wajib diisi.');
       return;
     }
     setIsSubmittingCreate(true);
@@ -74,7 +75,7 @@ export default function BusinessUnits({
   const handleUpdate = (e) => {
     e.preventDefault();
     if (!editingBU.name.trim() || !editingBU.code.trim()) {
-      alert('Nama dan Kode BU wajib diisi.');
+      toast.error('Nama dan Kode BU wajib diisi.');
       return;
     }
     setIsSubmittingEdit(true);
@@ -101,7 +102,7 @@ export default function BusinessUnits({
 
   const handleAddMember = (buId) => {
     if (!addMemberUserId) {
-      alert('Pilih user terlebih dahulu.');
+      toast.error('Pilih user terlebih dahulu.');
       return;
     }
     setIsSubmittingMember(true);

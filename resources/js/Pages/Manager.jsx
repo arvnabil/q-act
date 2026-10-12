@@ -17,6 +17,8 @@ const STATUS_TABS = [
   { key: 'approved', label: 'PO'       },
   { key: 'rejected', label: 'Rejected' },
   { key: 'expired',  label: 'Expired'  },
+  { key: 'cancelled', label: 'Cancelled' },
+  { key: 'superseded', label: 'Superseded' },
   { key: 'trash',    label: '🗑️ Trash / Terhapus' },
 ];
 
@@ -28,6 +30,9 @@ const statusClasses = (status) => {
     case 'approved': return 'bg-emerald-50 text-emerald-700 border border-emerald-200';
     case 'rejected': return 'bg-red-50 text-red-700 border border-red-200';
     case 'expired':  return 'bg-orange-50 text-orange-700 border border-orange-200';
+    case 'cancelled': return 'bg-red-50 text-red-700 border border-red-200';
+    case 'superseded': return 'bg-amber-50 text-amber-700 border border-amber-200';
+    case 'revision_draft': return 'bg-violet-50 text-violet-700 border border-violet-200';
     case 'deleted':  return 'bg-gray-100 text-gray-500 border border-gray-300';
     default:         return 'bg-surface-100 text-surface-600';
   }
@@ -48,7 +53,8 @@ export default function Manager({
   activeQuotations = [], 
   trashQuotations = [], 
   salesUsers = [], 
-  businessUnits = [] 
+  businessUnits = [],
+  pendingChangeRequests = []
 }) {
   const { auth } = usePage().props;
   const user = auth?.user || {};
@@ -152,6 +158,17 @@ export default function Manager({
     });
   };
 
+  const approveChangeRequest = (id) => {
+    if (!window.confirm('Setujui pengajuan ini? Dokumen lama akan ditandai cancelled/superseded.')) return;
+    router.post(route('change-requests.approve', id), {}, { preserveScroll: true });
+  };
+
+  const rejectChangeRequest = (id) => {
+    const manager_comment = window.prompt('Alasan penolakan:');
+    if (!manager_comment?.trim()) return;
+    router.post(route('change-requests.reject', id), { manager_comment }, { preserveScroll: true });
+  };
+
   // Selection toggle logic
   const handleToggleSelect = (id) => {
     setSelectedIds(prev => 
@@ -215,6 +232,14 @@ export default function Manager({
             <p className="text-xs text-surface-500">Monitoring seluruh penawaran tim sales, approval status, dan pengelolaan arsip quotation terhapus.</p>
           </div>
         </div>
+
+        {pendingChangeRequests.length > 0 && <div className="bg-amber-50 rounded-2xl border border-amber-200 p-5 shadow-sm">
+          <h3 className="text-sm font-bold text-amber-900 mb-3">Pengajuan Perubahan Menunggu Persetujuan ({pendingChangeRequests.length})</h3>
+          <div className="space-y-3">{pendingChangeRequests.map(cr => <div key={cr.id} className="bg-white rounded-xl border border-amber-100 p-4 flex flex-col md:flex-row md:items-center justify-between gap-3">
+            <div className="text-xs"><div className="font-bold text-surface-900">{cr.type === 'revision' ? 'Revisi' : 'Cancel PO'} · {cr.quotation?.id} · SO {cr.sales_order?.id || '-'}</div><div className="text-surface-600 mt-1">{cr.reason}</div><div className="text-surface-400 mt-1">Diajukan oleh {cr.requester?.name || '-'} </div></div>
+            <div className="flex gap-2 shrink-0"><button onClick={() => approveChangeRequest(cr.id)} className="px-3 py-2 rounded-lg bg-emerald-600 text-white text-xs font-bold">Setujui</button><button onClick={() => rejectChangeRequest(cr.id)} className="px-3 py-2 rounded-lg border border-red-200 text-red-600 text-xs font-bold">Tolak</button></div>
+          </div>)}</div>
+        </div>}
 
         {/* Summary KPI Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">

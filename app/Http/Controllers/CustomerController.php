@@ -92,6 +92,39 @@ class CustomerController extends Controller
         return back()->with('message', 'Customer berhasil ditambahkan.');
     }
 
+    public function storePic(Request $request, Customer $customer)
+    {
+        $validated = $request->validate([
+            'name' => 'required|string|max:255',
+            'email' => 'nullable|email|max:255',
+            'phone' => 'nullable|string|max:50',
+            'is_primary' => 'nullable|boolean',
+        ]);
+
+        if (! empty($validated['is_primary'])) {
+            $customer->pics()->update(['is_primary' => false]);
+        }
+
+        $pic = CustomerPic::create([
+            'customer_id' => $customer->id,
+            'name' => trim($validated['name']),
+            'email' => $validated['email'] ?? null,
+            'phone' => $validated['phone'] ?? null,
+            'is_primary' => ! empty($validated['is_primary']),
+            'created_by' => $request->user()->id,
+        ]);
+
+        return response()->json([
+            'pic' => [
+                'id' => $pic->id,
+                'name' => $pic->name,
+                'email' => $pic->email,
+                'phone' => $pic->phone,
+                'is_primary' => (bool) $pic->is_primary,
+            ],
+        ]);
+    }
+
     public function update(Request $request, Customer $customer)
     {
         $validated = $request->validate([
