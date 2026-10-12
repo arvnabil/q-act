@@ -174,7 +174,10 @@ export default function SalesOrderDetail({ so, costCategories = [], isFinance })
             toast.error('Deskripsi cost tidak boleh kosong');
             return;
         }
-        const amt = Number(newCostAmt.replace(/\D/g, ''));
+        const normalizedAmount = String(newCostAmt).includes(',')
+            ? String(newCostAmt).replace(/\./g, '').replace(',', '.')
+            : String(newCostAmt).replace(/\.(?=\d{3}(?:\D|$))/g, '');
+        const amt = Number(normalizedAmount);
         if (!amt || amt <= 0) {
             toast.error('Nominal cost tidak valid');
             return;
@@ -676,16 +679,17 @@ export default function SalesOrderDetail({ so, costCategories = [], isFinance })
                                         />
                                     </td>
                                     <td className="py-3 px-6">
-                                        <input
-                                            type="text"
-                                            placeholder="Rp 0"
-                                            className="w-full text-sm text-right font-mono bg-white border border-surface-300 rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500 outline-none transition-all"
-                                            value={newCostAmt}
-                                            onChange={e => {
-                                                const val = e.target.value.replace(/\D/g, '');
-                                                setNewCostAmt(val ? formatCurrency(val) : '');
-                                            }}
-                                        />
+                                        <div className="flex items-center gap-1 w-full bg-white border border-surface-300 rounded-lg px-3 py-2.5 focus-within:ring-2 focus-within:ring-brand-500/30 focus-within:border-brand-500 transition-all">
+                                            <span className="text-sm text-surface-500">Rp</span>
+                                            <input
+                                                type="text"
+                                                inputMode="decimal"
+                                                placeholder="0"
+                                                className="w-full text-sm text-right font-mono bg-transparent border-0 p-0 focus:ring-0 outline-none"
+                                                value={newCostAmt}
+                                                onChange={e => setNewCostAmt(e.target.value.replace(/[^0-9.,]/g, ''))}
+                                            />
+                                        </div>
                                     </td>
                                     <td className="py-3 px-6 text-center">
                                         <button
