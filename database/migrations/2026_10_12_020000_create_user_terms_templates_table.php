@@ -11,7 +11,9 @@ return new class extends Migration
         Schema::create('user_terms_templates', function (Blueprint $table) {
             $table->uuid('id')->primary();
             $table->foreignUuid('user_id')->constrained('users')->cascadeOnDelete();
-            $table->string('name');
+            // Keep the composite index below MySQL's 1000-byte limit on older
+            // hosting configurations using utf8mb4.
+            $table->string('name', 150);
             $table->json('terms');
             $table->timestamps();
             $table->index(['user_id', 'name']);
