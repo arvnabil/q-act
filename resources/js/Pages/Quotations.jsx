@@ -476,7 +476,7 @@ export default function Quotations({ quotations, isFinance }) {
                         </div>
 
                         <div className="flex items-center gap-2 w-full sm:w-auto mt-2 lg:mt-0">
-                            {!isFinance && ['Administrator', 'Sales Manager', 'Manager', 'Sales', 'Presales'].includes(user?.role) && (
+                            {auth?.permissions?.includes('quotations_import_legacy') && (
                                 <button onClick={() => setShowLegacyImport(true)} className="flex items-center justify-center gap-2 px-4 py-2 text-xs font-bold bg-white text-brand-700 border border-brand-200 rounded-lg hover:bg-brand-50 transition-all shadow-sm w-full sm:w-auto cursor-pointer">
                                     <UploadCloud className="w-4 h-4" /> Import Legacy
                                 </button>

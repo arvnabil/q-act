@@ -68,7 +68,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('/quotations/{quotation}/items/{item}/move', [QuotationController::class, 'moveItemToSubQuotation'])->name('quotations.items.move');
     Route::post('/quotations/{quotation}/purchase-orders', [QuotationController::class, 'addPurchaseOrder'])->name('quotations.purchase-orders.store');
     Route::post('/quotations/{quotation}/bulk-purchase-orders', [QuotationController::class, 'bulkPurchaseOrder'])->name('quotations.bulk-purchase-orders.store');
-    Route::post('/quotations/import-legacy', [QuotationController::class, 'importLegacy'])->name('quotations.import-legacy');
+    Route::post('/quotations/import-legacy', [QuotationController::class, 'importLegacy'])
+        ->middleware('permission:quotations_import_legacy')
+        ->name('quotations.import-legacy');
     Route::post('/quotations/{quotation}/change-requests', [ChangeRequestController::class, 'store'])->name('quotations.change-requests.store');
     Route::post('/quotations/{quotation}/new-from-cancelled', [ChangeRequestController::class, 'createFromCancelled'])->name('quotations.new-from-cancelled');
     Route::post('/quotation-templates', [SettingController::class, 'storePersonalTermsTemplate'])->name('quotation-templates.store');

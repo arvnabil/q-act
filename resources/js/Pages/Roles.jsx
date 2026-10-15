@@ -11,6 +11,7 @@ const FEATURE_LABELS = {
     'quotations_create': 'Quotations - Buat',
     'quotations_edit': 'Quotations - Edit',
     'quotations_delete': 'Quotations - Hapus',
+    'quotations_import_legacy': 'Quotations - Import Legacy',
     'sales_orders_view': 'Sales Orders - Lihat',
     'sales_orders_edit': 'Sales Orders - Edit / Kelola Biaya',
     'sales_orders_delete': 'Sales Orders - Hapus',

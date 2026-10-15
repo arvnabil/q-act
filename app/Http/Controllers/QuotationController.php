@@ -1538,10 +1538,6 @@ class QuotationController extends Controller
     public function importLegacy(Request $request)
     {
         $user = $request->user();
-        if (! in_array($user->role, ['Administrator', 'Sales Manager', 'Manager', 'Sales', 'Presales'], true)) {
-            return back()->withErrors(['import' => 'Role Anda tidak memiliki akses untuk mengimpor data historis.']);
-        }
-
         $data = $request->validate([
             'quotations' => 'required|array|min:1',
             'quotations.*.legacy_quotation_no' => 'required|string|max:30',

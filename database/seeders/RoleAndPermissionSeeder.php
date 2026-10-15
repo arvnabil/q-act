@@ -16,7 +16,7 @@ class RoleAndPermissionSeeder extends Seeder
 
         $permissions = [
             'dashboard', 'sales_targets_edit', 'quotations_view', 'quotations_create',
-            'quotations_edit', 'quotations_delete', 'sales_orders_view', 'sales_orders_edit',
+            'quotations_edit', 'quotations_delete', 'quotations_import_legacy', 'sales_orders_view', 'sales_orders_edit',
             'sales_orders_delete', 'sales_orders_delete_bulk', 'customers_view',
             'customers_create', 'customers_edit', 'customers_delete', 'products_view',
             'products_create', 'products_edit', 'products_delete', 'view_reports',
@@ -47,9 +47,9 @@ class RoleAndPermissionSeeder extends Seeder
         $defaults = [
             'Administrator' => $permissions,
             'Manager' => array_diff($permissions, ['user_management', 'manage_roles']),
-            'Sales Manager' => ['dashboard', 'quotations_view', 'quotations_create', 'quotations_edit', 'quotations_delete', 'sales_orders_view', 'sales_orders_edit', 'customers_view', 'customers_create', 'customers_edit', 'products_view', 'view_reports', 'manager_view'],
-            'Sales' => ['dashboard', 'quotations_view', 'quotations_create', 'quotations_edit', 'quotations_delete', 'sales_orders_view', 'sales_orders_edit', 'customers_view', 'customers_create', 'customers_edit', 'products_view'],
-            'Presales' => ['dashboard', 'quotations_view', 'quotations_create', 'quotations_edit', 'sales_orders_view', 'customers_view', 'products_view'],
+            'Sales Manager' => ['dashboard', 'quotations_view', 'quotations_create', 'quotations_edit', 'quotations_delete', 'quotations_import_legacy', 'sales_orders_view', 'sales_orders_edit', 'customers_view', 'customers_create', 'customers_edit', 'products_view', 'view_reports', 'manager_view'],
+            'Sales' => ['dashboard', 'quotations_view', 'quotations_create', 'quotations_edit', 'quotations_delete', 'quotations_import_legacy', 'sales_orders_view', 'sales_orders_edit', 'customers_view', 'customers_create', 'customers_edit', 'products_view'],
+            'Presales' => ['dashboard', 'quotations_view', 'quotations_create', 'quotations_edit', 'quotations_import_legacy', 'sales_orders_view', 'customers_view', 'products_view'],
             'Finance' => ['dashboard', 'quotations_view', 'sales_orders_view', 'sales_orders_edit', 'view_reports'],
         ];
 

@@ -18,6 +18,7 @@ const SYSTEM_PERMISSIONS = [
     'quotations_create',
     'quotations_edit',
     'quotations_delete',
+    'quotations_import_legacy',
     'sales_orders_view',
     'sales_orders_edit',
     'sales_orders_delete',
