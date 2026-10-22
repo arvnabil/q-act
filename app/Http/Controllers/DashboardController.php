@@ -177,10 +177,7 @@ class DashboardController extends Controller
             });
 
         if ($salesFilter !== 'all') {
-            $soQuery->where(function ($q) use ($salesFilter) {
-                $q->where('sales_id', $salesFilter)
-                  ->orWhere('created_by', $salesFilter);
-            });
+            $soQuery->where('sales_id', $salesFilter);
         }
 
         $tableSalesOrders = $soQuery->orderByDesc('date')->orderByDesc('created_at')->get()->map(function ($so) {
