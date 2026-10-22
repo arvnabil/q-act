@@ -1,13 +1,35 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Link, router } from '@inertiajs/react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
+import Pagination from '@/Components/Pagination';
 import { Head } from '@inertiajs/react';
 import {
     FileText, DollarSign, TrendingUp, CheckCircle2, ChevronRight,
-    Users, Target, Filter, Calendar, ChevronDown, Pencil, X, AlertTriangle
+    Users, Target, Filter, Calendar, ChevronDown, Pencil, X, AlertTriangle,
+    Search, ShoppingCart
 } from 'lucide-react';
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
+
+const formatDate = (str) => {
+    if (!str) return '-';
+    try {
+        const d = new Date(str);
+        return d.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
+    } catch { return str; }
+};
+
+const statusBadge = (status) => {
+    switch (status) {
+        case 'approved': return { label: 'PO', cls: 'bg-emerald-50 text-emerald-700 border-emerald-200' };
+        case 'sent':     return { label: 'Sent', cls: 'bg-blue-50 text-blue-700 border-blue-200' };
+        case 'created':
+        case 'draft':    return { label: 'Draft', cls: 'bg-surface-100 text-surface-600 border-surface-200' };
+        case 'rejected': return { label: 'Rejected', cls: 'bg-red-50 text-red-700 border-red-200' };
+        case 'expired':  return { label: 'Expired', cls: 'bg-amber-50 text-amber-700 border-amber-200' };
+        default:         return { label: status || '-', cls: 'bg-surface-100 text-surface-600 border-surface-200' };
+    }
+};
 
 const formatShort = (val) => {
     if (!val || val === 0) return 'Rp 0';
@@ -72,7 +94,7 @@ function ConversionRing({ pct }) {
 
 // ─── Main Component ──────────────────────────────────────────────────────────
 
-export default function Dashboard({ stats, salesUsers, filters, auth }) {
+export default function Dashboard({ stats, salesUsers, filters, auth, tableQuotations = [], tableSalesOrders = [] }) {
     const { user, permissions = [] } = auth || {};
     const canEditTarget = permissions.includes('sales_targets_edit') || ['Administrator', 'Sales Manager', 'Manager'].includes(user?.spatie_role || user?.role);
     const isManagerOrAdmin = ['Administrator', 'Sales Manager', 'Manager'].includes(user?.spatie_role || user?.role);
@@ -82,6 +104,11 @@ export default function Dashboard({ stats, salesUsers, filters, auth }) {
     const [salesFilter, setSalesFilter] = useState(filters?.salesFilter || 'all');
     const [customStart, setCustomStart] = useState(filters?.customStart || '');
     const [customEnd, setCustomEnd] = useState(filters?.customEnd || '');
+
+    // Table search & pagination state
+    const [tableSearch, setTableSearch] = useState('');
+    const [tablePage, setTablePage] = useState(1);
+    const [tablePageSize, setTablePageSize] = useState(10);
 
     const {
         totalQ = 0,
@@ -98,6 +125,57 @@ export default function Dashboard({ stats, salesUsers, filters, auth }) {
 
     const isPoDashboard = basis === 'po';
     const dashboardTitle = isPoDashboard ? 'Dashboard PO' : 'Dashboard Quotation';
+
+    // Reset table pagination when filters change
+    useEffect(() => {
+        setTablePage(1);
+    }, [basis, period, salesFilter, tableSearch]);
+
+    // Filter & Paginate Quotation data
+    const filteredQuotations = useMemo(() => {
+        if (!tableSearch) return tableQuotations;
+        const s = tableSearch.toLowerCase().trim();
+        return (tableQuotations || []).filter(q => {
+            return (
+                q.id?.toLowerCase().includes(s) ||
+                q.customer?.name?.toLowerCase().includes(s) ||
+                q.sales?.name?.toLowerCase().includes(s) ||
+                q.status?.toLowerCase().includes(s) ||
+                (q.date && formatDate(q.date).toLowerCase().includes(s)) ||
+                (q.grand_total != null && String(q.grand_total).includes(s))
+            );
+        });
+    }, [tableQuotations, tableSearch]);
+
+    const paginatedQuotations = useMemo(() => {
+        const start = (tablePage - 1) * tablePageSize;
+        return filteredQuotations.slice(start, start + tablePageSize);
+    }, [filteredQuotations, tablePage, tablePageSize]);
+
+    // Filter & Paginate Sales Order data
+    const filteredSalesOrders = useMemo(() => {
+        if (!tableSearch) return tableSalesOrders;
+        const s = tableSearch.toLowerCase().trim();
+        return (tableSalesOrders || []).filter(so => {
+            return (
+                so.id?.toLowerCase().includes(s) ||
+                so.quotation_id?.toLowerCase().includes(s) ||
+                so.customer?.name?.toLowerCase().includes(s) ||
+                so.sales?.name?.toLowerCase().includes(s) ||
+                so.status?.toLowerCase().includes(s) ||
+                so.po_number?.toLowerCase().includes(s) ||
+                so.po_status?.toLowerCase().includes(s) ||
+                (so.date && formatDate(so.date).toLowerCase().includes(s)) ||
+                (so.po_date && formatDate(so.po_date).toLowerCase().includes(s)) ||
+                (so.grand_total != null && String(so.grand_total).includes(s))
+            );
+        });
+    }, [tableSalesOrders, tableSearch]);
+
+    const paginatedSalesOrders = useMemo(() => {
+        const start = (tablePage - 1) * tablePageSize;
+        return filteredSalesOrders.slice(start, start + tablePageSize);
+    }, [filteredSalesOrders, tablePage, tablePageSize]);
 
     const [editingSales, setEditingSales] = useState(null);
     const [targetInputVal, setTargetInputVal] = useState('');
@@ -224,7 +302,10 @@ export default function Dashboard({ stats, salesUsers, filters, auth }) {
                                 Data tersebut belum dihitung dalam Dashboard PO. Lengkapi tanggal PO dari detail Sales Order agar masuk ke laporan.
                             </div>
                         </div>
-                        <Link href="/sales-orders" className="shrink-0 text-xs font-bold text-amber-800 underline underline-offset-2 hover:text-amber-950">
+                        <Link
+                            href={`/sales-orders?tab=missing_po_date${salesFilter && salesFilter !== 'all' ? `&sales_id=${salesFilter}` : ''}`}
+                            className="shrink-0 text-xs font-bold text-amber-800 underline underline-offset-2 hover:text-amber-950"
+                        >
                             Lihat SO
                         </Link>
                     </div>
@@ -611,6 +692,272 @@ export default function Dashboard({ stats, salesUsers, filters, auth }) {
                             </div>
                         )}
                     </div>
+                </div>
+
+                {/* ── Data Table Section (Quotation Table for Dashboard Quotation, SO Table for Dashboard PO) ── */}
+                <div className="bg-white rounded-xl border border-surface-200 shadow-sm overflow-hidden">
+                    {/* Header */}
+                    <div className="px-5 py-4 border-b border-surface-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <div>
+                            <div className="flex items-center gap-2">
+                                {!isPoDashboard ? (
+                                    <FileText className="w-4 h-4 text-brand-600" />
+                                ) : (
+                                    <ShoppingCart className="w-4 h-4 text-emerald-600" />
+                                )}
+                                <h2 className="text-sm font-bold text-surface-900">
+                                    {!isPoDashboard ? 'Data Quotation (Periode Aktif)' : 'Data Sales Order / PO (Periode Aktif)'}
+                                </h2>
+                                <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-surface-100 text-surface-600">
+                                    {!isPoDashboard ? filteredQuotations.length : filteredSalesOrders.length} data
+                                </span>
+                            </div>
+                            <p className="mt-1 text-xs text-surface-500">
+                                {!isPoDashboard
+                                    ? `Menampilkan data quotation sesuai periode aktif (${filters?.periodStart || '-'} s/d ${filters?.periodEnd || '-'}).`
+                                    : `Menampilkan data Sales Order yang PO-nya masuk pada periode aktif (${filters?.periodStart || '-'} s/d ${filters?.periodEnd || '-'}).`}
+                            </p>
+                        </div>
+
+                        <div className="flex items-center gap-3">
+                            {/* Quick search */}
+                            <div className="flex items-center gap-2 bg-surface-50 border border-surface-200 rounded-lg px-2.5 py-1.5 focus-within:border-brand-400 focus-within:bg-white transition-colors">
+                                <Search className="w-3.5 h-3.5 text-surface-400 shrink-0" />
+                                <input
+                                    type="text"
+                                    placeholder="Cari dalam tabel..."
+                                    value={tableSearch}
+                                    onChange={e => {
+                                        setTableSearch(e.target.value);
+                                        setTablePage(1);
+                                    }}
+                                    className="bg-transparent border-none outline-none text-xs text-surface-700 placeholder-surface-400 w-36 sm:w-48"
+                                />
+                                {tableSearch && (
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setTableSearch('');
+                                            setTablePage(1);
+                                        }}
+                                        className="text-xs text-surface-400 hover:text-surface-600 px-0.5 cursor-pointer"
+                                    >
+                                        ✕
+                                    </button>
+                                )}
+                            </div>
+
+                            {/* Link to full index page */}
+                            <Link
+                                href={!isPoDashboard ? '/quotations' : '/sales-orders'}
+                                className="inline-flex items-center gap-1 text-xs font-bold text-brand-600 hover:text-brand-800 hover:underline shrink-0"
+                            >
+                                <span>{!isPoDashboard ? 'Buka Semua Quotation' : 'Buka Semua SO'}</span>
+                                <ChevronRight className="w-3.5 h-3.5" />
+                            </Link>
+                        </div>
+                    </div>
+
+                    {/* Table for Dashboard Quotation */}
+                    {!isPoDashboard && (
+                        <div>
+                            {filteredQuotations.length === 0 ? (
+                                <div className="text-center py-12 text-xs text-surface-400">
+                                    Belum ada data quotation pada periode dan filter ini.
+                                </div>
+                            ) : (
+                                <div className="overflow-x-auto">
+                                    <table className="w-full text-left border-collapse">
+                                        <thead>
+                                            <tr className="bg-surface-50/70 border-b border-surface-200">
+                                                <th className="py-3 px-4 text-xs font-bold text-surface-500 uppercase tracking-wider">No. Quotation</th>
+                                                <th className="py-3 px-4 text-xs font-bold text-surface-500 uppercase tracking-wider">Tanggal</th>
+                                                <th className="py-3 px-4 text-xs font-bold text-surface-500 uppercase tracking-wider">Customer</th>
+                                                <th className="py-3 px-4 text-xs font-bold text-surface-500 uppercase tracking-wider">Sales</th>
+                                                <th className="py-3 px-4 text-center text-xs font-bold text-surface-500 uppercase tracking-wider">Status</th>
+                                                <th className="py-3 px-4 text-right text-xs font-bold text-surface-500 uppercase tracking-wider">Grand Total</th>
+                                                <th className="py-3 px-4 text-center text-xs font-bold text-surface-500 uppercase tracking-wider">Aksi</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-surface-100">
+                                            {paginatedQuotations.map(q => {
+                                                const badge = statusBadge(q.status);
+                                                return (
+                                                    <tr
+                                                        key={q.id}
+                                                        onClick={() => router.visit(`/quotations/${q.id}`)}
+                                                        className="hover:bg-brand-50/30 transition-colors cursor-pointer group"
+                                                    >
+                                                        <td className="py-3 px-4">
+                                                            <Link href={`/quotations/${q.id}`} className="text-xs font-bold font-mono text-brand-700 hover:underline">
+                                                                {q.id}
+                                                            </Link>
+                                                        </td>
+                                                        <td className="py-3 px-4 text-xs text-surface-600 font-medium whitespace-nowrap">
+                                                            {formatDate(q.date)}
+                                                        </td>
+                                                        <td className="py-3 px-4">
+                                                            <div className="text-xs font-semibold text-surface-800 line-clamp-1">{q.customer?.name || '-'}</div>
+                                                        </td>
+                                                        <td className="py-3 px-4 text-xs text-surface-700 whitespace-nowrap">
+                                                            {q.sales?.name || '-'}
+                                                        </td>
+                                                        <td className="py-3 px-4 text-center">
+                                                            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold border ${badge.cls}`}>
+                                                                {badge.label}
+                                                            </span>
+                                                        </td>
+                                                        <td className="py-3 px-4 text-right font-extrabold text-xs text-surface-900 whitespace-nowrap">
+                                                            {formatFull(q.grand_total)}
+                                                        </td>
+                                                        <td className="py-3 px-4 text-center" onClick={e => e.stopPropagation()}>
+                                                            <Link
+                                                                href={`/quotations/${q.id}`}
+                                                                className="inline-flex items-center gap-1 text-[11px] font-bold text-brand-600 hover:text-brand-800 hover:underline"
+                                                            >
+                                                                Detail
+                                                            </Link>
+                                                        </td>
+                                                    </tr>
+                                                );
+                                            })}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            )}
+
+                            {filteredQuotations.length > 0 && (
+                                <Pagination
+                                    page={tablePage}
+                                    totalPages={Math.ceil(filteredQuotations.length / tablePageSize) || 1}
+                                    totalItems={filteredQuotations.length}
+                                    pageSize={tablePageSize}
+                                    pageSizeOptions={[10, 20, 50]}
+                                    onPageChange={setTablePage}
+                                    onPageSizeChange={newSize => {
+                                        setTablePageSize(newSize);
+                                        setTablePage(1);
+                                    }}
+                                    itemLabel="quotation"
+                                />
+                            )}
+                        </div>
+                    )}
+
+                    {/* Table for Dashboard PO (Sales Orders) */}
+                    {isPoDashboard && (
+                        <div>
+                            {filteredSalesOrders.length === 0 ? (
+                                <div className="text-center py-12 text-xs text-surface-400">
+                                    Belum ada data Sales Order pada periode dan filter PO ini.
+                                </div>
+                            ) : (
+                                <div className="overflow-x-auto">
+                                    <table className="w-full text-left border-collapse">
+                                        <thead>
+                                            <tr className="bg-surface-50/70 border-b border-surface-200">
+                                                <th className="py-3 px-4 text-xs font-bold text-surface-500 uppercase tracking-wider">No. SO</th>
+                                                <th className="py-3 px-4 text-xs font-bold text-surface-500 uppercase tracking-wider">Ref. Quotation</th>
+                                                <th className="py-3 px-4 text-xs font-bold text-surface-500 uppercase tracking-wider">Tanggal SO</th>
+                                                <th className="py-3 px-4 text-xs font-bold text-surface-500 uppercase tracking-wider">Customer</th>
+                                                <th className="py-3 px-4 text-xs font-bold text-surface-500 uppercase tracking-wider">Sales</th>
+                                                <th className="py-3 px-4 text-left text-xs font-bold text-surface-500 uppercase tracking-wider">Status PO</th>
+                                                <th className="py-3 px-4 text-right text-xs font-bold text-surface-500 uppercase tracking-wider">Grand Total</th>
+                                                <th className="py-3 px-4 text-center text-xs font-bold text-surface-500 uppercase tracking-wider">Aksi</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-surface-100">
+                                            {paginatedSalesOrders.map(so => (
+                                                <tr
+                                                    key={so.id}
+                                                    onClick={() => router.visit(`/sales-orders/${so.id}`)}
+                                                    className="hover:bg-brand-50/30 transition-colors cursor-pointer group"
+                                                >
+                                                    <td className="py-3 px-4">
+                                                        <Link href={`/sales-orders/${so.id}`} className="text-xs font-bold font-mono text-brand-700 hover:underline">
+                                                            {so.id}
+                                                        </Link>
+                                                    </td>
+                                                    <td className="py-3 px-4">
+                                                        {so.quotation_id ? (
+                                                            <Link
+                                                                href={`/quotations/${so.quotation_id}`}
+                                                                onClick={e => e.stopPropagation()}
+                                                                className="text-xs text-surface-600 font-mono hover:text-brand-700 hover:underline"
+                                                            >
+                                                                {so.quotation_id}
+                                                            </Link>
+                                                        ) : (
+                                                            <span className="text-xs text-surface-400 font-mono">-</span>
+                                                        )}
+                                                    </td>
+                                                    <td className="py-3 px-4 text-xs text-surface-600 font-medium whitespace-nowrap">
+                                                        {formatDate(so.date)}
+                                                    </td>
+                                                    <td className="py-3 px-4">
+                                                        <div className="text-xs font-semibold text-surface-800 line-clamp-1">{so.customer?.name || '-'}</div>
+                                                    </td>
+                                                    <td className="py-3 px-4 text-xs text-surface-700 whitespace-nowrap">
+                                                        {so.sales?.name || '-'}
+                                                    </td>
+                                                    <td className="py-3 px-4">
+                                                        <div className="flex flex-col items-start gap-0.5">
+                                                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                                                <CheckCircle2 className="w-3 h-3 text-emerald-600 shrink-0" />
+                                                                {so.po_status || 'Diterima'}
+                                                            </span>
+                                                            {so.po_number && (
+                                                                <span className="text-[11px] font-mono font-medium text-surface-800">
+                                                                    No: {so.po_number}
+                                                                </span>
+                                                            )}
+                                                            {so.po_date ? (
+                                                                <span className="text-[10px] text-surface-500">
+                                                                    {formatDate(so.po_date)}
+                                                                </span>
+                                                            ) : (
+                                                                <span className="inline-flex items-center gap-1 text-[10px] text-amber-600 font-medium">
+                                                                    <AlertTriangle className="w-2.5 h-2.5 text-amber-500" />
+                                                                    Tgl PO belum diisi
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                    </td>
+                                                    <td className="py-3 px-4 text-right font-extrabold text-xs text-surface-900 whitespace-nowrap">
+                                                        {formatFull(so.grand_total)}
+                                                    </td>
+                                                    <td className="py-3 px-4 text-center" onClick={e => e.stopPropagation()}>
+                                                        <Link
+                                                            href={`/sales-orders/${so.id}`}
+                                                            className="inline-flex items-center gap-1 text-[11px] font-bold text-brand-600 hover:text-brand-800 hover:underline"
+                                                        >
+                                                            Detail
+                                                        </Link>
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            )}
+
+                            {filteredSalesOrders.length > 0 && (
+                                <Pagination
+                                    page={tablePage}
+                                    totalPages={Math.ceil(filteredSalesOrders.length / tablePageSize) || 1}
+                                    totalItems={filteredSalesOrders.length}
+                                    pageSize={tablePageSize}
+                                    pageSizeOptions={[10, 20, 50]}
+                                    onPageChange={setTablePage}
+                                    onPageSizeChange={newSize => {
+                                        setTablePageSize(newSize);
+                                        setTablePage(1);
+                                    }}
+                                    itemLabel="sales order"
+                                />
+                            )}
+                        </div>
+                    )}
                 </div>
             </div>
         </AuthenticatedLayout>

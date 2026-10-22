@@ -7,6 +7,7 @@ use App\Models\ActivityLog;
 use App\Models\Quotation;
 use App\Models\SalesOrder;
 use App\Models\SalesOrderCost;
+use App\Models\User;
 use App\Services\NotificationService;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -20,26 +21,70 @@ class SalesOrderController extends Controller
         $isManagerOrAdmin = in_array($user->role, ['Administrator', 'Sales Manager', 'Manager']);
         $isFinance = $user->role === 'Finance';
 
-        $query = SalesOrder::with(['customer', 'quotation', 'sales', 'creator']);
+        $query = SalesOrder::with(['customer', 'quotation.purchaseOrders', 'sales', 'creator']);
 
         if (! $isManagerOrAdmin && ! $isFinance) {
             $query->where('sales_id', $user->id);
         }
 
-        $salesOrders = $query->orderByDesc('created_at')->get()->map(fn ($so) => [
-            'id' => $so->id,
-            'quotation_id' => $so->quotation_id,
-            'status' => $so->status,
-            'date' => $so->date?->toDateString(),
-            'grand_total' => $so->grand_total,
-            'created_at' => $so->created_at,
-            'customer' => $so->customer ? ['id' => $so->customer->id, 'name' => $so->customer->name] : null,
-            'sales' => $so->sales ? ['id' => $so->sales->id, 'name' => $so->sales->name] : null,
-        ]);
+        $salesOrders = $query->orderByDesc('created_at')->get()->map(function ($so) {
+            $latestPo = $so->quotation?->purchaseOrders?->sortByDesc('created_at')->first();
+
+            $poNumber = $so->po_number
+                ?: $latestPo?->po_number
+                ?: $so->quotation?->po_number;
+
+            $poDate = $so->po_date?->toDateString()
+                ?: $latestPo?->po_date?->toDateString()
+                ?: $so->quotation?->po_date?->toDateString();
+
+            $poStatus = $so->po_status
+                ?: $latestPo?->status
+                ?: $so->quotation?->po_status
+                ?: ($so->quotation?->status === 'approved' ? 'Diterima' : null);
+
+            $poDocument = $so->po_document_path
+                ?: $latestPo?->document_path
+                ?: $so->quotation?->po_document_path;
+
+            $isPoReceived = in_array($poStatus, ['Diterima', 'Sebagian']) || $so->quotation?->status === 'approved';
+            $hasPo = $isPoReceived || !empty($poNumber) || !empty($poDate);
+            $missingPoDate = $hasPo && empty($poDate);
+            $isPoComplete = !empty($poNumber) && !empty($poDate);
+
+            return [
+                'id' => $so->id,
+                'quotation_id' => $so->quotation_id,
+                'status' => $so->status,
+                'date' => $so->date?->toDateString(),
+                'grand_total' => (float) $so->grand_total,
+                'created_at' => $so->created_at,
+                'po_number' => $poNumber,
+                'po_date' => $poDate,
+                'po_status' => $poStatus ?: ($hasPo ? 'Diterima' : null),
+                'po_document_path' => $poDocument,
+                'is_po_received' => $isPoReceived,
+                'has_po' => $hasPo,
+                'is_po_complete' => $isPoComplete,
+                'missing_po_date' => $missingPoDate,
+                'customer' => $so->customer ? ['id' => $so->customer->id, 'name' => $so->customer->name] : null,
+                'sales' => $so->sales ? ['id' => $so->sales->id, 'name' => $so->sales->name] : null,
+            ];
+        });
+
+        $salesUsers = ($isManagerOrAdmin || $isFinance)
+            ? User::whereIn('role', ['Sales', 'Presales', 'Sales Manager', 'Manager'])
+                ->where('is_active', true)
+                ->orderBy('name')
+                ->get(['id', 'name'])
+                ->values()
+            : [];
 
         return Inertia::render('SalesOrders', [
             'salesOrders' => $salesOrders,
+            'salesUsers' => $salesUsers,
             'isFinance' => $isFinance,
+            'canFilterSales' => $isManagerOrAdmin || $isFinance,
         ]);
     }
 

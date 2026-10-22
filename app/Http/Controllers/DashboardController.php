@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Quotation;
 use App\Models\Customer;
 use App\Models\User;
+use App\Models\SalesOrder;
 use App\Models\SalesTarget;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -32,7 +33,7 @@ class DashboardController extends Controller
 
         // Quotation pipeline follows quotation creation date.
         $quotationQuery = Quotation::active()
-            ->with(['customer', 'sales', 'items'])
+            ->with(['customer', 'sales', 'creator', 'items'])
             ->whereBetween('created_at', [$periodStart, $periodEnd]);
 
         if ($salesFilter !== 'all') {
@@ -48,7 +49,7 @@ class DashboardController extends Controller
         // quotation created in an earlier period to be reported in the quarter
         // where the customer actually issued the PO.
         $approvedPoQuery = Quotation::active()
-            ->with(['customer', 'sales', 'items'])
+            ->with(['customer', 'sales', 'creator', 'items'])
             ->where('status', 'approved')
             ->whereBetween('po_date', [$periodStart->toDateString(), $periodEnd->toDateString()]);
 
@@ -152,6 +153,56 @@ class DashboardController extends Controller
             ];
         })->sortByDesc('achieved')->values()->toArray();
 
+        // Prepare table data for Dashboard Quotation
+        $tableQuotations = $quotations->sortByDesc('created_at')->values()->map(function ($q) {
+            return [
+                'id' => $q->id,
+                'date' => $q->date?->toDateString() ?: ($q->created_at ? Carbon::parse($q->created_at)->toDateString() : null),
+                'created_at' => $q->created_at?->toDateTimeString(),
+                'status' => $q->status,
+                'po_number' => $q->po_number,
+                'po_date' => $q->po_date?->toDateString(),
+                'grand_total' => (float) $q->grand_total,
+                'customer' => $q->customer ? ['id' => $q->customer->id, 'name' => $q->customer->name] : null,
+                'sales' => $q->sales ? ['id' => $q->sales->id, 'name' => $q->sales->name] : ($q->creator ? ['id' => $q->creator->id, 'name' => $q->creator->name] : null),
+            ];
+        })->toArray();
+
+        // Prepare table data for Dashboard PO (Sales Orders)
+        $approvedPoQuotationIds = $approvedPoQuotations->pluck('id');
+        $soQuery = SalesOrder::with(['customer', 'sales', 'creator', 'quotation.purchaseOrders'])
+            ->where(function ($q) use ($periodStart, $periodEnd, $approvedPoQuotationIds) {
+                $q->whereBetween('po_date', [$periodStart->toDateString(), $periodEnd->toDateString()])
+                  ->orWhereIn('quotation_id', $approvedPoQuotationIds);
+            });
+
+        if ($salesFilter !== 'all') {
+            $soQuery->where(function ($q) use ($salesFilter) {
+                $q->where('sales_id', $salesFilter)
+                  ->orWhere('created_by', $salesFilter);
+            });
+        }
+
+        $tableSalesOrders = $soQuery->orderByDesc('date')->orderByDesc('created_at')->get()->map(function ($so) {
+            $latestPo = $so->quotation?->purchaseOrders?->sortByDesc('created_at')->first();
+            $poNumber = $so->po_number ?: $latestPo?->po_number ?: $so->quotation?->po_number;
+            $poDate = $so->po_date?->toDateString() ?: $latestPo?->po_date?->toDateString() ?: $so->quotation?->po_date?->toDateString();
+            $poStatus = $so->po_status ?: $latestPo?->status ?: $so->quotation?->po_status ?: 'Diterima';
+
+            return [
+                'id' => $so->id,
+                'quotation_id' => $so->quotation_id,
+                'date' => $so->date?->toDateString(),
+                'po_number' => $poNumber,
+                'po_date' => $poDate,
+                'po_status' => $poStatus,
+                'grand_total' => (float) $so->grand_total,
+                'status' => $so->status,
+                'customer' => $so->customer ? ['id' => $so->customer->id, 'name' => $so->customer->name] : null,
+                'sales' => $so->sales ? ['id' => $so->sales->id, 'name' => $so->sales->name] : null,
+            ];
+        })->values()->toArray();
+
         return Inertia::render('Dashboard', [
             'stats' => [
                 'totalQ' => $totalQ,
@@ -166,6 +217,8 @@ class DashboardController extends Controller
                 'basis' => $basis,
                 'missingPoDateCount' => $missingPoDateCount,
             ],
+            'tableQuotations' => $tableQuotations,
+            'tableSalesOrders' => $tableSalesOrders,
             'salesUsers' => $salesUsers->map(fn($u) => ['id' => $u->id, 'name' => $u->name])->values(),
             'filters' => [
                 'period' => $period,
