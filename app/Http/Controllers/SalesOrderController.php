@@ -47,8 +47,10 @@ class SalesOrderController extends Controller
                 ?: $latestPo?->document_path
                 ?: $so->quotation?->po_document_path;
 
-            $isPoReceived = in_array($poStatus, ['Diterima', 'Sebagian']) || $so->quotation?->status === 'approved';
-            $hasPo = $isPoReceived || !empty($poNumber) || !empty($poDate);
+            $normalizedStatus = strtolower(trim($poStatus ?? ''));
+            $isPoReceived = in_array($normalizedStatus, ['diterima', 'sebagian'])
+                || strtolower(trim($so->quotation?->status ?? '')) === 'approved';
+            $hasPo = $isPoReceived || !empty($poStatus) || !empty($poNumber) || !empty($poDate) || !empty($poDocument);
             $missingPoDate = $hasPo && empty($poDate);
             $isPoComplete = !empty($poNumber) && !empty($poDate);
 

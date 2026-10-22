@@ -15,6 +15,25 @@ const formatDate = (str) => {
     } catch { return str; }
 };
 
+// Robust local PO status helpers — don't rely solely on backend has_po
+const checkIsPoReceived = (so) => {
+    const status = (so.po_status || '').trim().toLowerCase();
+    return status === 'diterima' || status === 'sebagian' || status === 'approved';
+};
+
+const checkHasPo = (so) => {
+    return Boolean(
+        so.has_po ||
+        checkIsPoReceived(so) ||
+        (so.po_status && so.po_status.trim()) ||
+        (so.po_number && so.po_number.trim()) ||
+        so.po_date ||
+        so.po_document_path
+    );
+};
+
+const checkMissingPoDate = (so) => checkHasPo(so) && !so.po_date;
+
 const SO_TABS = [
     { key: 'all',             label: 'Semua' },
     { key: 'po_diterima',     label: 'PO Diterima' },
@@ -119,16 +138,16 @@ export default function SalesOrders({ salesOrders = [], salesUsers = [], isFinan
         return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name));
     }, [salesUsers, salesOrders]);
 
-    // Tab badge counters based on current sales filter
+    // Tab badge counters based on current sales filter (uses local helpers)
     const countByTab = (tabKey) => {
         const base = selectedSales === 'all'
             ? salesOrders
             : (salesOrders || []).filter(so => so.sales?.id === selectedSales);
 
         if (tabKey === 'all') return base.length;
-        if (tabKey === 'po_diterima') return base.filter(so => so.is_po_received || so.has_po).length;
-        if (tabKey === 'missing_po_date' || tabKey === 'missing_po') return base.filter(so => so.missing_po_date).length;
-        if (tabKey === 'no_po') return base.filter(so => !so.has_po).length;
+        if (tabKey === 'po_diterima') return base.filter(so => checkHasPo(so)).length;
+        if (tabKey === 'missing_po_date' || tabKey === 'missing_po') return base.filter(so => checkMissingPoDate(so)).length;
+        if (tabKey === 'no_po') return base.filter(so => !checkHasPo(so)).length;
         return 0;
     };
 
@@ -167,13 +186,13 @@ export default function SalesOrders({ salesOrders = [], salesUsers = [], isFinan
             }
 
             // 2. Tab filter
-            if (activeTab === 'po_diterima' && !(so.is_po_received || so.has_po)) {
+            if (activeTab === 'po_diterima' && !checkHasPo(so)) {
                 return false;
             }
-            if ((activeTab === 'missing_po_date' || activeTab === 'missing_po') && !so.missing_po_date) {
+            if ((activeTab === 'missing_po_date' || activeTab === 'missing_po') && !checkMissingPoDate(so)) {
                 return false;
             }
-            if (activeTab === 'no_po' && so.has_po) {
+            if (activeTab === 'no_po' && checkHasPo(so)) {
                 return false;
             }
 
@@ -460,12 +479,12 @@ export default function SalesOrders({ salesOrders = [], salesUsers = [], isFinan
 
                                                 {/* Status PO Column */}
                                                 <td className="py-3.5 px-4">
-                                                    {so.has_po ? (
+                                                    {checkHasPo(so) ? (
                                                         <div className="flex flex-col items-start gap-1">
                                                             <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold ${
-                                                                so.po_status === 'Sebagian'
+                                                                (so.po_status || '').toLowerCase() === 'sebagian'
                                                                     ? 'bg-blue-50 text-blue-700 border border-blue-200'
-                                                                    : so.po_status === 'Dibatalkan'
+                                                                    : (so.po_status || '').toLowerCase() === 'dibatalkan'
                                                                         ? 'bg-red-50 text-red-700 border border-red-200'
                                                                         : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
                                                             }`}>
