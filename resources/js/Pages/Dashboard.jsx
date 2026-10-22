@@ -552,13 +552,19 @@ export default function Dashboard({ stats, salesUsers, filters, auth, tableQuota
                                     const contribPct = Math.round((c.poValue / totalCustomerPO) * 100);
                                     const rankColors = ['bg-amber-100 text-amber-700', 'bg-gray-100 text-gray-600', 'bg-orange-100 text-orange-700'];
                                     const rankCls = rankColors[i] || 'bg-surface-100 text-surface-500';
+                                    const detailHref = c.id && c.id !== 'unknown' ? route('customers.show', c.id) : null;
+                                    const RowWrapper = detailHref ? Link : 'div';
                                     return (
-                                        <div key={i} className="flex items-center gap-3 py-2.5 px-3 rounded-lg hover:bg-surface-50 transition-colors group">
+                                        <RowWrapper
+                                            key={i}
+                                            {...(detailHref ? { href: detailHref } : {})}
+                                            className={`flex items-center gap-3 py-2.5 px-3 rounded-lg transition-colors group ${detailHref ? 'hover:bg-brand-50 cursor-pointer' : 'hover:bg-surface-50'}`}
+                                        >
                                             <div className={`w-7 h-7 rounded-md ${rankCls} flex items-center justify-center text-xs font-bold shrink-0`}>
                                                 {i + 1}
                                             </div>
                                             <div className="flex-1 min-w-0">
-                                                <div className="text-sm font-semibold text-surface-800 truncate">{c.name}</div>
+                                                <div className={`text-sm font-semibold truncate ${detailHref ? 'text-brand-700 group-hover:underline' : 'text-surface-800'}`}>{c.name}</div>
                                                 <div className="flex items-center gap-2 mt-0.5">
                                                     <div className="flex-1 h-1.5 bg-surface-100 rounded-full overflow-hidden">
                                                         <div className="h-full bg-brand-500 rounded-full transition-all duration-500" style={{ width: `${barW}%` }} />
@@ -570,11 +576,12 @@ export default function Dashboard({ stats, salesUsers, filters, auth, tableQuota
                                                 <div className="text-sm font-bold text-surface-800">{formatShort(c.poValue)}</div>
                                                 <div className="text-[10px] text-surface-400">{c.poCount} {isPoDashboard ? 'PO' : 'Quotation'}</div>
                                             </div>
-                                        </div>
+                                        </RowWrapper>
                                     );
                                 })}
                             </div>
                         )}
+
                     </div>
 
                     {/* Sales Team Performance */}

@@ -33,6 +33,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     // Customers
     Route::get('/customers', [CustomerController::class, 'index'])->name('customers.index');
+    Route::get('/customers/{customer}', [CustomerController::class, 'show'])->name('customers.show');
     Route::post('/customers', [CustomerController::class, 'store'])->name('customers.store');
     Route::post('/customers/{customer}/pics', [CustomerController::class, 'storePic'])->name('customers.pics.store');
     Route::put('/customers/{customer}', [CustomerController::class, 'update'])->name('customers.update');

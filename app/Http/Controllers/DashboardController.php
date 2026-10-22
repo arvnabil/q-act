@@ -107,7 +107,7 @@ class DashboardController extends Controller
             $cid = $q->customer_id ?? 'unknown';
             $name = $q->customer?->name ?? 'Customer';
             if (!isset($customerMap[$cid])) {
-                $customerMap[$cid] = ['name' => $name, 'poValue' => 0, 'poCount' => 0, 'totalQ' => 0];
+                $customerMap[$cid] = ['id' => $cid, 'name' => $name, 'poValue' => 0, 'poCount' => 0, 'totalQ' => 0];
             }
             $customerMap[$cid]['totalQ']++;
             if ($basis === 'quotation') {
@@ -119,7 +119,7 @@ class DashboardController extends Controller
             $cid = $q->customer_id ?? 'unknown';
             $name = $q->customer?->name ?? 'Customer';
             if (!isset($customerMap[$cid])) {
-                $customerMap[$cid] = ['name' => $name, 'poValue' => 0, 'poCount' => 0, 'totalQ' => 0];
+                $customerMap[$cid] = ['id' => $cid, 'name' => $name, 'poValue' => 0, 'poCount' => 0, 'totalQ' => 0];
             }
             $customerMap[$cid]['poValue'] += $q->grand_total ?? 0;
             $customerMap[$cid]['poCount']++;

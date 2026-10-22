@@ -51,6 +51,81 @@ class CustomerController extends Controller
         ]);
     }
 
+    public function show(Request $request, Customer $customer): Response
+    {
+        $user = $request->user();
+        $isManagerOrAdmin = in_array($user->role, ['Administrator', 'Sales Manager', 'Manager']);
+        $isFinance = $user->role === 'Finance';
+
+        $customer->load(['pics', 'businessUnit']);
+
+        // Load quotations
+        $quotationsQuery = $customer->quotations()->with(['sales', 'creator'])
+            ->orderByDesc('created_at');
+        if (!$isManagerOrAdmin && !$isFinance) {
+            $quotationsQuery->where(function ($q) use ($user) {
+                $q->where('sales_id', $user->id)->orWhere('created_by', $user->id);
+            });
+        }
+        $quotations = $quotationsQuery->get()->map(fn($q) => [
+            'id'          => $q->id,
+            'date'        => $q->date?->toDateString(),
+            'created_at'  => $q->created_at?->toDateTimeString(),
+            'status'      => $q->status,
+            'grand_total' => (float) $q->grand_total,
+            'po_number'   => $q->po_number,
+            'po_date'     => $q->po_date?->toDateString(),
+            'sales'       => $q->sales ? ['id' => $q->sales->id, 'name' => $q->sales->name] : null,
+        ]);
+
+        // Load sales orders
+        $salesOrdersQuery = $customer->salesOrders()->with(['sales', 'quotation.purchaseOrders'])
+            ->orderByDesc('created_at');
+        if (!$isManagerOrAdmin && !$isFinance) {
+            $salesOrdersQuery->where('sales_id', $user->id);
+        }
+        $salesOrders = $salesOrdersQuery->get()->map(function ($so) {
+            $latestPo = $so->quotation?->purchaseOrders?->sortByDesc('created_at')->first();
+            $poNumber = $so->po_number ?: $latestPo?->po_number ?: $so->quotation?->po_number;
+            $poDate   = $so->po_date?->toDateString() ?: $latestPo?->po_date?->toDateString() ?: $so->quotation?->po_date?->toDateString();
+            $poStatus = $so->po_status ?: $latestPo?->status ?: $so->quotation?->po_status;
+            $normalizedStatus = strtolower(trim($poStatus ?? ''));
+            $hasPo = in_array($normalizedStatus, ['diterima', 'sebagian']) || !empty($poNumber) || !empty($poDate) || !empty($poStatus);
+
+            return [
+                'id'          => $so->id,
+                'quotation_id' => $so->quotation_id,
+                'date'        => $so->date?->toDateString(),
+                'created_at'  => $so->created_at?->toDateTimeString(),
+                'status'      => $so->status,
+                'grand_total' => (float) $so->grand_total,
+                'po_number'   => $poNumber,
+                'po_date'     => $poDate,
+                'po_status'   => $poStatus,
+                'has_po'      => $hasPo,
+                'sales'       => $so->sales ? ['id' => $so->sales->id, 'name' => $so->sales->name] : null,
+            ];
+        });
+
+        return Inertia::render('CustomerDetail', [
+            'customer'    => [
+                'id'      => $customer->id,
+                'name'    => $customer->name,
+                'address' => $customer->address,
+                'pics'    => $customer->pics->map(fn($p) => [
+                    'id'         => $p->id,
+                    'name'       => $p->name,
+                    'email'      => $p->email,
+                    'phone'      => $p->phone,
+                    'is_primary' => (bool) $p->is_primary,
+                ]),
+            ],
+            'quotations'  => $quotations,
+            'salesOrders' => $salesOrders,
+        ]);
+    }
+
+
     public function store(Request $request)
     {
         $validated = $request->validate([
