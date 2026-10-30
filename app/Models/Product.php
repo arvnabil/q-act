@@ -26,6 +26,16 @@ class Product extends Model
         return 'slug';
     }
 
+    /**
+     * Resolve route binding by slug first, with fallback to sku
+     */
+    public function resolveRouteBinding($value, $field = null)
+    {
+        return $this->where('slug', $value)
+            ->orWhere('sku', $value)
+            ->firstOrFail();
+    }
+
     protected static function booted()
     {
         static::saving(function ($product) {
