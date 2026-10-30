@@ -276,7 +276,7 @@ export default function Products({ products = [], brands = [] }) {
         }
 
         const payload = {
-            sku: String(newProduct.sku || '').trim().toUpperCase(),
+            sku: String(newProduct.sku || '').replace(/[\r\n]+/g, ' ').replace(/\s+/g, ' ').trim().toUpperCase(),
             name: String(newProduct.name || '').trim(),
             brand_id: newProduct.brand_id ? newProduct.brand_id : null,
             description: newProduct.description ? String(newProduct.description).trim() : null,
@@ -302,7 +302,7 @@ export default function Products({ products = [], brands = [] }) {
         };
 
         if (editingProduct) {
-            router.put(route('products.update', editingProduct.sku), payload, routeOpts);
+            router.put(route('products.update', editingProduct.slug || editingProduct.sku), payload, routeOpts);
         } else {
             router.post(route('products.store'), payload, routeOpts);
         }
@@ -362,7 +362,7 @@ export default function Products({ products = [], brands = [] }) {
             });
         } else if (deleteModal.product) {
             const p = deleteModal.product;
-            router.delete(route('products.destroy', p.sku), {
+            router.delete(route('products.destroy', p.slug || p.sku), {
                 preserveScroll: true,
                 onSuccess: () => {
                     setDeleteModal({ open: false, product: null, isBulk: false });
@@ -485,7 +485,7 @@ export default function Products({ products = [], brands = [] }) {
                                 obj.modal = Math.round(pl * (1 - dk / 100));
                             }
                         }
-                        if (obj.sku) obj.sku = String(obj.sku).trim().toUpperCase();
+                        if (obj.sku) obj.sku = String(obj.sku).replace(/[\r\n]+/g, ' ').replace(/\s+/g, ' ').trim().toUpperCase();
                         return { _rowNum: i + 2, ...obj };
                     });
 
@@ -525,7 +525,7 @@ export default function Products({ products = [], brands = [] }) {
         const toUpsert = importRows.map(r => {
             const { _rowNum, brand, ...rest } = r;
             return {
-                sku: String(rest.sku || '').trim().toUpperCase(),
+                sku: String(rest.sku || '').replace(/[\r\n]+/g, ' ').replace(/\s+/g, ' ').trim().toUpperCase(),
                 name: String(rest.name || '').trim(),
                 description: String(rest.description || '').trim() || null,
                 price: Math.round(Number(rest.price) || 0),

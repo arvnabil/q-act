@@ -18,6 +18,7 @@ class ProductController extends Controller
         $products = Product::with('brand')->orderBy('name')->get()->map(fn($p) => [
             'id' => $p->sku,
             'sku' => $p->sku,
+            'slug' => $p->slug,
             'name' => $p->name,
             'description' => $p->description,
             'price' => $p->price,
@@ -69,10 +70,11 @@ class ProductController extends Controller
         $modal = $validated['modal'] ?? 0;
         $pricelistDist = $validated['pricelist_distributor'] ?? 0;
         $diskonDist = $validated['diskon_distributor'] ?? 0;
-        $imageUrl = $this->processImageUrl($validated['image_url'] ?? null, $validated['sku']);
+        $cleanSku = strtoupper(trim(preg_replace('/[\r\n]+/', ' ', $validated['sku'])));
+        $imageUrl = $this->processImageUrl($validated['image_url'] ?? null, $cleanSku);
 
         $product = Product::updateOrCreate(
-            ['sku' => trim($validated['sku'])],
+            ['sku' => $cleanSku],
             [
                 'name' => $validated['name'],
                 'brand_id' => $brandId,
@@ -250,8 +252,9 @@ class ProductController extends Controller
                 }
             }
 
+            $cleanSku = strtoupper(trim(preg_replace('/[\r\n]+/', ' ', $p['sku'])));
             $upsertData[] = [
-                'sku' => strtoupper(trim($p['sku'])),
+                'sku' => $cleanSku,
                 'name' => trim($p['name']),
                 'description' => trim($p['description'] ?? ''),
                 'price' => (float)($p['price'] ?? 0),

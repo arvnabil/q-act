@@ -13,10 +13,38 @@ class Product extends Model
     public $incrementing = false;
 
     protected $fillable = [
-        'sku', 'brand_id', 'name', 'description', 'price',
+        'sku', 'slug', 'brand_id', 'name', 'description', 'price',
         'pricelist_distributor', 'diskon_distributor', 'modal',
         'margin_sales', 'image_url', 'is_active',
     ];
+
+    /**
+     * Use slug as the route key for implicit route model binding
+     */
+    public function getRouteKeyName(): string
+    {
+        return 'slug';
+    }
+
+    protected static function booted()
+    {
+        static::saving(function ($product) {
+            if (empty($product->slug) || ($product->isDirty('name') && empty($product->slug))) {
+                $baseSlug = \Illuminate\Support\Str::slug($product->name);
+                if (empty($baseSlug)) {
+                    $cleanSku = preg_replace('/[\r\n]+/', ' ', (string) $product->sku);
+                    $baseSlug = \Illuminate\Support\Str::slug($cleanSku) ?: ('prod-' . \Illuminate\Support\Str::lower(\Illuminate\Support\Str::random(8)));
+                }
+
+                $slug = $baseSlug;
+                $counter = 1;
+                while (static::where('slug', $slug)->where('sku', '!=', $product->sku)->exists()) {
+                    $slug = "{$baseSlug}-" . (++$counter);
+                }
+                $product->slug = $slug;
+            }
+        });
+    }
 
     protected $casts = [
         'price' => 'float',
