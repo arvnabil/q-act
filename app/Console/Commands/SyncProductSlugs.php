@@ -68,44 +68,42 @@ class SyncProductSlugs extends Command
         $usedSlugsMap = array_fill_keys($usedSlugs, true);
         $samples = [];
 
-        $query->orderBy('sku')->chunk($chunkSize, function ($products) use (&$updatedCount, &$usedSlugsMap, &$samples, $progressBar) {
-            foreach ($products as $product) {
-                // Generate base slug dari nama / title produk
-                $baseSlug = Str::slug($product->name);
+        foreach ($query->orderBy('sku')->cursor() as $product) {
+            // Generate base slug dari nama / title produk
+            $baseSlug = Str::slug($product->name);
 
-                // Jika nama kosong atau karakter non-latin, fallback ke SKU atau random
-                if (empty($baseSlug)) {
-                    $cleanSku = preg_replace('/[\r\n]+/', ' ', (string) $product->sku);
-                    $baseSlug = Str::slug($cleanSku) ?: ('prod-' . Str::lower(Str::random(8)));
-                }
-
-                // Cari slug yang unik
-                $slug = $baseSlug;
-                $counter = 1;
-
-                while (isset($usedSlugsMap[$slug])) {
-                    $slug = "{$baseSlug}-" . (++$counter);
-                }
-
-                $usedSlugsMap[$slug] = true;
-
-                // Simpan langsung ke database tanpa trigger event loop berulang
-                $product->slug = $slug;
-                $product->saveQuietly();
-
-                $updatedCount++;
-
-                if (count($samples) < 5) {
-                    $samples[] = [
-                        'SKU' => Str::limit($product->sku, 20),
-                        'Nama Produk' => Str::limit($product->name, 35),
-                        'Slug yang Dibuat' => $slug,
-                    ];
-                }
-
-                $progressBar->advance();
+            // Jika nama kosong atau karakter non-latin, fallback ke SKU atau random
+            if (empty($baseSlug)) {
+                $cleanSku = preg_replace('/[\r\n]+/', ' ', (string) $product->sku);
+                $baseSlug = Str::slug($cleanSku) ?: ('prod-' . Str::lower(Str::random(8)));
             }
-        });
+
+            // Cari slug yang unik
+            $slug = $baseSlug;
+            $counter = 1;
+
+            while (isset($usedSlugsMap[$slug])) {
+                $slug = "{$baseSlug}-" . (++$counter);
+            }
+
+            $usedSlugsMap[$slug] = true;
+
+            // Simpan langsung ke database tanpa trigger event loop berulang
+            $product->slug = $slug;
+            $product->saveQuietly();
+
+            $updatedCount++;
+
+            if (count($samples) < 5) {
+                $samples[] = [
+                    'SKU' => Str::limit($product->sku, 20),
+                    'Nama Produk' => Str::limit($product->name, 35),
+                    'Slug yang Dibuat' => $slug,
+                ];
+            }
+
+            $progressBar->advance();
+        }
 
         $progressBar->finish();
         $this->newLine(2);
