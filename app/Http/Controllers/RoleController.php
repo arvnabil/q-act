@@ -14,6 +14,9 @@ use Spatie\Permission\Models\Permission;
 const SYSTEM_PERMISSIONS = [
     'dashboard',
     'sales_targets_edit',
+    'leads_view',
+    'leads_manage',
+    'leads_visits',
     'quotations_view',
     'quotations_create',
     'quotations_edit',
@@ -32,8 +35,12 @@ const SYSTEM_PERMISSIONS = [
     'products_edit',
     'products_delete',
     'view_reports',
+    'achievements_view',
     'manager_view',
     'user_management',
+    'manage_business_units',
+    'manage_settings',
+    'manage_roles',
 ];
 
 const STANDARD_ROLES = ['Administrator', 'Manager', 'Sales', 'Presales', 'Finance'];

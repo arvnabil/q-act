@@ -1,6 +1,8 @@
 <?php
 
+use App\Http\Controllers\AchievementController;
 use App\Http\Controllers\AnalyticsController;
+use App\Http\Controllers\LeadController;
 use App\Http\Controllers\BrandController;
 use App\Http\Controllers\BusinessUnitController;
 use App\Http\Controllers\ChangeRequestController;
@@ -122,8 +124,24 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
 
+    // Lead Pipeline
+    Route::prefix('leads')->name('leads.')->group(function () {
+        Route::get('/',                              [LeadController::class, 'index'])->name('index');
+        Route::post('/',                             [LeadController::class, 'store'])->name('store');
+        Route::get('/visits',                        [LeadController::class, 'indexVisits'])->name('visits');
+        Route::post('/visits',                       [LeadController::class, 'storeVisit'])->name('visits.store');
+        Route::post('/visits/{visit}/check-in',      [LeadController::class, 'checkIn'])->name('visits.check-in');
+        Route::get('/{lead}',                        [LeadController::class, 'show'])->name('show');
+        Route::put('/{lead}',                        [LeadController::class, 'update'])->name('update');
+        Route::patch('/{lead}/stage',                [LeadController::class, 'updateStage'])->name('stage.update');
+        Route::delete('/{lead}',                     [LeadController::class, 'destroy'])->name('destroy');
+        Route::post('/{lead}/activities',            [LeadController::class, 'addActivity'])->name('activities.store');
+        Route::post('/settings',                     [LeadController::class, 'updateSettings'])->name('settings.update');
+    });
+
     // Analytics
     Route::get('/analytics', [AnalyticsController::class, 'index'])->name('analytics');
+    Route::get('/achievements', [AchievementController::class, 'index'])->name('achievements.index');
 
     // Notifications
     Route::get('/notifications', [NotificationController::class, 'index'])->name('notifications.index');

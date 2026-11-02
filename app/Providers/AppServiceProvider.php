@@ -4,6 +4,7 @@ namespace App\Providers;
 
 use Illuminate\Auth\Notifications\ResetPassword;
 use Illuminate\Notifications\Messages\MailMessage;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Vite;
 use Illuminate\Support\ServiceProvider;
 
@@ -22,6 +23,11 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        // Super admin bypass for Administrator role
+        Gate::before(function ($user, $ability) {
+            return ($user->hasRole('Administrator') || $user->role === 'Administrator') ? true : null;
+        });
+
         Vite::prefetch(concurrency: 3);
 
         ResetPassword::toMailUsing(function (object $notifiable, string $token) {

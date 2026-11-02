@@ -7,6 +7,9 @@ import toast from 'react-hot-toast';
 const FEATURE_LABELS = {
     'dashboard': 'Dashboard',
     'sales_targets_edit': 'Dashboard - Atur Target Sales',
+    'leads_view': 'Lead Pipeline - Lihat Board',
+    'leads_manage': 'Lead Pipeline - Tambah / Edit / Pindah Stage',
+    'leads_visits': 'Lead Pipeline - Visit & Follow-up',
     'quotations_view': 'Quotations - Lihat',
     'quotations_create': 'Quotations - Buat',
     'quotations_edit': 'Quotations - Edit',
@@ -24,9 +27,13 @@ const FEATURE_LABELS = {
     'products_create': 'Produk & Brand - Tambah',
     'products_edit': 'Produk & Brand - Edit',
     'products_delete': 'Produk & Brand - Hapus',
-    'view_reports': 'Analytics',
-    'manager_view': 'Manager View',
-    'user_management': 'User Management'
+    'view_reports': 'Reports - Analytics',
+    'achievements_view': 'Reports - Pencapaian (Sales Manager)',
+    'manager_view': 'Reports - Manager View',
+    'user_management': 'Sistem - User Management',
+    'manage_business_units': 'Sistem - Kelola Business Units',
+    'manage_settings': 'Sistem - Pengaturan Sistem (Settings)',
+    'manage_roles': 'Sistem - Kelola Roles & Hak Akses',
 };
 
 export default function RolesPage({ rolePermissions, rolesList, features }) {

@@ -2,8 +2,10 @@ import React, { useState, useEffect } from 'react';
 import ReactDOM from 'react-dom';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head, usePage, router } from '@inertiajs/react';
+import axios from 'axios';
 import { 
-  Plus, Edit, Trash2, Star, Building2, CreditCard, Loader2, X, FileText, Wrench, ImageIcon, Globe 
+  Plus, Edit, Trash2, Star, Building2, CreditCard, Loader2, X, FileText, Wrench, ImageIcon, Globe,
+  TrendingUp, SlidersHorizontal
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 
@@ -12,7 +14,8 @@ export default function Settings({
   bankAccounts = [], 
   masterTerms = [], 
   domainLogoMap = [], 
-  maintenanceMode = { enabled: false, domains: [] } 
+  maintenanceMode = { enabled: false, domains: [] },
+  pipelineSettings = null
 }) {
   const { auth } = usePage().props;
   const user = auth?.user || {};
@@ -243,6 +246,58 @@ export default function Settings({
     });
   };
 
+  // Pipeline Settings State
+  const defaultStages = [
+    { key: 'data_masuk',      name: 'Data Masuk',      type: 'normal', color: '#94A3B8' },
+    { key: 'sph_terlayang',   name: 'SPH Terlayang',   type: 'normal', color: '#3B82F6' },
+    { key: 'hot_progress',    name: 'Hot Progress',    type: 'normal', color: '#F59E0B' },
+    { key: 'proyek_deal',     name: 'Proyek Deal',     type: 'deal',   color: '#009680' },
+    { key: 'proyek_berjalan', name: 'Proyek Berjalan', type: 'normal', color: '#8B5CF6' },
+    { key: 'proyek_selesai',  name: 'Proyek Selesai',  type: 'normal', color: '#10B981' },
+    { key: 'no_deal',         name: 'No Deal',         type: 'lost',   color: '#EF4444' },
+  ];
+
+  const [pipeline, setPipeline] = useState(pipelineSettings || {
+    featured_stage_1: 'hot_progress',
+    featured_stage_2: 'proyek_deal',
+    stages: defaultStages,
+  });
+  const [isSavingPipeline, setIsSavingPipeline] = useState(false);
+
+  useEffect(() => {
+    if (pipelineSettings) {
+      setPipeline(pipelineSettings);
+    }
+  }, [pipelineSettings]);
+
+  const handlePipelineNameChange = (key, name) => {
+    setPipeline(prev => ({
+      ...prev,
+      stages: (prev.stages || defaultStages).map(s => s.key === key ? { ...s, name } : s)
+    }));
+  };
+
+  const handlePipelineTypeChange = (key, type) => {
+    setPipeline(prev => ({
+      ...prev,
+      stages: (prev.stages || defaultStages).map(s => s.key === key ? { ...s, type } : s)
+    }));
+  };
+
+  const handleSavePipeline = async (e) => {
+    e.preventDefault();
+    setIsSavingPipeline(true);
+    try {
+      await axios.post(route('leads.settings.update'), pipeline);
+      toast.success('Pengaturan tahap pipeline berhasil disimpan!');
+    } catch (err) {
+      console.error(err);
+      toast.error('Gagal menyimpan pengaturan pipeline');
+    } finally {
+      setIsSavingPipeline(false);
+    }
+  };
+
   return (
     <AuthenticatedLayout
       header={<h2 className="font-semibold text-xl text-gray-800 leading-tight">Pengaturan Sistem</h2>}
@@ -309,6 +364,98 @@ export default function Settings({
                   </button>
                 </div>
               )}
+            </form>
+          </div>
+
+          {/* Tahap Pipeline Section */}
+          <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+            <div className="px-6 py-4 border-b border-gray-100 bg-gray-50/50">
+              <div className="flex items-center gap-2">
+                <TrendingUp className="w-4 h-4 text-brand-600" />
+                <h2 className="text-sm font-bold text-gray-800">Tahap pipeline</h2>
+              </div>
+              <p className="text-xs text-gray-500 mt-1 leading-relaxed">
+                Tipe menentukan perhitungan dashboard: <strong>Deal</strong> = menang, <strong>Lost</strong> = gugur, <strong>Normal</strong> = masih jalan. Hanya owner/manager yang dapat mengubah tahap pipeline; tim mengikuti pengaturan ini.
+              </p>
+            </div>
+
+            <form onSubmit={handleSavePipeline} className="p-6 space-y-6">
+              {/* Highlight Cards Configuration */}
+              <div className="bg-gray-50 rounded-xl p-4 border border-gray-200 space-y-2">
+                <div className="flex items-center gap-2">
+                  <SlidersHorizontal className="w-4 h-4 text-brand-600" />
+                  <h3 className="text-xs font-bold text-gray-700 uppercase tracking-wider">Card Ringkasan di Header Pipeline</h3>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
+                  <div>
+                    <label className="text-xs font-semibold text-gray-600 block mb-1">Card Status 1 (Dinamis)</label>
+                    <select
+                      value={pipeline.featured_stage_1 || 'hot_progress'}
+                      onChange={e => setPipeline(prev => ({ ...prev, featured_stage_1: e.target.value }))}
+                      className="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-800 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 outline-none"
+                    >
+                      {(pipeline.stages || defaultStages).map(s => (
+                        <option key={s.key} value={s.key}>{s.name} ({s.key})</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-xs font-semibold text-gray-600 block mb-1">Card Status 2 (Dinamis)</label>
+                    <select
+                      value={pipeline.featured_stage_2 || 'proyek_deal'}
+                      onChange={e => setPipeline(prev => ({ ...prev, featured_stage_2: e.target.value }))}
+                      className="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-800 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 outline-none"
+                    >
+                      {(pipeline.stages || defaultStages).map(s => (
+                        <option key={s.key} value={s.key}>{s.name} ({s.key})</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              {/* Stages List */}
+              <div className="space-y-3">
+                {(pipeline.stages || defaultStages).map(s => (
+                  <div key={s.key} className="flex items-center gap-3 p-3 bg-white rounded-xl border border-gray-200 hover:border-gray-300 transition-colors">
+                    <div
+                      className="w-8 h-8 rounded-lg shrink-0 flex items-center justify-center shadow-2xs"
+                      style={{ backgroundColor: s.color || '#94A3B8' }}
+                    />
+                    <div className="flex-1 min-w-0">
+                      <input
+                        type="text"
+                        value={s.name}
+                        onChange={e => handlePipelineNameChange(s.key, e.target.value)}
+                        placeholder="Nama tahap..."
+                        className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800 font-medium focus:border-brand-500 focus:ring-1 focus:ring-brand-500 outline-none"
+                      />
+                    </div>
+                    <div className="w-40 shrink-0">
+                      <select
+                        value={s.type || 'normal'}
+                        onChange={e => handlePipelineTypeChange(s.key, e.target.value)}
+                        className="w-full border border-gray-200 rounded-lg px-3 py-2 text-xs font-semibold text-gray-700 bg-white focus:border-brand-500 focus:ring-1 focus:ring-brand-500 outline-none"
+                      >
+                        <option value="normal">Normal</option>
+                        <option value="deal">Deal (menang)</option>
+                        <option value="lost">Lost</option>
+                      </select>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="flex justify-end pt-2">
+                <button
+                  type="submit"
+                  disabled={isSavingPipeline}
+                  className="flex items-center gap-2 px-5 py-2 text-sm font-bold bg-brand-600 text-white rounded-lg hover:bg-brand-700 transition-all shadow-sm disabled:opacity-60 cursor-pointer"
+                >
+                  {isSavingPipeline && <Loader2 className="w-4 h-4 animate-spin" />}
+                  Simpan Pengaturan Pipeline
+                </button>
+              </div>
             </form>
           </div>
 

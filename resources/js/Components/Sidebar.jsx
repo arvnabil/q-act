@@ -1,27 +1,51 @@
 import React, { useState } from 'react';
 import { Link, usePage } from '@inertiajs/react';
-import { LayoutDashboard, FileText, Users, Box, Settings, LogOut, ChevronRight, ChevronDown, BarChart2, ShieldCheck, UserCog, FileStack } from 'lucide-react';
+import { LayoutDashboard, FileText, Users, Box, Settings, LogOut, ChevronRight, ChevronDown, BarChart2, ShieldCheck, UserCog, FileStack, TrendingUp, MapPin, Trophy } from 'lucide-react';
 
 export default function Sidebar({ mobileOpen, setMobileOpen }) {
     const { auth } = usePage().props;
     const { user, permissions } = auth;
-
-    const hasPermission = (perm) => {
-        if (!permissions) return false;
-        if (Array.isArray(permissions)) {
-            return permissions.includes(perm);
-        }
-        return Boolean(permissions[perm]);
-    };
 
     const effectiveRole = user?.spatie_role ?? user?.role;
     const isManager = ['Administrator', 'Sales Manager', 'Manager'].includes(effectiveRole);
     const isAdmin = ['Administrator'].includes(effectiveRole);
     const isFinance = effectiveRole === 'Finance';
 
-    const canAnalytics = user && (isAdmin || isManager || isFinance || hasPermission('view_reports') || hasPermission('analytics'));
-    const canManager = user && (isAdmin || isManager || hasPermission('manager_view'));
-    const canUserManagement = user && (isAdmin || hasPermission('user_management'));
+    const hasPermission = (perm) => {
+        if (!user) return false;
+        if (isAdmin) return true;
+
+        if (permissions && Array.isArray(permissions) && permissions.length > 0) {
+            return permissions.includes(perm);
+        }
+
+        // Graceful fallback based on role if permissions array is empty
+        if (['Sales', 'Presales'].includes(effectiveRole)) {
+            return [
+                'dashboard', 'leads_view', 'leads_manage', 'leads_visits',
+                'quotations_view', 'quotations_create', 'quotations_edit', 'quotations_delete', 'quotations_import_legacy',
+                'sales_orders_view', 'sales_orders_edit', 'customers_view', 'customers_create', 'customers_edit', 'products_view'
+            ].includes(perm);
+        }
+        if (['Manager', 'Sales Manager'].includes(effectiveRole)) {
+            return !['user_management', 'manage_roles'].includes(perm);
+        }
+        if (effectiveRole === 'Finance') {
+            return ['dashboard', 'quotations_view', 'sales_orders_view', 'view_reports'].includes(perm);
+        }
+        return false;
+    };
+
+    const canAccess = (perm) => {
+        if (!user) return false;
+        if (isAdmin) return true;
+        return hasPermission(perm);
+    };
+
+    const canAnalytics = canAccess('view_reports') || isFinance;
+    const canAchievements = canAccess('achievements_view') || ['Sales Manager', 'Manager'].includes(effectiveRole);
+    const canManager = canAccess('manager_view');
+    const canUserManagement = canAccess('user_management');
 
     const [expandedMenus, setExpandedMenus] = useState({});
 
@@ -37,29 +61,67 @@ export default function Sidebar({ mobileOpen, setMobileOpen }) {
     const quotationsCount = undefined; 
 
     const rawNav = [
-        { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-        { path: '/quotations', label: 'Quotations', icon: FileText, badge: quotationsCount },
-        { path: '/sales-orders', label: 'Sales Orders', icon: FileStack },
-        { path: '/customers', label: 'Customers', icon: Users, hideForFinance: true },
+        { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, permission: 'dashboard' },
+        { 
+            path: '/leads-group', 
+            label: 'Lead Pipeline', 
+            icon: TrendingUp,
+            permission: 'leads_view',
+            hideForFinance: true,
+            submenu: [
+                { path: '/leads', label: 'Pipeline Board', permission: 'leads_view' },
+                { path: '/leads/visits', label: 'Visit & Follow-up', permission: 'leads_visits' },
+            ]
+        },
+        { path: '/quotations', label: 'Quotations', icon: FileText, badge: quotationsCount, permission: 'quotations_view' },
+        { path: '/sales-orders', label: 'Sales Orders', icon: FileStack, permission: 'sales_orders_view' },
+        { path: '/customers', label: 'Customers', icon: Users, hideForFinance: true, permission: 'customers_view' },
         { 
             path: '/products-group', 
             label: 'Products', 
             icon: Box,
             hideForFinance: true,
+            permission: 'products_view',
             submenu: [
-                { path: '/products', label: 'Katalog Produk' },
-                { path: '/brands', label: 'Kelola Brand' },
+                { path: '/products', label: 'Katalog Produk', permission: 'products_view' },
+                { path: '/brands', label: 'Kelola Brand', permission: 'products_view' },
             ]
         },
     ];
 
-    const mainNav = isFinance ? rawNav.filter(n => !n.hideForFinance) : rawNav;
+    const filterNavByPermission = (items) => {
+        return items.filter(n => {
+            if (isFinance && n.hideForFinance) return false;
+            if (n.submenu) {
+                const filteredSubs = n.submenu.filter(sub => !sub.permission || canAccess(sub.permission));
+                if (filteredSubs.length === 0) return false;
+                n.submenu = filteredSubs;
+                return true;
+            }
+            return !n.permission || canAccess(n.permission);
+        });
+    };
+
+    const mainNav = filterNavByPermission(rawNav);
 
     if (!user) return null;
 
     const { url } = usePage();
-    const isActiveLink = (path) => url.startsWith(path);
-    const isActiveExact = (path) => url === path;
+    const currentPath = url.split('?')[0];
+
+    const isActiveLink = (path) => {
+        if (path === '/leads') {
+            return currentPath === '/leads' || (currentPath.startsWith('/leads/') && !currentPath.startsWith('/leads/visits'));
+        }
+        return currentPath.startsWith(path);
+    };
+
+    const isActiveExact = (path) => {
+        if (path === '/leads') {
+            return currentPath === '/leads' || (currentPath.startsWith('/leads/') && !currentPath.startsWith('/leads/visits'));
+        }
+        return currentPath === path || currentPath.startsWith(path + '/');
+    };
 
     return (
         <>
@@ -146,7 +208,7 @@ export default function Sidebar({ mobileOpen, setMobileOpen }) {
                         </div>
                     </div>
                     
-                    {(canAnalytics || canManager) && (
+                    {(canAnalytics || canAchievements || canManager) && (
                         <div className="mb-5">
                             <span className="text-[10px] font-bold text-surface-400 tracking-widest uppercase px-3 mb-2 block">REPORTS</span>
                             <div className="flex flex-col gap-0.5">
@@ -155,6 +217,13 @@ export default function Sidebar({ mobileOpen, setMobileOpen }) {
                                         {isActiveLink('/analytics') && <div className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-5 bg-brand-500 rounded-r"></div>}
                                         <BarChart2 className="w-5 h-5" />
                                         <span>Analytics</span>
+                                    </Link>
+                                )}
+                                {canAchievements && (
+                                    <Link href="/achievements" className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors relative ${isActiveLink('/achievements') ? 'bg-brand-50 text-brand-700 font-semibold' : 'text-surface-500 hover:bg-surface-100 hover:text-surface-700'}`} onClick={() => setMobileOpen(false)}>
+                                        {isActiveLink('/achievements') && <div className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-5 bg-brand-500 rounded-r"></div>}
+                                        <Trophy className="w-5 h-5" />
+                                        <span>Pencapaian</span>
                                     </Link>
                                 )}
                                 {canManager && (

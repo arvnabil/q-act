@@ -60,12 +60,29 @@ class SettingController extends Controller
 
         $bankAccounts = CompanyBankAccount::orderByDesc('is_default')->get();
 
+        $defaultStages = [
+            ['key' => 'data_masuk',      'name' => 'Data Masuk',      'type' => 'normal', 'color' => '#94A3B8'],
+            ['key' => 'sph_terlayang',   'name' => 'SPH Terlayang',   'type' => 'normal', 'color' => '#3B82F6'],
+            ['key' => 'hot_progress',    'name' => 'Hot Progress',    'type' => 'normal', 'color' => '#F59E0B'],
+            ['key' => 'proyek_deal',     'name' => 'Proyek Deal',     'type' => 'deal',   'color' => '#009680'],
+            ['key' => 'proyek_berjalan', 'name' => 'Proyek Berjalan', 'type' => 'normal', 'color' => '#8B5CF6'],
+            ['key' => 'proyek_selesai',  'name' => 'Proyek Selesai',  'type' => 'normal', 'color' => '#10B981'],
+            ['key' => 'no_deal',         'name' => 'No Deal',         'type' => 'lost',   'color' => '#EF4444'],
+        ];
+        $pipelineSetting = SystemSetting::find('lead_pipeline_settings');
+        $pipelineSettings = $pipelineSetting ? $pipelineSetting->value : [
+            'featured_stage_1' => 'hot_progress',
+            'featured_stage_2' => 'proyek_deal',
+            'stages'           => $defaultStages,
+        ];
+
         return Inertia::render('Settings', [
-            'companyInfo'   => $companyInfo,
-            'bankAccounts'  => $bankAccounts,
-            'masterTerms'   => $masterTerms,
-            'domainLogoMap' => $domainLogoMap,
-            'maintenanceMode' => $maintenanceMode,
+            'companyInfo'      => $companyInfo,
+            'bankAccounts'     => $bankAccounts,
+            'masterTerms'      => $masterTerms,
+            'domainLogoMap'    => $domainLogoMap,
+            'maintenanceMode'  => $maintenanceMode,
+            'pipelineSettings' => $pipelineSettings,
         ]);
     }
 
