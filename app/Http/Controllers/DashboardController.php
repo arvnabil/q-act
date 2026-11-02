@@ -22,9 +22,9 @@ class DashboardController extends Controller
 
         // Period defaults to last 6 months
         $period = $request->get('period', '6m');
-        $basis = in_array($request->get('basis', 'quotation'), ['quotation', 'po'], true)
-            ? $request->get('basis', 'quotation')
-            : 'quotation';
+        $basis = in_array($request->get('basis', 'personal'), ['quotation', 'po', 'personal'], true)
+            ? $request->get('basis', 'personal')
+            : 'personal';
         $customStart = $request->get('custom_start');
         $customEnd = $request->get('custom_end');
         $salesFilter = $request->get('sales_filter', 'all');
@@ -200,6 +200,8 @@ class DashboardController extends Controller
             ];
         })->values()->toArray();
 
+        $personalStats = $this->getPersonalDashboardData($user, $request, $isManagerOrAdmin);
+
         return Inertia::render('Dashboard', [
             'stats' => [
                 'totalQ' => $totalQ,
@@ -214,6 +216,7 @@ class DashboardController extends Controller
                 'basis' => $basis,
                 'missingPoDateCount' => $missingPoDateCount,
             ],
+            'personalStats' => $personalStats,
             'tableQuotations' => $tableQuotations,
             'tableSalesOrders' => $tableSalesOrders,
             'salesUsers' => $salesUsers->map(fn($u) => ['id' => $u->id, 'name' => $u->name])->values(),
@@ -225,6 +228,7 @@ class DashboardController extends Controller
                 'periodStart' => $periodStart->toDateString(),
                 'periodEnd' => $periodEnd->toDateString(),
                 'basis' => $basis,
+                'personalSalesId' => $request->get('personal_sales_id', $user->id),
             ],
         ]);
     }
@@ -335,5 +339,204 @@ class DashboardController extends Controller
         }
 
         return back()->with('error', 'Data target tidak valid.');
+    }
+
+    private function getPersonalDashboardData(User $user, Request $request, bool $isManagerOrAdmin): array
+    {
+        $targetUserId = ($isManagerOrAdmin && $request->filled('personal_sales_id'))
+            ? $request->get('personal_sales_id')
+            : $user->id;
+
+        $targetUser = User::find($targetUserId) ?? $user;
+
+        $userQuotations = Quotation::active()
+            ->with(['customer', 'pic', 'items'])
+            ->where(function ($q) use ($targetUser) {
+                $q->where('sales_id', $targetUser->id)
+                  ->orWhere('created_by', $targetUser->id);
+            })
+            ->get();
+
+        $salesTargetAmount = SalesTarget::where('user_id', $targetUser->id)->value('target_amount')
+            ?? (float) ($targetUser->target_sales ?? 600_000_000);
+        if ($salesTargetAmount <= 0) {
+            $salesTargetAmount = 600_000_000;
+        }
+
+        $now = now();
+        $startOfThisMonth = $now->copy()->startOfMonth();
+        $endOfThisMonth = $now->copy()->endOfMonth();
+
+        // Deals won this month
+        $wonThisMonth = $userQuotations->where('status', 'approved')->filter(function ($q) use ($startOfThisMonth, $endOfThisMonth) {
+            if ($q->po_date) {
+                return Carbon::parse($q->po_date)->betweenIncluded($startOfThisMonth, $endOfThisMonth);
+            }
+            return $q->created_at && Carbon::parse($q->created_at)->betweenIncluded($startOfThisMonth, $endOfThisMonth);
+        });
+
+        $revenueThisMonth = (float) $wonThisMonth->sum('grand_total');
+        $dealsWonThisMonth = $wonThisMonth->count();
+
+        $lostThisMonth = $userQuotations->whereIn('status', ['rejected', 'expired'])->filter(function ($q) use ($startOfThisMonth, $endOfThisMonth) {
+            return $q->created_at && Carbon::parse($q->created_at)->betweenIncluded($startOfThisMonth, $endOfThisMonth);
+        });
+        $dealsLostThisMonth = $lostThisMonth->count();
+
+        $targetPct = $salesTargetAmount > 0 ? round(($revenueThisMonth / $salesTargetAmount) * 100, 1) : 0;
+
+        // Forecast pipeline (open active quotations)
+        $openQuotations = $userQuotations->whereIn('status', ['sent', 'created', 'draft']);
+        $forecastPipeline = (float) $openQuotations->sum('grand_total');
+
+        // Last 6 months data for charts
+        $monthlyRevenueLast6 = [];
+        $monthlyTrendsLast6 = [];
+
+        for ($i = 5; $i >= 0; $i--) {
+            $mStart = $now->copy()->subMonths($i)->startOfMonth();
+            $mEnd = $now->copy()->subMonths($i)->endOfMonth();
+            $label = $mStart->locale('id')->translatedFormat('M');
+
+            $newLeads = $userQuotations->filter(function ($q) use ($mStart, $mEnd) {
+                return $q->created_at && Carbon::parse($q->created_at)->betweenIncluded($mStart, $mEnd);
+            });
+
+            $wonInMonth = $userQuotations->where('status', 'approved')->filter(function ($q) use ($mStart, $mEnd) {
+                if ($q->po_date) {
+                    return Carbon::parse($q->po_date)->betweenIncluded($mStart, $mEnd);
+                }
+                return $q->created_at && Carbon::parse($q->created_at)->betweenIncluded($mStart, $mEnd);
+            });
+
+            $revInMonth = (float) $wonInMonth->sum('grand_total');
+
+            $monthlyRevenueLast6[] = [
+                'month' => $label,
+                'year' => $mStart->format('Y'),
+                'revenue' => $revInMonth,
+                'deals' => $wonInMonth->count(),
+            ];
+
+            $monthlyTrendsLast6[] = [
+                'month' => $label,
+                'leads' => $newLeads->count(),
+                'deals' => $wonInMonth->count(),
+                'revenue' => $revInMonth,
+            ];
+        }
+
+        // All-time performance
+        $allTimeTotalLeads = $userQuotations->count();
+        $allTimeWon = $userQuotations->where('status', 'approved')->count();
+        $allTimeLost = $userQuotations->whereIn('status', ['rejected', 'expired'])->count();
+        $allTimeRevenue = (float) $userQuotations->where('status', 'approved')->sum('grand_total');
+        $allTimeWinRate = $allTimeTotalLeads > 0 ? round(($allTimeWon / $allTimeTotalLeads) * 100, 1) : 0;
+
+        // Pipeline Review & Follow-up
+        $needsFollowUpQuotations = $userQuotations->whereIn('status', ['sent', 'created']);
+        $needsFollowUpCount = $needsFollowUpQuotations->count();
+
+        $today = Carbon::today();
+        $endOfWeek = $now->copy()->endOfWeek();
+
+        $expiringSoon = $needsFollowUpQuotations->filter(function ($q) use ($today, $endOfWeek) {
+            if (!$q->expired) return false;
+            $exp = Carbon::parse($q->expired);
+            return $exp->lte($endOfWeek);
+        });
+
+        $nextFollowUp = $needsFollowUpQuotations->sortBy(function ($q) {
+            return $q->expired ? Carbon::parse($q->expired)->timestamp : 9999999999;
+        })->first();
+
+        $nextCustomerName = $nextFollowUp?->customer?->name ?? ($needsFollowUpQuotations->first()?->customer?->name ?? null);
+
+        // Upcoming tasks
+        $upcomingTasks = $needsFollowUpQuotations->sortBy(function ($q) {
+            return $q->expired ? Carbon::parse($q->expired)->timestamp : 9999999999;
+        })->take(5)->map(function ($q) use ($today) {
+            $daysLeft = $q->expired ? $today->diffInDays(Carbon::parse($q->expired), false) : null;
+            $priority = 'Normal';
+            if ($daysLeft !== null && $daysLeft <= 0) {
+                $priority = 'Hari ini';
+            } elseif ($daysLeft !== null && $daysLeft <= 3) {
+                $priority = 'Prioritas';
+            } elseif ($q->grand_total >= 50_000_000) {
+                $priority = 'Prioritas';
+            }
+
+            $action = $q->status === 'sent' ? 'FOLLOW-UP QUOTATION' : 'KONFIRMASI DRAFT';
+
+            return [
+                'id' => $q->id,
+                'action' => $action,
+                'customer' => $q->customer?->name ?? 'Pelanggan',
+                'pic' => $q->pic?->name ?? '-',
+                'grand_total' => (float) $q->grand_total,
+                'status' => $q->status,
+                'expired' => $q->expired?->toDateString(),
+                'days_left' => $daysLeft,
+                'priority' => $priority,
+            ];
+        })->values()->toArray();
+
+        // Contextual Smart Recommendation
+        $smartTipMessage = 'Fokus pada follow-up penawaran yang paling berpeluang menghasilkan deal bulan ini.';
+        if (count($upcomingTasks) > 0) {
+            $firstTask = $upcomingTasks[0];
+            $formattedVal = $this->formatShortVal($firstTask['grand_total']);
+            $smartTipMessage = "Prioritaskan follow-up {$firstTask['customer']} ({$firstTask['id']}) senilai {$formattedVal} untuk percepatan closing deal.";
+        } elseif ($needsFollowUpCount > 0) {
+            $smartTipMessage = "Terdapat {$needsFollowUpCount} penawaran berstatus aktif yang membutuhkan follow-up terencana minggu ini.";
+        }
+
+        return [
+            'targetUser' => [
+                'id' => $targetUser->id,
+                'name' => $targetUser->name,
+                'email' => $targetUser->email,
+                'role' => $targetUser->role,
+            ],
+            'revenueThisMonth' => $revenueThisMonth,
+            'dealsWonThisMonth' => $dealsWonThisMonth,
+            'dealsLostThisMonth' => $dealsLostThisMonth,
+            'targetAmount' => $salesTargetAmount,
+            'targetPct' => $targetPct,
+            'forecastPipeline' => $forecastPipeline,
+            'monthlyRevenueLast6' => $monthlyRevenueLast6,
+            'monthlyTrendsLast6' => $monthlyTrendsLast6,
+            'allTime' => [
+                'totalLeads' => $allTimeTotalLeads,
+                'dealsWon' => $allTimeWon,
+                'dealsLost' => $allTimeLost,
+                'winRate' => $allTimeWinRate,
+                'totalRevenue' => $allTimeRevenue,
+            ],
+            'pipelineReview' => [
+                'totalLeads' => $allTimeTotalLeads,
+                'dealsWon' => $allTimeWon,
+                'dealsLost' => $allTimeLost,
+                'needsFollowUp' => $needsFollowUpCount,
+                'todayAgenda' => $expiringSoon->count(),
+                'nextCustomer' => $nextCustomerName,
+                'dealsThisMonth' => $dealsWonThisMonth,
+                'monthWinRate' => ($dealsWonThisMonth + $dealsLostThisMonth) > 0
+                    ? round(($dealsWonThisMonth / ($dealsWonThisMonth + $dealsLostThisMonth)) * 100)
+                    : ($allTimeTotalLeads > 0 ? $allTimeWinRate : 0),
+            ],
+            'smartTip' => [
+                'title' => 'Rekomendasi Hari Ini',
+                'message' => $smartTipMessage,
+            ],
+            'upcomingTasks' => $upcomingTasks,
+        ];
+    }
+
+    private function formatShortVal(float $val): string
+    {
+        if ($val >= 1_000_000_000) return 'Rp ' . number_format($val / 1_000_000_000, 1, ',', '.') . ' M';
+        if ($val >= 1_000_000) return 'Rp ' . number_format($val / 1_000_000, 1, ',', '.') . ' jt';
+        return 'Rp ' . number_format($val, 0, ',', '.');
     }
 }

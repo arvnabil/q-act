@@ -6,7 +6,7 @@ import { Head } from '@inertiajs/react';
 import {
     FileText, DollarSign, TrendingUp, CheckCircle2, ChevronRight,
     Users, Target, Filter, Calendar, ChevronDown, Pencil, X, AlertTriangle,
-    Search, ShoppingCart
+    Search, ShoppingCart, UserCheck, Eye, EyeOff, Sparkles, Clock, ArrowUpRight
 } from 'lucide-react';
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -92,18 +92,545 @@ function ConversionRing({ pct }) {
     );
 }
 
+function PersonalTargetGauge({ pct = 0 }) {
+    const clampedPct = Math.min(100, Math.max(0, Math.round(pct)));
+    const radius = 48;
+    const strokeWidth = 10;
+    const circ = Math.PI * radius;
+    const dashoffset = circ - (circ * clampedPct) / 100;
+    const color = clampedPct >= 80 ? '#059669' : clampedPct >= 40 ? '#10B981' : '#14B8A6';
+
+    return (
+        <div className="flex flex-col items-center">
+            <svg width="130" height="75" viewBox="0 0 130 75" className="overflow-visible">
+                <path
+                    d="M 15 70 A 48 48 0 0 1 115 70"
+                    fill="none"
+                    stroke="#F1F5F9"
+                    strokeWidth={strokeWidth}
+                    strokeLinecap="round"
+                />
+                <path
+                    d="M 15 70 A 48 48 0 0 1 115 70"
+                    fill="none"
+                    stroke={color}
+                    strokeWidth={strokeWidth}
+                    strokeLinecap="round"
+                    strokeDasharray={circ}
+                    strokeDashoffset={dashoffset}
+                    className="transition-all duration-700 ease-out"
+                />
+                <text
+                    x="65"
+                    y="60"
+                    textAnchor="middle"
+                    className="fill-surface-900 font-extrabold"
+                    fontSize="18"
+                    fontWeight="800"
+                >
+                    {clampedPct}%
+                </text>
+            </svg>
+            <span className="text-[10px] text-surface-400 font-semibold mt-1">Win rate</span>
+        </div>
+    );
+}
+
+function getSmoothCurvePath(points) {
+    if (!points || points.length === 0) return '';
+    if (points.length === 1) return `M ${points[0].x} ${points[0].y}`;
+    let d = `M ${points[0].x} ${points[0].y}`;
+    for (let i = 0; i < points.length - 1; i++) {
+        const p0 = points[i === 0 ? 0 : i - 1];
+        const p1 = points[i];
+        const p2 = points[i + 1];
+        const p3 = points[i + 2] || p2;
+
+        const cp1x = p1.x + (p2.x - p0.x) / 6;
+        const cp1y = p1.y + (p2.y - p0.y) / 6;
+        const cp2x = p2.x - (p3.x - p1.x) / 6;
+        const cp2y = p2.y - (p3.y - p1.y) / 6;
+
+        d += ` C ${cp1x.toFixed(1)} ${cp1y.toFixed(1)}, ${cp2x.toFixed(1)} ${cp2y.toFixed(1)}, ${p2.x.toFixed(1)} ${p2.y.toFixed(1)}`;
+    }
+    return d;
+}
+
+function PersonalTrendChart({ trends = [] }) {
+    if (!trends || trends.length === 0) {
+        return (
+            <div className="flex items-center justify-center h-44 text-xs text-surface-400">
+                Belum ada data tren 6 bulan terakhir.
+            </div>
+        );
+    }
+
+    const maxVal = Math.max(
+        5,
+        ...trends.map(t => Math.max(t.leads || 0, t.deals || 0))
+    );
+
+    const width = 500;
+    const height = 150;
+    const padX = 40;
+    const padY = 25;
+    const innerW = width - padX * 2;
+    const innerH = height - padY * 2;
+
+    const stepX = trends.length > 1 ? innerW / (trends.length - 1) : innerW;
+
+    const leadPoints = trends.map((t, idx) => ({
+        x: padX + idx * stepX,
+        y: height - padY - ((t.leads || 0) / maxVal) * innerH,
+        val: t.leads || 0,
+        month: t.month,
+    }));
+
+    const dealPoints = trends.map((t, idx) => ({
+        x: padX + idx * stepX,
+        y: height - padY - ((t.deals || 0) / maxVal) * innerH,
+        val: t.deals || 0,
+        month: t.month,
+    }));
+
+    const leadCurve = getSmoothCurvePath(leadPoints);
+    const leadArea = leadPoints.length > 1
+        ? `${leadCurve} L ${leadPoints[leadPoints.length - 1].x} ${height - padY} L ${leadPoints[0].x} ${height - padY} Z`
+        : '';
+
+    const dealCurve = getSmoothCurvePath(dealPoints);
+    const dealArea = dealPoints.length > 1
+        ? `${dealCurve} L ${dealPoints[dealPoints.length - 1].x} ${height - padY} L ${dealPoints[0].x} ${height - padY} Z`
+        : '';
+
+    return (
+        <div className="w-full overflow-x-auto">
+            <svg viewBox={`0 0 ${width} ${height + 25}`} className="w-full h-44 min-w-[360px]">
+                <defs>
+                    <linearGradient id="blueGrad" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="#2563EB" stopOpacity="0.2" />
+                        <stop offset="100%" stopColor="#2563EB" stopOpacity="0.0" />
+                    </linearGradient>
+                    <linearGradient id="emeraldGrad" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="#059669" stopOpacity="0.2" />
+                        <stop offset="100%" stopColor="#059669" stopOpacity="0.0" />
+                    </linearGradient>
+                </defs>
+
+                <line x1={padX} y1={padY} x2={width - padX} y2={padY} stroke="#F1F5F9" strokeWidth="1" strokeDasharray="3 3" />
+                <line x1={padX} y1={padY + innerH / 2} x2={width - padX} y2={padY + innerH / 2} stroke="#F1F5F9" strokeWidth="1" strokeDasharray="3 3" />
+                <line x1={padX} y1={height - padY} x2={width - padX} y2={height - padY} stroke="#E2E8F0" strokeWidth="1" />
+
+                <text x={padX - 8} y={padY + 4} textAnchor="end" fontSize="10" fill="#94A3B8" fontWeight="600">{maxVal}</text>
+                <text x={padX - 8} y={padY + innerH / 2 + 4} textAnchor="end" fontSize="10" fill="#94A3B8" fontWeight="600">{Math.round(maxVal / 2)}</text>
+                <text x={padX - 8} y={height - padY + 4} textAnchor="end" fontSize="10" fill="#94A3B8" fontWeight="600">0</text>
+
+                {leadArea && <path d={leadArea} fill="url(#blueGrad)" />}
+                {dealArea && <path d={dealArea} fill="url(#emeraldGrad)" />}
+
+                {leadCurve && <path d={leadCurve} fill="none" stroke="#2563EB" strokeWidth="2.5" strokeLinecap="round" />}
+                {dealCurve && <path d={dealCurve} fill="none" stroke="#059669" strokeWidth="2.5" strokeLinecap="round" />}
+
+                {leadPoints.map((p, i) => (
+                    <circle key={`lead-${i}`} cx={p.x} cy={p.y} r="3.5" fill="#FFFFFF" stroke="#2563EB" strokeWidth="2">
+                        <title>{`${p.month}: ${p.val} lead baru`}</title>
+                    </circle>
+                ))}
+                {dealPoints.map((p, i) => (
+                    <circle key={`deal-${i}`} cx={p.x} cy={p.y} r="3.5" fill="#FFFFFF" stroke="#059669" strokeWidth="2">
+                        <title>{`${p.month}: ${p.val} deal menang`}</title>
+                    </circle>
+                ))}
+
+                {leadPoints.map((p, i) => (
+                    <text key={`lbl-${i}`} x={p.x} y={height + 15} textAnchor="middle" fontSize="11" fill="#64748B" fontWeight="600">
+                        {p.month}
+                    </text>
+                ))}
+            </svg>
+        </div>
+    );
+}
+
+function PersonalSalesDashboard({
+    personalStats,
+    auth,
+    salesUsers = [],
+    isManagerOrAdmin = false,
+    selectedSalesId,
+    onSelectSalesUser,
+}) {
+    const [isCollapsed, setIsCollapsed] = useState(false);
+
+    const {
+        targetUser = {},
+        revenueThisMonth = 0,
+        dealsWonThisMonth = 0,
+        dealsLostThisMonth = 0,
+        targetAmount = 600000000,
+        targetPct = 0,
+        forecastPipeline = 0,
+        monthlyRevenueLast6 = [],
+        monthlyTrendsLast6 = [],
+        allTime = {},
+        pipelineReview = {},
+        smartTip = {},
+        upcomingTasks = [],
+    } = personalStats || {};
+
+    const maxMonthlyRev = Math.max(1, ...(monthlyRevenueLast6 || []).map(m => m.revenue || 0));
+
+    const hour = new Date().getHours();
+    const timeGreeting = hour < 11 ? 'Good morning' : hour < 15 ? 'Good afternoon' : hour < 18 ? 'Good afternoon' : 'Good evening';
+
+    const todayDateFormatted = new Date().toLocaleDateString('id-ID', {
+        weekday: 'long',
+        day: 'numeric',
+        month: 'long',
+        year: 'numeric'
+    });
+
+    const currentMonthYear = new Date().toLocaleDateString('id-ID', {
+        month: 'long',
+        year: 'numeric'
+    });
+
+    return (
+        <div className="space-y-6">
+            {/* ── Top Greeting Header ─────────────────────────────────────── */}
+            <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
+                <div>
+                    <div className="text-[11px] font-semibold tracking-wider text-surface-400 uppercase mb-1">
+                        SALES WORKSPACE <span className="text-surface-300">/</span> WORKSPACE <span className="text-surface-300">/</span> <span className="text-brand-600 font-bold">DASHBOARD</span>
+                    </div>
+                    <h1 className="text-2xl sm:text-3xl font-extrabold text-surface-900 tracking-tight">
+                        {timeGreeting}, {targetUser?.name || auth?.user?.name}
+                    </h1>
+                    <p className="mt-1 text-xs sm:text-sm text-surface-500 flex items-center gap-1.5 flex-wrap">
+                        <span className="font-semibold text-surface-700">{todayDateFormatted}</span>
+                        <span className="text-surface-300">•</span>
+                        <span>Fokus pada follow-up yang paling berpeluang menghasilkan deal.</span>
+                    </p>
+                </div>
+
+                <div className="flex items-center gap-3 self-start md:self-auto">
+                    <span className="hidden sm:inline-block text-xs italic font-medium text-surface-400 select-none">
+                        "Always know what's next."
+                    </span>
+
+                    {/* Manager / Admin Switcher */}
+                    {isManagerOrAdmin && salesUsers.length > 0 && (
+                        <div className="relative">
+                            <select
+                                value={selectedSalesId || targetUser?.id}
+                                onChange={(e) => onSelectSalesUser(e.target.value)}
+                                className="appearance-none pl-3 pr-8 py-1.5 text-xs font-semibold border border-surface-200 rounded-lg bg-white text-surface-700 focus:outline-none focus:ring-2 focus:ring-brand-500/30 cursor-pointer shadow-2xs"
+                            >
+                                {salesUsers.map((s) => (
+                                    <option key={s.id} value={s.id}>
+                                        Sales: {s.name}
+                                    </option>
+                                ))}
+                            </select>
+                            <ChevronDown className="w-3.5 h-3.5 absolute right-2.5 top-1/2 -translate-y-1/2 text-surface-400 pointer-events-none" />
+                        </div>
+                    )}
+                </div>
+            </div>
+
+            {/* ── Card 1: Performa Saya ────────────────────────────────────── */}
+            <div className="bg-white rounded-2xl border border-surface-200 p-6 shadow-xs">
+                {/* Header */}
+                <div className="flex items-center justify-between pb-4 border-b border-surface-100">
+                    <div>
+                        <h2 className="text-base font-bold text-surface-900">Performa saya</h2>
+                        <p className="text-xs text-surface-400 font-medium capitalize">{currentMonthYear}</p>
+                    </div>
+                    <button
+                        type="button"
+                        onClick={() => setIsCollapsed(!isCollapsed)}
+                        className="text-xs font-semibold text-surface-500 hover:text-surface-800 px-3 py-1.5 rounded-lg border border-surface-200 hover:bg-surface-50 transition-colors flex items-center gap-1.5 cursor-pointer"
+                    >
+                        {isCollapsed ? (
+                            <>
+                                <Eye className="w-3.5 h-3.5" />
+                                <span>Tampilkan</span>
+                            </>
+                        ) : (
+                            <>
+                                <EyeOff className="w-3.5 h-3.5" />
+                                <span>Sembunyikan</span>
+                            </>
+                        )}
+                    </button>
+                </div>
+
+                {!isCollapsed && (
+                    <div className="pt-6 space-y-6">
+                        {/* Top Row: Revenue saya + Target pribadi */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
+                            {/* Revenue saya */}
+                            <div className="space-y-1.5">
+                                <span className="text-xs font-bold text-surface-500 uppercase tracking-wider">Revenue saya</span>
+                                <div className="text-3xl sm:text-4xl font-extrabold text-surface-900 tracking-tight">
+                                    {formatFull(revenueThisMonth)}
+                                </div>
+                                <p className="text-xs text-surface-500">Revenue bulan ini dari deal Anda</p>
+                                <div className="pt-2 text-[11px] text-surface-400">
+                                    {dealsWonThisMonth} deal selesai tgl bulan ini
+                                </div>
+                            </div>
+
+                            {/* Target pribadi */}
+                            <div className="flex flex-col items-center md:items-end md:pr-4">
+                                <span className="text-xs font-bold text-surface-500 uppercase tracking-wider mb-2 self-start md:self-auto">
+                                    Target pribadi
+                                </span>
+                                <div className="flex flex-col items-center">
+                                    <PersonalTargetGauge pct={targetPct} />
+                                    <div className="mt-2 text-sm font-extrabold text-surface-800 text-center">
+                                        {formatShort(revenueThisMonth)} / {formatShort(targetAmount)}
+                                    </div>
+                                    <div className="text-[11px] text-surface-400 font-medium mt-0.5">
+                                        Forecast pipeline {formatShort(forecastPipeline)}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <hr className="border-surface-100" />
+
+                        {/* Bottom Row: 6-month bars + All-time summary */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-end">
+                            {/* Revenue saya 6 bulan terakhir */}
+                            <div>
+                                <h3 className="text-xs font-bold text-surface-700 uppercase tracking-wider mb-4">
+                                    Revenue saya 6 bulan terakhir
+                                </h3>
+                                <div className="flex items-end justify-between gap-2 pt-2 pb-1">
+                                    {(monthlyRevenueLast6 || []).map((m, idx) => {
+                                        const rev = m.revenue || 0;
+                                        const h = rev > 0 ? Math.max(16, Math.round((rev / maxMonthlyRev) * 70)) : 4;
+                                        return (
+                                            <div key={idx} className="flex flex-col items-center gap-1.5 flex-1 min-w-[45px]">
+                                                <div className="text-[10px] font-semibold text-surface-600 whitespace-nowrap">
+                                                    {rev > 0 ? formatShort(rev) : '-'}
+                                                </div>
+                                                <div className="w-full flex items-end justify-center" style={{ height: '70px' }}>
+                                                    <div
+                                                        className={`w-6 sm:w-8 rounded-t transition-all ${
+                                                            rev > 0
+                                                                ? 'bg-brand-500 hover:bg-brand-600'
+                                                                : 'h-1 bg-surface-200'
+                                                        }`}
+                                                        style={{ height: `${h}px` }}
+                                                        title={`${m.month} ${m.year}: ${formatFull(rev)}`}
+                                                    />
+                                                </div>
+                                                <div className="text-[11px] text-surface-500 font-semibold">{m.month}</div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+
+                            {/* Performa saya sepanjang masa */}
+                            <div>
+                                <h3 className="text-xs font-bold text-surface-700 uppercase tracking-wider mb-4">
+                                    Performa saya sepanjang masa
+                                </h3>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="p-3 rounded-xl bg-surface-50/80 border border-surface-100">
+                                        <div className="text-xl sm:text-2xl font-black text-surface-900">{allTime.totalLeads ?? 0}</div>
+                                        <div className="text-[11px] text-surface-500 font-medium mt-0.5">Total lead</div>
+                                    </div>
+                                    <div className="p-3 rounded-xl bg-surface-50/80 border border-surface-100">
+                                        <div className="text-xl sm:text-2xl font-black text-emerald-600">{allTime.winRate ?? 0}%</div>
+                                        <div className="text-[11px] text-surface-500 font-medium mt-0.5">Win rate</div>
+                                    </div>
+                                    <div className="p-3 rounded-xl bg-surface-50/80 border border-surface-100">
+                                        <div className="text-xl sm:text-2xl font-black text-surface-900">{allTime.dealsWon ?? 0}</div>
+                                        <div className="text-[11px] text-surface-500 font-medium mt-0.5">Deal dimenangkan</div>
+                                    </div>
+                                    <div className="p-3 rounded-xl bg-surface-50/80 border border-surface-100">
+                                        <div className="text-xl sm:text-2xl font-black text-surface-900">{formatShort(allTime.totalRevenue ?? 0)}</div>
+                                        <div className="text-[11px] text-surface-500 font-medium mt-0.5">Total revenue</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )}
+            </div>
+
+            {/* ── Section 2: Pipeline Review Mingguan ──────────────────────── */}
+            <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                    <h2 className="text-base font-bold text-surface-900">Pipeline Review mingguan</h2>
+                    <div className="flex items-center gap-1.5 text-xs font-semibold text-surface-600 bg-white border border-surface-200 px-3 py-1.5 rounded-lg shadow-2xs">
+                        <Calendar className="w-3.5 h-3.5 text-surface-400" />
+                        <span>{todayDateFormatted}</span>
+                    </div>
+                </div>
+
+                {/* Dark Smart Advisor Banner */}
+                <div className="bg-slate-900 text-white rounded-2xl p-4 sm:p-5 shadow-sm border border-slate-800 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                    <div className="flex items-start sm:items-center gap-3.5">
+                        <div className="w-10 h-10 rounded-xl bg-indigo-500/20 border border-indigo-400/30 flex items-center justify-center shrink-0 text-indigo-300">
+                            <Sparkles className="w-5 h-5 text-indigo-400" />
+                        </div>
+                        <div>
+                            <div className="flex items-center gap-2">
+                                <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-400 bg-indigo-950/60 border border-indigo-800/40 px-2 py-0.5 rounded">
+                                    AI Advisor
+                                </span>
+                                <h3 className="text-sm font-bold text-white">{smartTip.title || 'Rekomendasi Hari Ini'}</h3>
+                            </div>
+                            <p className="mt-1 text-xs text-slate-300 max-w-2xl leading-relaxed">
+                                {smartTip.message}
+                            </p>
+                        </div>
+                    </div>
+
+                    <Link
+                        href="/quotations?status=sent"
+                        className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-white text-slate-900 hover:bg-slate-100 rounded-xl text-xs font-bold transition-all shadow-sm shrink-0 self-start md:self-auto cursor-pointer"
+                    >
+                        <span>Buka Penawaran Prioritas</span>
+                        <ChevronRight className="w-3.5 h-3.5" />
+                    </Link>
+                </div>
+
+                {/* 4 Pipeline Stat Cards */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div className="bg-white rounded-xl border border-surface-200 p-5 shadow-xs flex flex-col gap-1">
+                        <div className="text-3xl font-black text-surface-900">{pipelineReview.totalLeads ?? 0}</div>
+                        <div className="text-xs font-bold text-surface-700">Total lead</div>
+                        <div className="text-[11px] text-surface-400 mt-1">
+                            {pipelineReview.dealsWon ?? 0} menang, {pipelineReview.dealsLost ?? 0} kalah
+                        </div>
+                    </div>
+
+                    <div className="bg-white rounded-xl border border-surface-200 p-5 shadow-xs flex flex-col gap-1">
+                        <div className="text-3xl font-black text-surface-900">{pipelineReview.needsFollowUp ?? 0}</div>
+                        <div className="text-xs font-bold text-surface-700">Perlu follow-up</div>
+                        <div className="text-[11px] text-surface-400 mt-1">Lead dengan langkah berikutnya</div>
+                    </div>
+
+                    <div className="bg-white rounded-xl border border-surface-200 p-5 shadow-xs flex flex-col gap-1">
+                        <div className="text-3xl font-black text-surface-900">{pipelineReview.todayAgenda ?? 0}</div>
+                        <div className="text-xs font-bold text-surface-700">Kunjungan / Agenda hari ini</div>
+                        <div className="text-[11px] text-surface-400 mt-1 truncate">
+                            Berikutnya: <span className="font-semibold text-surface-600">{pipelineReview.nextCustomer || '-'}</span>
+                        </div>
+                    </div>
+
+                    <div className="bg-white rounded-xl border border-surface-200 p-5 shadow-xs flex flex-col gap-1">
+                        <div className="text-3xl font-black text-surface-900">{pipelineReview.dealsThisMonth ?? 0}</div>
+                        <div className="text-xs font-bold text-surface-700">Deal bulan ini</div>
+                        <div className="text-[11px] text-surface-400 mt-1">
+                            {dealsLostThisMonth} kalah • win rate {pipelineReview.monthWinRate ?? 0}% sepanjang masa
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {/* ── Section 3: Bottom 2-Column Grid (Trends & Upcoming Tasks) ─ */}
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                {/* Tren lead & deal (Left) */}
+                <div className="lg:col-span-7 bg-white rounded-2xl border border-surface-200 p-6 shadow-xs flex flex-col justify-between">
+                    <div className="flex items-center justify-between pb-3 border-b border-surface-100 mb-4">
+                        <div>
+                            <h2 className="text-sm font-bold text-surface-900">Tren lead & deal</h2>
+                            <p className="text-[11px] text-surface-400">6 bulan terakhir</p>
+                        </div>
+                        <div className="flex items-center gap-4 text-xs">
+                            <span className="flex items-center gap-1.5 font-semibold text-surface-600">
+                                <span className="w-2.5 h-2.5 rounded-full bg-blue-500 inline-block" />
+                                Lead baru
+                            </span>
+                            <span className="flex items-center gap-1.5 font-semibold text-surface-600">
+                                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block" />
+                                Deal menang
+                            </span>
+                        </div>
+                    </div>
+
+                    <div className="flex-1 flex items-center">
+                        <PersonalTrendChart trends={monthlyTrendsLast6} />
+                    </div>
+                </div>
+
+                {/* Tugas terdekat (Right) */}
+                <div className="lg:col-span-5 bg-white rounded-2xl border border-surface-200 p-6 shadow-xs flex flex-col">
+                    <div className="flex items-center justify-between pb-3 border-b border-surface-100 mb-4">
+                        <h2 className="text-sm font-bold text-surface-900">Tugas terdekat</h2>
+                        <Link href="/quotations" className="text-xs font-bold text-brand-600 hover:text-brand-700 flex items-center gap-1">
+                            Lihat semua <ChevronRight className="w-3.5 h-3.5" />
+                        </Link>
+                    </div>
+
+                    <div className="space-y-3 flex-1">
+                        {(!upcomingTasks || upcomingTasks.length === 0) ? (
+                            <div className="flex flex-col items-center justify-center py-12 text-center text-xs text-surface-400">
+                                <CheckCircle2 className="w-8 h-8 text-emerald-400 mb-2 opacity-60" />
+                                <span>Tidak ada tugas mendesak saat ini.</span>
+                                <span className="text-[11px] text-surface-400 mt-0.5">Semua quotation dan pipeline terpantau aman.</span>
+                            </div>
+                        ) : (
+                            upcomingTasks.map((task) => {
+                                const priorityBadge = task.priority === 'Prioritas'
+                                    ? { label: 'Prioritas', cls: 'bg-brand-50 text-brand-700 border-brand-200' }
+                                    : task.priority === 'Hari ini'
+                                        ? { label: 'Hari ini', cls: 'bg-amber-50 text-amber-700 border-amber-200' }
+                                        : { label: 'Normal', cls: 'bg-surface-100 text-surface-600 border-surface-200' };
+
+                                return (
+                                    <Link
+                                        key={task.id}
+                                        href={route('quotations.show', task.id)}
+                                        className="block p-3 rounded-xl border border-surface-200 hover:border-brand-300 hover:bg-surface-50/70 transition-all group cursor-pointer"
+                                    >
+                                        <div className="flex items-start justify-between gap-2">
+                                            <div className="min-w-0 flex-1">
+                                                <div className="text-[10px] font-extrabold uppercase tracking-wider text-surface-500 mb-0.5 group-hover:text-brand-600 transition-colors">
+                                                    {task.action}
+                                                </div>
+                                                <h4 className="text-xs font-bold text-surface-800 truncate">
+                                                    {task.customer}
+                                                </h4>
+                                                <p className="text-[11px] text-surface-400 mt-0.5">
+                                                    PIC: {task.pic} • <span className="font-semibold text-surface-600">{formatShort(task.grand_total)}</span>
+                                                </p>
+                                            </div>
+                                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded border shrink-0 ${priorityBadge.cls}`}>
+                                                {priorityBadge.label}
+                                            </span>
+                                        </div>
+                                    </Link>
+                                );
+                            })
+                        )}
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+}
+
 // ─── Main Component ──────────────────────────────────────────────────────────
 
-export default function Dashboard({ stats, salesUsers, filters, auth, tableQuotations = [], tableSalesOrders = [] }) {
+export default function Dashboard({ stats, personalStats, salesUsers, filters, auth, tableQuotations = [], tableSalesOrders = [] }) {
     const { user, permissions = [] } = auth || {};
     const canEditTarget = permissions.includes('sales_targets_edit') || ['Administrator', 'Sales Manager', 'Manager'].includes(user?.spatie_role || user?.role);
     const isManagerOrAdmin = ['Administrator', 'Sales Manager', 'Manager'].includes(user?.spatie_role || user?.role);
 
     const [period, setPeriod] = useState(filters?.period || '6m');
-    const [basis, setBasis] = useState(filters?.basis || 'quotation');
+    const [basis, setBasis] = useState(filters?.basis || 'personal');
     const [salesFilter, setSalesFilter] = useState(filters?.salesFilter || 'all');
     const [customStart, setCustomStart] = useState(filters?.customStart || '');
     const [customEnd, setCustomEnd] = useState(filters?.customEnd || '');
+    const [personalSalesId, setPersonalSalesId] = useState(filters?.personalSalesId || auth?.user?.id);
 
     // Table search & pagination state
     const [tableSearch, setTableSearch] = useState('');
@@ -124,7 +651,12 @@ export default function Dashboard({ stats, salesUsers, filters, auth, tableQuota
     } = stats || {};
 
     const isPoDashboard = basis === 'po';
-    const dashboardTitle = isPoDashboard ? 'Dashboard PO' : 'Dashboard Quotation';
+    const isPersonalDashboard = basis === 'personal';
+    const dashboardTitle = isPersonalDashboard
+        ? 'Performa Sales'
+        : isPoDashboard
+            ? 'Dashboard PO'
+            : 'Dashboard Quotation';
 
     // Reset table pagination when filters change
     useEffect(() => {
@@ -226,8 +758,14 @@ export default function Dashboard({ stats, salesUsers, filters, auth, tableQuota
             sales_filter: overrides.salesFilter ?? salesFilter,
             custom_start: overrides.customStart ?? customStart,
             custom_end: overrides.customEnd ?? customEnd,
+            personal_sales_id: overrides.personal_sales_id ?? personalSalesId,
         };
         router.get('/dashboard', params, { preserveState: true, replace: true });
+    };
+
+    const handlePersonalSalesChange = (id) => {
+        setPersonalSalesId(id);
+        applyFilters({ personal_sales_id: id, basis: 'personal' });
     };
 
     const handlePeriodChange = (key) => {
@@ -272,12 +810,22 @@ export default function Dashboard({ stats, salesUsers, filters, auth, tableQuota
             <div className="animate-fade-in-up space-y-6">
 
                 {/* ── Reporting basis tabs ──────────────────────────────────── */}
-                <div className="bg-white rounded-xl border border-surface-200 p-1.5 shadow-sm inline-flex gap-1">
+                <div className="bg-white rounded-xl border border-surface-200 p-1.5 shadow-sm inline-flex gap-1 flex-wrap">
+                    <button
+                        type="button"
+                        onClick={() => handleBasisChange('personal')}
+                        className={`px-4 py-2 rounded-lg text-sm font-bold transition-all flex items-center gap-1.5 ${
+                            basis === 'personal' ? 'bg-brand-600 text-white shadow-sm' : 'text-surface-600 hover:bg-surface-50'
+                        }`}
+                    >
+                        <UserCheck className="w-4 h-4" />
+                        Performa Saya
+                    </button>
                     <button
                         type="button"
                         onClick={() => handleBasisChange('quotation')}
                         className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${
-                            !isPoDashboard ? 'bg-brand-600 text-white shadow-sm' : 'text-surface-600 hover:bg-surface-50'
+                            basis === 'quotation' ? 'bg-brand-600 text-white shadow-sm' : 'text-surface-600 hover:bg-surface-50'
                         }`}
                     >
                         Dashboard Quotation
@@ -286,12 +834,24 @@ export default function Dashboard({ stats, salesUsers, filters, auth, tableQuota
                         type="button"
                         onClick={() => handleBasisChange('po')}
                         className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${
-                            isPoDashboard ? 'bg-brand-600 text-white shadow-sm' : 'text-surface-600 hover:bg-surface-50'
+                            basis === 'po' ? 'bg-brand-600 text-white shadow-sm' : 'text-surface-600 hover:bg-surface-50'
                         }`}
                     >
                         Dashboard PO
                     </button>
                 </div>
+
+                {isPersonalDashboard ? (
+                    <PersonalSalesDashboard
+                        personalStats={personalStats}
+                        auth={auth}
+                        salesUsers={salesUsers}
+                        isManagerOrAdmin={isManagerOrAdmin}
+                        selectedSalesId={personalSalesId}
+                        onSelectSalesUser={handlePersonalSalesChange}
+                    />
+                ) : (
+                    <>
 
                 {isPoDashboard && missingPoDateCount > 0 && (
                     <div className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 shadow-sm">
@@ -550,7 +1110,7 @@ export default function Dashboard({ stats, salesUsers, filters, auth, tableQuota
                                 {topCustomers.map((c, i) => {
                                     const barW = maxCustomerPO > 0 ? Math.round((c.poValue / maxCustomerPO) * 100) : 0;
                                     const contribPct = Math.round((c.poValue / totalCustomerPO) * 100);
-                                    const rankColors = ['bg-amber-100 text-amber-700', 'bg-gray-100 text-gray-600', 'bg-orange-100 text-orange-700'];
+                                    const rankColors = ['bg-amber-100 text-amber-700', 'bg-gray-100 text-gray-600', 'bg-brand-100 text-brand-700'];
                                     const rankCls = rankColors[i] || 'bg-surface-100 text-surface-500';
                                     const detailHref = c.id && c.id !== 'unknown' ? route('customers.show', c.id) : null;
                                     const RowWrapper = detailHref ? Link : 'div';
@@ -966,6 +1526,8 @@ export default function Dashboard({ stats, salesUsers, filters, auth, tableQuota
                         </div>
                     )}
                 </div>
+                </>
+            )}
             </div>
         </AuthenticatedLayout>
     );
