@@ -4,16 +4,183 @@ import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import CustomerModal from '@/Components/CustomerModal';
 import Pagination from '@/Components/Pagination';
 import { Head, router, usePage } from '@inertiajs/react';
+import axios from 'axios';
 import {
     Search, Plus, Users as UsersIcon, Mail, Phone,
     Edit, Trash2, LayoutGrid, List as ListIcon, Loader2, Box,
-    AlertTriangle
+    AlertTriangle, GitMerge, ChevronRight, CheckCircle2, X
 } from 'lucide-react';
 
 const PAGE_SIZE = 8;
 
+// ─── Merge Duplicates Modal ───────────────────────────────────────────────────
+function MergeDuplicatesModal({ onClose }) {
+    const [loading, setLoading] = useState(false);
+    const [merging, setMerging] = useState(false);
+    const [duplicates, setDuplicates] = useState([]);
+    const [error, setError] = useState(null);
+    const [mergeTarget, setMergeTarget] = useState(null); // { keepId, removeId }
+    const [mergeResult, setMergeResult] = useState(null);
+
+    useEffect(() => {
+        setLoading(true);
+        axios.get(route('customers.duplicates'))
+            .then(res => setDuplicates(res.data.duplicates || []))
+            .catch(() => setError('Gagal memuat data duplikat.'))
+            .finally(() => setLoading(false));
+    }, []);
+
+    const handleMerge = async () => {
+        if (!mergeTarget) return;
+        setMerging(true);
+        setError(null);
+        try {
+            const res = await axios.post(route('customers.merge'), mergeTarget, {
+                headers: { 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content },
+            });
+            setMergeResult(res.data);
+            // Refresh duplicates list
+            const dupRes = await axios.get(route('customers.duplicates'));
+            setDuplicates(dupRes.data.duplicates || []);
+            setMergeTarget(null);
+        } catch (e) {
+            setError(e.response?.data?.message || 'Gagal menggabungkan customer.');
+        } finally {
+            setMerging(false);
+        }
+    };
+
+    return ReactDOM.createPortal(
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[85vh] flex flex-col">
+                {/* Header */}
+                <div className="flex items-center justify-between px-6 py-4 border-b border-surface-200">
+                    <div className="flex items-center gap-3">
+                        <div className="w-9 h-9 rounded-xl bg-amber-50 flex items-center justify-center">
+                            <GitMerge className="w-5 h-5 text-amber-600" />
+                        </div>
+                        <div>
+                            <h2 className="text-base font-bold text-surface-800">Gabung Customer Duplikat</h2>
+                            <p className="text-xs text-surface-500">Admin only — data akan digabungkan ke customer tertua</p>
+                        </div>
+                    </div>
+                    <button onClick={onClose} className="p-2 hover:bg-surface-100 rounded-lg transition-colors">
+                        <X className="w-4 h-4 text-surface-500" />
+                    </button>
+                </div>
+
+                <div className="flex-1 overflow-y-auto px-6 py-4">
+                    {loading && (
+                        <div className="flex items-center justify-center py-12 text-surface-400">
+                            <Loader2 className="w-6 h-6 animate-spin mr-2" />
+                            <span className="text-sm">Memindai duplikat...</span>
+                        </div>
+                    )}
+
+                    {!loading && duplicates.length === 0 && (
+                        <div className="flex flex-col items-center justify-center py-12 text-surface-400">
+                            <CheckCircle2 className="w-10 h-10 mb-3 text-emerald-400" />
+                            <p className="font-semibold text-emerald-600">Tidak ada duplikat ditemukan!</p>
+                            <p className="text-xs mt-1">Semua nama customer sudah unik.</p>
+                        </div>
+                    )}
+
+                    {error && (
+                        <div className="mb-4 px-4 py-3 bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl flex items-center gap-2">
+                            <AlertTriangle className="w-4 h-4 shrink-0" />
+                            {error}
+                        </div>
+                    )}
+
+                    {mergeResult && (
+                        <div className="mb-4 px-4 py-3 bg-emerald-50 border border-emerald-200 text-emerald-700 text-sm rounded-xl">
+                            <p className="font-semibold">{mergeResult.message}</p>
+                            <p className="text-xs mt-1 text-emerald-600">
+                                {mergeResult.stats?.quotations_moved} quotation · {mergeResult.stats?.orders_moved} SO · {mergeResult.stats?.leads_moved} lead dipindahkan
+                            </p>
+                        </div>
+                    )}
+
+                    {!loading && duplicates.map((group, gi) => (
+                        <div key={gi} className="mb-5 border border-amber-200 rounded-xl overflow-hidden">
+                            <div className="bg-amber-50 px-4 py-2 flex items-center gap-2">
+                                <AlertTriangle className="w-4 h-4 text-amber-500" />
+                                <span className="text-sm font-semibold text-amber-700">
+                                    "{group.customers[0]?.name}" — {group.count} entri ditemukan
+                                </span>
+                            </div>
+                            <div className="divide-y divide-surface-100">
+                                {group.customers.map((c, ci) => {
+                                    const isKeep = ci === 0;
+                                    const isSelectedKeep = mergeTarget?.keep_id === c.id;
+                                    const isSelectedRemove = mergeTarget?.remove_id === c.id;
+                                    return (
+                                        <div
+                                            key={c.id}
+                                            className={`px-4 py-3 flex items-center justify-between gap-3 ${isKeep ? 'bg-emerald-50/30' : 'bg-white'}`}
+                                        >
+                                            <div className="flex-1 min-w-0">
+                                                <div className="flex items-center gap-2">
+                                                    <span className="text-xs font-mono text-surface-400">{c.id}</span>
+                                                    {isKeep && (
+                                                        <span className="text-[10px] bg-emerald-100 text-emerald-600 font-bold px-1.5 py-0.5 rounded">SIMPAN</span>
+                                                    )}
+                                                </div>
+                                                <p className="text-sm font-semibold text-surface-800 truncate">{c.name}</p>
+                                                <p className="text-xs text-surface-400 mt-0.5">
+                                                    {c.pic_count} PIC · {c.quot_count} Quot · {c.so_count} SO · Dibuat: {c.created_at ? new Date(c.created_at).toLocaleDateString('id-ID') : '—'}
+                                                </p>
+                                            </div>
+                                            {!isKeep && (
+                                                <button
+                                                    onClick={() => setMergeTarget({ keep_id: group.customers[0].id, remove_id: c.id })}
+                                                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors shrink-0
+                                                        ${mergeTarget?.remove_id === c.id
+                                                            ? 'bg-amber-500 text-white'
+                                                            : 'bg-amber-100 text-amber-700 hover:bg-amber-200'}`}
+                                                >
+                                                    <GitMerge className="w-3.5 h-3.5" />
+                                                    {mergeTarget?.remove_id === c.id ? 'Dipilih' : 'Gabung ke SIMPAN'}
+                                                </button>
+                                            )}
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    ))}
+                </div>
+
+                {/* Footer */}
+                <div className="px-6 py-4 border-t border-surface-200 flex items-center justify-between gap-3">
+                    <p className="text-xs text-surface-400">
+                        Semua Quotation, SO, dan Lead dari customer yang dihapus akan dipindahkan ke customer yang disimpan.
+                    </p>
+                    <div className="flex items-center gap-2 shrink-0">
+                        <button onClick={onClose} className="px-4 py-2 text-sm font-medium text-surface-600 hover:bg-surface-100 rounded-lg transition-colors">
+                            Tutup
+                        </button>
+                        {mergeTarget && (
+                            <button
+                                onClick={handleMerge}
+                                disabled={merging}
+                                className="flex items-center gap-2 px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white text-sm font-semibold rounded-lg transition-colors disabled:opacity-60"
+                            >
+                                {merging ? <Loader2 className="w-4 h-4 animate-spin" /> : <GitMerge className="w-4 h-4" />}
+                                Gabungkan Sekarang
+                            </button>
+                        )}
+                    </div>
+                </div>
+            </div>
+        </div>,
+        document.body
+    );
+}
+
 export default function Customers({ customers }) {
-    const { flash } = usePage().props;
+    const { flash, auth } = usePage().props;
+    const isManagerOrAdmin = ['Administrator', 'Sales Manager', 'Manager'].includes(auth?.user?.role);
 
     const [search, setSearch] = useState('');
     const [viewMode, setViewMode] = useState('list');
@@ -25,6 +192,7 @@ export default function Customers({ customers }) {
     const [deleteModalState, setDeleteModalState] = useState({
         isOpen: false, type: 'single', targetId: null, targetName: '',
     });
+    const [showMergeModal, setShowMergeModal] = useState(false);
 
     // Reset page on filter/view change
     useEffect(() => { setPage(1); setSelectedIds([]); }, [search, viewMode]);
@@ -146,6 +314,18 @@ export default function Customers({ customers }) {
                                     <LayoutGrid className="w-4 h-4" />
                                 </button>
                             </div>
+
+                            {/* Merge Duplicates — Admin/Manager only */}
+                            {isManagerOrAdmin && (
+                                <button
+                                    onClick={() => setShowMergeModal(true)}
+                                    className="flex items-center gap-1.5 px-3 py-2 text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 text-sm font-semibold rounded-lg transition-colors shrink-0 cursor-pointer"
+                                    title="Gabungkan customer dengan nama duplikat"
+                                >
+                                    <GitMerge className="w-4 h-4" />
+                                    <span className="hidden sm:inline">Gabung Duplikat</span>
+                                </button>
+                            )}
 
                             <button
                                 onClick={() => { setCustomerToEdit(null); setIsModalOpen(true); }}
@@ -406,6 +586,11 @@ export default function Customers({ customers }) {
                     document.body
                 )}
             </div>
+
+            {/* Merge Duplicates Modal */}
+            {showMergeModal && (
+                <MergeDuplicatesModal onClose={() => { setShowMergeModal(false); router.reload({ only: ['customers'] }); }} />
+            )}
         </AuthenticatedLayout>
     );
 }

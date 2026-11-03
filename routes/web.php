@@ -35,12 +35,16 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     // Customers
     Route::get('/customers', [CustomerController::class, 'index'])->name('customers.index');
-    Route::get('/customers/{customer}', [CustomerController::class, 'show'])->name('customers.show');
     Route::post('/customers', [CustomerController::class, 'store'])->name('customers.store');
+    Route::delete('/customers', [CustomerController::class, 'bulkDestroy'])->name('customers.bulk-destroy');
+    // Admin-only: merge duplicate customers (must be BEFORE /{customer} routes)
+    Route::get('/customers/duplicates/scan', [CustomerController::class, 'duplicates'])->name('customers.duplicates');
+    Route::post('/customers/merge', [CustomerController::class, 'merge'])->name('customers.merge');
+    // Dynamic customer routes
+    Route::get('/customers/{customer}', [CustomerController::class, 'show'])->name('customers.show');
     Route::post('/customers/{customer}/pics', [CustomerController::class, 'storePic'])->name('customers.pics.store');
     Route::put('/customers/{customer}', [CustomerController::class, 'update'])->name('customers.update');
     Route::delete('/customers/{customer}', [CustomerController::class, 'destroy'])->name('customers.destroy');
-    Route::delete('/customers', [CustomerController::class, 'bulkDestroy'])->name('customers.bulk-destroy');
 
     // Products
     Route::get('/products', [ProductController::class, 'index'])->name('products.index');

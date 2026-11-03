@@ -6,6 +6,7 @@ use App\Models\Customer;
 use App\Models\CustomerPic;
 use App\Services\NotificationService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -129,7 +130,7 @@ class CustomerController extends Controller
     public function store(Request $request)
     {
         $validated = $request->validate([
-            'name' => 'required|string|max:255',
+            'name' => 'required|string|max:255|unique:customers,name',
             'address' => 'nullable|string',
             'pics' => 'nullable|array',
             'pics.*.name' => 'required|string|max:255',
@@ -203,7 +204,7 @@ class CustomerController extends Controller
     public function update(Request $request, Customer $customer)
     {
         $validated = $request->validate([
-            'name' => 'required|string|max:255',
+            'name' => 'required|string|max:255|unique:customers,name,' . $customer->id,
             'address' => 'nullable|string',
             'pics' => 'nullable|array',
             'pics.*.id' => 'nullable',
@@ -288,5 +289,125 @@ class CustomerController extends Controller
         $last = Customer::orderByRaw('CAST(SUBSTRING(id, 2) AS UNSIGNED) DESC')->first();
         $num = $last ? (int)substr($last->id, 1) + 1 : 1;
         return 'C' . str_pad($num, 6, '0', STR_PAD_LEFT);
+    }
+
+    /**
+     * Merge a duplicate customer (remove_id) into another (keep_id).
+     * Reassigns all PICs, Quotations, SOs, and Leads then deletes the duplicate.
+     * Only accessible by Admin / Manager.
+     */
+    public function merge(Request $request): \Illuminate\Http\JsonResponse
+    {
+        $user = $request->user();
+        if (!in_array($user->role, ['Administrator', 'Sales Manager', 'Manager'])) {
+            return response()->json(['message' => 'Tidak diizinkan.'], 403);
+        }
+
+        $validated = $request->validate([
+            'keep_id'   => 'required|string|exists:customers,id',
+            'remove_id' => 'required|string|exists:customers,id|different:keep_id',
+        ]);
+
+        $keepId   = $validated['keep_id'];
+        $removeId = $validated['remove_id'];
+
+        $keep   = Customer::find($keepId);
+        $remove = Customer::find($removeId);
+
+        DB::beginTransaction();
+        try {
+            // 1. Move PICs — skip duplicates by email
+            $keepPicEmails = DB::table('customer_pics')
+                ->where('customer_id', $keepId)
+                ->pluck('email')
+                ->filter()
+                ->map(fn($e) => strtolower($e))
+                ->toArray();
+
+            $removePics = DB::table('customer_pics')->where('customer_id', $removeId)->get();
+            foreach ($removePics as $pic) {
+                $emailLower = $pic->email ? strtolower($pic->email) : null;
+                if ($emailLower && in_array($emailLower, $keepPicEmails)) {
+                    DB::table('customer_pics')->where('id', $pic->id)->delete();
+                } else {
+                    DB::table('customer_pics')->where('id', $pic->id)->update([
+                        'customer_id' => $keepId,
+                        'is_primary'  => false,
+                    ]);
+                }
+            }
+
+            // 2. Reassign quotations
+            $qMoved = DB::table('quotations')->where('customer_id', $removeId)->count();
+            DB::table('quotations')->where('customer_id', $removeId)->update(['customer_id' => $keepId]);
+
+            // 3. Reassign sales orders
+            $soMoved = DB::table('sales_orders')->where('customer_id', $removeId)->count();
+            DB::table('sales_orders')->where('customer_id', $removeId)->update(['customer_id' => $keepId]);
+
+            // 4. Reassign leads
+            $leadMoved = DB::table('leads')->where('customer_id', $removeId)->count();
+            DB::table('leads')->where('customer_id', $removeId)->update(['customer_id' => $keepId]);
+
+            // 5. Delete the duplicate
+            $remove->pics()->delete(); // safety — should be 0 at this point
+            $remove->delete();
+
+            DB::commit();
+
+            return response()->json([
+                'message'    => "Customer \"{$remove->name}\" berhasil digabungkan ke \"{$keep->name}\".",
+                'stats'      => [
+                    'quotations_moved' => $qMoved,
+                    'orders_moved'     => $soMoved,
+                    'leads_moved'      => $leadMoved,
+                ],
+            ]);
+
+        } catch (\Throwable $e) {
+            DB::rollBack();
+            return response()->json(['message' => 'Gagal merge: ' . $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * Return list of customers with the same name (case-insensitive) for merge UI.
+     */
+    public function duplicates(Request $request): \Illuminate\Http\JsonResponse
+    {
+        $user = $request->user();
+        if (!in_array($user->role, ['Administrator', 'Sales Manager', 'Manager'])) {
+            return response()->json(['message' => 'Tidak diizinkan.'], 403);
+        }
+
+        $groups = DB::table('customers')
+            ->select(DB::raw('LOWER(TRIM(name)) as norm_name'), DB::raw('COUNT(*) as cnt'))
+            ->groupBy(DB::raw('LOWER(TRIM(name))'))
+            ->having('cnt', '>', 1)
+            ->get();
+
+        $result = [];
+        foreach ($groups as $group) {
+            $customers = DB::table('customers')
+                ->whereRaw('LOWER(TRIM(name)) = ?', [$group->norm_name])
+                ->get()
+                ->map(function ($c) {
+                    return [
+                        'id'         => $c->id,
+                        'name'       => $c->name,
+                        'created_at' => $c->created_at,
+                        'pic_count'  => DB::table('customer_pics')->where('customer_id', $c->id)->count(),
+                        'quot_count' => DB::table('quotations')->where('customer_id', $c->id)->count(),
+                        'so_count'   => DB::table('sales_orders')->where('customer_id', $c->id)->count(),
+                    ];
+                });
+            $result[] = [
+                'norm_name' => $group->norm_name,
+                'count'     => $group->cnt,
+                'customers' => $customers,
+            ];
+        }
+
+        return response()->json(['duplicates' => $result]);
     }
 }
