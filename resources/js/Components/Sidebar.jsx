@@ -71,6 +71,7 @@ export default function Sidebar({ mobileOpen, setMobileOpen }) {
             submenu: [
                 { path: '/leads', label: 'Pipeline Board', permission: 'leads_view' },
                 { path: '/leads/visits', label: 'Visit & Follow-up', permission: 'leads_visits' },
+                { path: '/team-calendar', label: 'Kalender Tim', permission: 'leads_visits' },
             ]
         },
         { path: '/quotations', label: 'Quotations', icon: FileText, badge: quotationsCount, permission: 'quotations_view' },

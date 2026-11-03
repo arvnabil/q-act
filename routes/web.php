@@ -134,7 +134,11 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('/',                             [LeadController::class, 'store'])->name('store');
         Route::get('/visits',                        [LeadController::class, 'indexVisits'])->name('visits');
         Route::post('/visits',                       [LeadController::class, 'storeVisit'])->name('visits.store');
+        Route::put('/visits/{visit}',                [LeadController::class, 'updateVisit'])->name('visits.update');
+        Route::delete('/visits/{visit}',             [LeadController::class, 'destroyVisit'])->name('visits.destroy');
         Route::post('/visits/{visit}/check-in',      [LeadController::class, 'checkIn'])->name('visits.check-in');
+        Route::post('/visits/{visit}/zoom',          [LeadController::class, 'createZoomForVisit'])->name('visits.zoom');
+        Route::get('/calendar',                      [LeadController::class, 'indexCalendar'])->name('calendar');
         Route::get('/{lead}',                        [LeadController::class, 'show'])->name('show');
         Route::put('/{lead}',                        [LeadController::class, 'update'])->name('update');
         Route::patch('/{lead}/stage',                [LeadController::class, 'updateStage'])->name('stage.update');
@@ -146,6 +150,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::delete('/{lead}/pics/{pic}',          [LeadController::class, 'destroyPic'])->name('pics.destroy');
         Route::post('/settings',                     [LeadController::class, 'updateSettings'])->name('settings.update');
     });
+
+    Route::get('/team-calendar', [LeadController::class, 'indexCalendar'])->name('team-calendar');
 
     // Analytics
     Route::get('/analytics', [AnalyticsController::class, 'index'])->name('analytics');
@@ -181,6 +187,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('/settings/master-terms', [SettingController::class, 'updateMasterTerms'])->name('settings.master-terms');
         Route::post('/settings/domain-logo', [SettingController::class, 'updateDomainLogoMap'])->name('settings.domain-logo');
         Route::post('/settings/maintenance-mode', [SettingController::class, 'updateMaintenanceMode'])->name('settings.maintenance-mode');
+        Route::post('/settings/integrations/google-calendar', [SettingController::class, 'updateGoogleCalendar'])->name('settings.google-calendar');
+        Route::post('/settings/integrations/zoom', [SettingController::class, 'updateZoom'])->name('settings.zoom');
+        Route::post('/settings/users/{user}/integrations', [SettingController::class, 'updateUserIntegrations'])->name('settings.users.integrations');
     });
 });
 

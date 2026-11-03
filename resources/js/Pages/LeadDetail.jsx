@@ -616,7 +616,22 @@ function PoSoTab({ allPurchaseOrders, allSalesOrders }) {
 
 // ─── Visits Tab ───────────────────────────────────────────────────────────────────
 
-function VisitsTab({ visits = [], leadId }) {
+function VisitsTab({ visits = [], leadId, onOpenSchedule, googleCalendarConfigured, zoomConfigured }) {
+    const handleDeleteVisit = (visitId, subject) => {
+        if (!confirm(`Hapus jadwal kunjungan "${subject}"? Event di Google Calendar dan Zoom akan ikut dibatalkan.`)) return;
+        router.delete(route('leads.visits.destroy', visitId), {
+            preserveScroll: true,
+            onSuccess: () => toast.success('Jadwal kunjungan berhasil dihapus')
+        });
+    };
+
+    const handleCreateZoom = (visitId) => {
+        router.post(route('leads.visits.zoom', visitId), {}, {
+            preserveScroll: true,
+            onSuccess: () => toast.success('Zoom meeting berhasil dibuat!')
+        });
+    };
+
     return (
         <div className="space-y-4">
             <div className="flex items-center justify-between flex-wrap gap-3">
@@ -624,13 +639,23 @@ function VisitsTab({ visits = [], leadId }) {
                     <h3 className="text-sm font-bold text-surface-800">Jadwal & Riwayat Kunjungan</h3>
                     <p className="text-xs text-surface-400">Aktivitas visit, demo, dan survey lapangan untuk lead ini</p>
                 </div>
-                <Link
-                    href={route('leads.visits')}
-                    className="flex items-center gap-1.5 px-3 py-1.5 bg-brand-600 hover:bg-brand-700 text-white rounded-lg text-xs font-semibold shadow-sm transition-colors cursor-pointer"
-                >
-                    <Plus className="w-3.5 h-3.5" />
-                    Jadwalkan Kunjungan Baru
-                </Link>
+                <div className="flex items-center gap-2">
+                    <Link
+                        href={route('team-calendar')}
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-surface-100 hover:bg-surface-200 text-surface-700 rounded-lg text-xs font-semibold transition-colors cursor-pointer"
+                    >
+                        <Calendar className="w-3.5 h-3.5 text-blue-600" />
+                        Buka di Kalender Tim
+                    </Link>
+                    <button
+                        type="button"
+                        onClick={onOpenSchedule}
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-brand-600 hover:bg-brand-700 text-white rounded-lg text-xs font-semibold shadow-sm transition-colors cursor-pointer"
+                    >
+                        <Plus className="w-3.5 h-3.5" />
+                        Jadwalkan Kunjungan Baru
+                    </button>
+                </div>
             </div>
 
             {visits.length === 0 ? (
@@ -638,15 +663,16 @@ function VisitsTab({ visits = [], leadId }) {
                     <MapPin className="w-8 h-8 mx-auto mb-2 text-surface-300" />
                     <p className="text-xs font-semibold text-surface-600">Belum ada jadwal kunjungan untuk lead ini</p>
                     <p className="text-[11px] text-surface-400 mt-0.5">Jadwalkan presentasi, demo produk, atau survey lapangan</p>
-                    <Link
-                        href={route('leads.visits')}
-                        className="mt-3 inline-flex items-center gap-1 text-xs font-bold text-brand-600 hover:underline"
+                    <button
+                        type="button"
+                        onClick={onOpenSchedule}
+                        className="mt-3 inline-flex items-center gap-1 text-xs font-bold text-brand-600 hover:underline cursor-pointer"
                     >
                         <Plus className="w-3 h-3" /> Buat Jadwal Kunjungan
-                    </Link>
+                    </button>
                 </div>
             ) : (
-                <div className="overflow-hidden rounded-xl border border-surface-200 bg-white">
+                <div className="overflow-hidden rounded-xl border border-surface-200 bg-white shadow-2xs">
                     <table className="w-full text-xs text-left">
                         <thead>
                             <tr className="bg-surface-50 border-b border-surface-200 text-surface-500 font-bold uppercase tracking-wider text-[10px]">
@@ -654,14 +680,19 @@ function VisitsTab({ visits = [], leadId }) {
                                 <th className="px-4 py-3">Jenis</th>
                                 <th className="px-4 py-3">Waktu Pelaksanaan</th>
                                 <th className="px-4 py-3">Lokasi</th>
+                                <th className="px-4 py-3">Integrasi</th>
                                 <th className="px-4 py-3">Status Check-in</th>
                                 <th className="px-4 py-3">Petugas</th>
+                                <th className="px-4 py-3 text-right">Aksi</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-surface-100">
                             {visits.map(v => (
                                 <tr key={v.id} className="hover:bg-surface-50 transition-colors">
-                                    <td className="px-4 py-3 font-semibold text-surface-900">{v.subject}</td>
+                                    <td className="px-4 py-3 font-semibold text-surface-900">
+                                        <div>{v.subject}</div>
+                                        {v.notes && <div className="text-[11px] text-surface-400 font-normal line-clamp-1">{v.notes}</div>}
+                                    </td>
                                     <td className="px-4 py-3">
                                         <span className="capitalize px-2 py-0.5 bg-surface-100 text-surface-700 rounded text-[10px] font-semibold">
                                             {v.visit_type}
@@ -673,10 +704,41 @@ function VisitsTab({ visits = [], leadId }) {
                                     <td className="px-4 py-3 text-surface-500">
                                         {v.location ? (
                                             <span className="flex items-center gap-1">
-                                                <Navigation className="w-3 h-3 text-surface-400" />
-                                                {v.location}
+                                                <Navigation className="w-3 h-3 text-surface-400 shrink-0" />
+                                                <span className="truncate max-w-[150px]">{v.location}</span>
                                             </span>
                                         ) : '—'}
+                                    </td>
+                                    <td className="px-4 py-3">
+                                        <div className="flex flex-col gap-1">
+                                            {v.zoom_join_url ? (
+                                                <a
+                                                    href={v.zoom_join_url}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-bold bg-sky-50 text-sky-700 hover:bg-sky-100 border border-sky-200 transition-colors w-fit"
+                                                >
+                                                    <Video className="w-3 h-3" />
+                                                    Join Zoom
+                                                </a>
+                                            ) : (
+                                                zoomConfigured && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleCreateZoom(v.id)}
+                                                        className="text-[10px] text-sky-600 hover:text-sky-800 font-semibold inline-flex items-center gap-1 hover:underline cursor-pointer w-fit"
+                                                    >
+                                                        <Video className="w-2.5 h-2.5" /> + Buat Zoom
+                                                    </button>
+                                                )
+                                            )}
+
+                                            {v.gc_event_id && (
+                                                <span className="inline-flex items-center gap-1 text-[10px] text-blue-600 font-medium">
+                                                    <Calendar className="w-2.5 h-2.5" /> Google Calendar
+                                                </span>
+                                            )}
+                                        </div>
                                     </td>
                                     <td className="px-4 py-3">
                                         {v.checked_in_at ? (
@@ -689,6 +751,16 @@ function VisitsTab({ visits = [], leadId }) {
                                     </td>
                                     <td className="px-4 py-3 text-surface-700 font-medium">
                                         {v.user?.name || '—'}
+                                    </td>
+                                    <td className="px-4 py-3 text-right">
+                                        <button
+                                            type="button"
+                                            onClick={() => handleDeleteVisit(v.id, v.subject)}
+                                            className="text-surface-400 hover:text-red-600 p-1 rounded hover:bg-surface-100 transition-colors cursor-pointer"
+                                            title="Hapus jadwal"
+                                        >
+                                            <Trash2 className="w-3.5 h-3.5" />
+                                        </button>
                                     </td>
                                 </tr>
                             ))}
@@ -800,6 +872,201 @@ function PicsTab({ lead, pics, onOpenAdd }) {
                     })}
                 </div>
             )}
+        </div>
+    );
+}
+
+// ─── Schedule Visit Modal ─────────────────────────────────────────────────────────
+
+function ScheduleVisitModal({ open, onClose, lead, googleCalendarConfigured, zoomConfigured }) {
+    const [form, setForm] = useState({
+        visit_type: 'visit',
+        subject: '',
+        location: lead.customer?.address || '',
+        scheduled_at: '',
+        notes: '',
+        sync_calendar: googleCalendarConfigured,
+        create_zoom: false,
+    });
+    const [submitting, setSubmitting] = useState(false);
+
+    useEffect(() => {
+        if (open) {
+            const tomorrow = new Date();
+            tomorrow.setDate(tomorrow.getDate() + 1);
+            tomorrow.setHours(10, 0, 0, 0);
+            const isoLocal = new Date(tomorrow.getTime() - tomorrow.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+
+            setForm({
+                visit_type: 'visit',
+                subject: `Kunjungan Prospek: ${lead.title}`,
+                location: lead.customer?.address || '',
+                scheduled_at: isoLocal,
+                notes: '',
+                sync_calendar: googleCalendarConfigured,
+                create_zoom: false,
+            });
+        }
+    }, [open, lead, googleCalendarConfigured]);
+
+    if (!open) return null;
+
+    const handleSubmit = (e) => {
+        e.preventDefault();
+        setSubmitting(true);
+        router.post(route('leads.visits.store'), {
+            lead_id: lead.id,
+            customer_id: lead.customer_id || null,
+            visit_type: form.visit_type,
+            subject: form.subject,
+            location: form.location,
+            scheduled_at: form.scheduled_at,
+            notes: form.notes,
+            sync_calendar: form.sync_calendar,
+            create_zoom: form.create_zoom,
+        }, {
+            preserveScroll: true,
+            onSuccess: () => {
+                toast.success('Jadwal kunjungan berhasil dibuat!');
+                onClose();
+            },
+            onError: () => toast.error('Gagal menjadwalkan kunjungan'),
+            onFinish: () => setSubmitting(false),
+        });
+    };
+
+    return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-surface-900/60 backdrop-blur-sm">
+            <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg overflow-hidden border border-surface-200">
+                <div className="px-6 py-4 border-b border-surface-100 flex items-center justify-between bg-surface-50">
+                    <div className="flex items-center gap-2">
+                        <div className="w-8 h-8 rounded-lg bg-teal-100 text-teal-700 flex items-center justify-center">
+                            <MapPin className="w-4 h-4" />
+                        </div>
+                        <div>
+                            <h3 className="text-sm font-bold text-surface-900">Jadwalkan Kunjungan Baru</h3>
+                            <p className="text-[11px] text-surface-500">Lead: {lead.title} ({lead.lead_code})</p>
+                        </div>
+                    </div>
+                    <button type="button" onClick={onClose} className="text-surface-400 hover:text-surface-600 cursor-pointer">
+                        <X className="w-5 h-5" />
+                    </button>
+                </div>
+
+                <form onSubmit={handleSubmit} className="p-6 space-y-4">
+                    <div>
+                        <label className="block text-xs font-semibold text-surface-700 mb-1">Agenda / Subject <span className="text-red-500">*</span></label>
+                        <input
+                            type="text"
+                            value={form.subject}
+                            onChange={e => setForm({ ...form, subject: e.target.value })}
+                            required
+                            className="w-full border border-surface-200 rounded-lg px-3 py-2 text-xs text-surface-800 outline-none focus:ring-2 focus:ring-brand-500"
+                        />
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                            <label className="block text-xs font-semibold text-surface-700 mb-1">Jenis Kunjungan <span className="text-red-500">*</span></label>
+                            <select
+                                value={form.visit_type}
+                                onChange={e => {
+                                    const val = e.target.value;
+                                    setForm(f => ({
+                                        ...f,
+                                        visit_type: val,
+                                        create_zoom: (val === 'demo' || val === 'presentation') ? true : f.create_zoom
+                                    }));
+                                }}
+                                className="w-full border border-surface-200 rounded-lg px-3 py-2 text-xs text-surface-800 outline-none focus:ring-2 focus:ring-brand-500 bg-white"
+                            >
+                                <option value="visit">Visit Lapangan</option>
+                                <option value="follow_up">Follow Up</option>
+                                <option value="demo">Demo Produk</option>
+                                <option value="presentation">Presentasi / Pitching</option>
+                                <option value="other">Lainnya</option>
+                            </select>
+                        </div>
+
+                        <div>
+                            <label className="block text-xs font-semibold text-surface-700 mb-1">Waktu Pelaksanaan <span className="text-red-500">*</span></label>
+                            <input
+                                type="datetime-local"
+                                value={form.scheduled_at}
+                                onChange={e => setForm({ ...form, scheduled_at: e.target.value })}
+                                required
+                                className="w-full border border-surface-200 rounded-lg px-3 py-2 text-xs text-surface-800 outline-none focus:ring-2 focus:ring-brand-500"
+                            />
+                        </div>
+                    </div>
+
+                    <div>
+                        <label className="block text-xs font-semibold text-surface-700 mb-1">Lokasi Kunjungan</label>
+                        <input
+                            type="text"
+                            value={form.location}
+                            onChange={e => setForm({ ...form, location: e.target.value })}
+                            placeholder="Alamat kantor klien, Google Meet, dll"
+                            className="w-full border border-surface-200 rounded-lg px-3 py-2 text-xs text-surface-800 outline-none focus:ring-2 focus:ring-brand-500"
+                        />
+                    </div>
+
+                    <div>
+                        <label className="block text-xs font-semibold text-surface-700 mb-1">Catatan / Detail Persiapan</label>
+                        <textarea
+                            rows={2}
+                            value={form.notes}
+                            onChange={e => setForm({ ...form, notes: e.target.value })}
+                            placeholder="Materi yang dibawa, PIC yang akan ditemui..."
+                            className="w-full border border-surface-200 rounded-lg p-2.5 text-xs text-surface-800 outline-none focus:ring-2 focus:ring-brand-500"
+                        />
+                    </div>
+
+                    {/* Integration Options */}
+                    <div className="bg-surface-50 rounded-xl p-3 border border-surface-200/80 space-y-2">
+                        <label className="flex items-center gap-2 cursor-pointer select-none">
+                            <input
+                                type="checkbox"
+                                checked={form.sync_calendar}
+                                onChange={e => setForm({ ...form, sync_calendar: e.target.checked })}
+                                className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500 cursor-pointer"
+                            />
+                            <div className="text-xs">
+                                <span className="font-semibold text-surface-800 flex items-center gap-1.5">
+                                    <Calendar className="w-3.5 h-3.5 text-blue-600" /> Sinkron ke Google Calendar Tim
+                                </span>
+                                <p className="text-[10px] text-surface-400">Jadwal akan otomatis masuk ke Google Calendar kantor dan handphone tim</p>
+                            </div>
+                        </label>
+
+                        {zoomConfigured && (
+                            <label className="flex items-center gap-2 cursor-pointer select-none pt-1">
+                                <input
+                                    type="checkbox"
+                                    checked={form.create_zoom}
+                                    onChange={e => setForm({ ...form, create_zoom: e.target.checked })}
+                                    className="w-4 h-4 rounded text-sky-600 focus:ring-sky-500 cursor-pointer"
+                                />
+                                <div className="text-xs">
+                                    <span className="font-semibold text-surface-800 flex items-center gap-1.5">
+                                        <Video className="w-3.5 h-3.5 text-sky-600" /> Buat Link Zoom Meeting Otomatis
+                                    </span>
+                                    <p className="text-[10px] text-surface-400">Menghasilkan link Zoom meeting instan dari lisensi akun perusahaan</p>
+                                </div>
+                            </label>
+                        )}
+                    </div>
+
+                    <div className="flex justify-end gap-2 pt-2 border-t border-surface-100">
+                        <button type="button" onClick={onClose} className="px-4 py-2 text-xs font-semibold text-surface-600 hover:bg-surface-100 rounded-lg cursor-pointer">
+                            Batal
+                        </button>
+                        <button type="submit" disabled={submitting} className="px-4 py-2 text-xs font-bold text-white bg-brand-600 hover:bg-brand-700 rounded-lg shadow-sm disabled:opacity-60 cursor-pointer">
+                            {submitting ? 'Menyimpan...' : 'Jadwalkan Kunjungan'}
+                        </button>
+                    </div>
+                </form>
+            </div>
         </div>
     );
 }
@@ -989,7 +1256,15 @@ function AddLeadPicModal({ open, onClose, lead, customerPics = [] }) {
 
 // ─── Main Page: Lead 360° Cockpit ────────────────────────────────────────────────
 
-export default function LeadDetail({ lead, customerPics = [], stages = [], sources = [] }) {
+export default function LeadDetail({ 
+    lead, 
+    customerPics = [], 
+    stages = [], 
+    sources = [],
+    googleCalendarConfigured = false,
+    zoomConfigured = false,
+    userHasZoomLicense = false
+}) {
     const { auth } = usePage().props;
     const currentUser = auth?.user;
     const isManagerOrAdmin = ['Administrator', 'Sales Manager', 'Manager', 'Super Admin'].includes(currentUser?.role);
@@ -997,6 +1272,7 @@ export default function LeadDetail({ lead, customerPics = [], stages = [], sourc
 
     const [activeTab, setActiveTab] = useState('timeline');
     const [showAddPicModal, setShowAddPicModal] = useState(false);
+    const [showScheduleModal, setShowScheduleModal] = useState(false);
     const [changingStage, setChangingStage] = useState(false);
     const [currentStage, setCurrentStage] = useState(lead.stage);
     const [activities, setActivities] = useState(lead.activities || []);
@@ -1292,6 +1568,9 @@ export default function LeadDetail({ lead, customerPics = [], stages = [], sourc
                                 <VisitsTab
                                     visits={lead.visits || []}
                                     leadId={lead.id}
+                                    onOpenSchedule={() => setShowScheduleModal(true)}
+                                    googleCalendarConfigured={googleCalendarConfigured}
+                                    zoomConfigured={zoomConfigured}
                                 />
                             )}
 
@@ -1306,6 +1585,15 @@ export default function LeadDetail({ lead, customerPics = [], stages = [], sourc
                     </div>
                 </div>
             </div>
+
+            {/* Modal Jadwalkan Kunjungan */}
+            <ScheduleVisitModal
+                open={showScheduleModal}
+                onClose={() => setShowScheduleModal(false)}
+                lead={lead}
+                googleCalendarConfigured={googleCalendarConfigured}
+                zoomConfigured={zoomConfigured}
+            />
 
             {/* Modal Tambah PIC */}
             <AddLeadPicModal

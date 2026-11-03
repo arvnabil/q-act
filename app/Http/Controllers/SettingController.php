@@ -4,7 +4,10 @@ namespace App\Http\Controllers;
 
 use App\Models\CompanyBankAccount;
 use App\Models\SystemSetting;
+use App\Models\User;
 use App\Models\UserTermsTemplate;
+use App\Services\GoogleCalendarService;
+use App\Services\ZoomService;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -76,13 +79,40 @@ class SettingController extends Controller
             'stages'           => $defaultStages,
         ];
 
+        // Integrations (Google Calendar & Zoom)
+        $gcSetting = SystemSetting::find('google_calendar_credentials');
+        $gcVal = $gcSetting ? $gcSetting->value : null;
+        $googleCalendarSettings = [
+            'is_configured' => (new GoogleCalendarService())->isConfigured(),
+            'calendar_id'   => $gcVal['calendar_id'] ?? '',
+            'client_email'  => $gcVal['client_email'] ?? '',
+            'project_id'    => $gcVal['project_id'] ?? '',
+            'has_private_key' => !empty($gcVal['private_key']),
+        ];
+
+        $zoomSetting = SystemSetting::find('zoom_credentials');
+        $zoomVal = $zoomSetting ? $zoomSetting->value : null;
+        $zoomSettings = [
+            'is_configured' => (new ZoomService())->isConfigured(),
+            'account_id'    => $zoomVal['account_id'] ?? '',
+            'client_id'     => $zoomVal['client_id'] ?? '',
+            'has_client_secret' => !empty($zoomVal['client_secret']),
+        ];
+
+        $teamUsers = User::select('id', 'name', 'email', 'role', 'has_zoom_license', 'google_calendar_email')
+            ->orderBy('name')
+            ->get();
+
         return Inertia::render('Settings', [
-            'companyInfo'      => $companyInfo,
-            'bankAccounts'     => $bankAccounts,
-            'masterTerms'      => $masterTerms,
-            'domainLogoMap'    => $domainLogoMap,
-            'maintenanceMode'  => $maintenanceMode,
-            'pipelineSettings' => $pipelineSettings,
+            'companyInfo'            => $companyInfo,
+            'bankAccounts'           => $bankAccounts,
+            'masterTerms'            => $masterTerms,
+            'domainLogoMap'          => $domainLogoMap,
+            'maintenanceMode'        => $maintenanceMode,
+            'pipelineSettings'       => $pipelineSettings,
+            'googleCalendarSettings' => $googleCalendarSettings,
+            'zoomSettings'           => $zoomSettings,
+            'teamUsers'              => $teamUsers,
         ]);
     }
 
@@ -259,5 +289,103 @@ class SettingController extends Controller
         );
 
         return back()->with('message', 'Pengaturan mode perawatan berhasil diperbarui!');
+    }
+
+    // ─── Integrations (Google Calendar & Zoom) ───────────────────────────────────
+
+    public function updateGoogleCalendar(Request $request)
+    {
+        $data = $request->validate([
+            'action'        => 'required|in:save,clear,test',
+            'calendar_id'   => 'nullable|string|max:255',
+            'service_json'  => 'nullable|string', // Pasted service account JSON file
+            'client_email'  => 'nullable|string|max:255',
+            'private_key'   => 'nullable|string',
+        ]);
+
+        if ($data['action'] === 'clear') {
+            SystemSetting::where('key', 'google_calendar_credentials')->delete();
+            return back()->with('message', 'Kredensial Google Calendar berhasil dihapus.');
+        }
+
+        $existing = SystemSetting::find('google_calendar_credentials')?->value ?? [];
+
+        // If user pasted raw JSON from Google Service Account file
+        if (!empty($data['service_json'])) {
+            $parsed = json_decode($data['service_json'], true);
+            if (is_array($parsed) && !empty($parsed['client_email']) && !empty($parsed['private_key'])) {
+                $existing['client_email'] = $parsed['client_email'];
+                $existing['private_key']  = $parsed['private_key'];
+                $existing['project_id']   = $parsed['project_id'] ?? '';
+            } else {
+                return back()->withErrors(['service_json' => 'Format JSON Service Account tidak valid. Pastikan file JSON resmi dari Google Cloud Console.']);
+            }
+        }
+
+        if (!empty($data['calendar_id'])) {
+            $existing['calendar_id'] = trim($data['calendar_id']);
+        }
+        if (!empty($data['client_email'])) {
+            $existing['client_email'] = trim($data['client_email']);
+        }
+        if (!empty($data['private_key'])) {
+            $existing['private_key'] = $data['private_key'];
+        }
+
+        SystemSetting::updateOrCreate(
+            ['key' => 'google_calendar_credentials'],
+            ['value' => $existing]
+        );
+
+        return back()->with('message', 'Pengaturan Google Calendar berhasil disimpan!');
+    }
+
+    public function updateZoom(Request $request)
+    {
+        $data = $request->validate([
+            'action'        => 'required|in:save,clear,test',
+            'account_id'    => 'nullable|string|max:255',
+            'client_id'     => 'nullable|string|max:255',
+            'client_secret' => 'nullable|string|max:255',
+        ]);
+
+        if ($data['action'] === 'clear') {
+            SystemSetting::where('key', 'zoom_credentials')->delete();
+            return back()->with('message', 'Kredensial Zoom Server-to-Server berhasil dihapus.');
+        }
+
+        $existing = SystemSetting::find('zoom_credentials')?->value ?? [];
+
+        if (!empty($data['account_id'])) {
+            $existing['account_id'] = trim($data['account_id']);
+        }
+        if (!empty($data['client_id'])) {
+            $existing['client_id'] = trim($data['client_id']);
+        }
+        if (!empty($data['client_secret'])) {
+            $existing['client_secret'] = trim($data['client_secret']);
+        }
+
+        SystemSetting::updateOrCreate(
+            ['key' => 'zoom_credentials'],
+            ['value' => $existing]
+        );
+
+        return back()->with('message', 'Pengaturan Zoom Server-to-Server berhasil disimpan!');
+    }
+
+    public function updateUserIntegrations(Request $request, User $user)
+    {
+        $data = $request->validate([
+            'has_zoom_license'      => 'nullable|boolean',
+            'google_calendar_email' => 'nullable|email|max:255',
+        ]);
+
+        $user->update([
+            'has_zoom_license'      => $data['has_zoom_license'] ?? $user->has_zoom_license,
+            'google_calendar_email' => $data['google_calendar_email'] ?? $user->google_calendar_email,
+        ]);
+
+        return back()->with('message', "Pengaturan integrasi user {$user->name} berhasil diperbarui!");
     }
 }

@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
-import { Head, router, usePage } from '@inertiajs/react';
+import { Head, router, Link, usePage } from '@inertiajs/react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
+import { toast } from 'react-hot-toast';
 import {
     MapPin, Plus, X, Calendar, Clock, CheckCircle2, Navigation,
     Building2, User, ChevronDown, AlertCircle, FileText,
-    ClipboardList, History
+    ClipboardList, History, Video, Trash2, CalendarCheck
 } from 'lucide-react';
 
 // ─── Helpers ────────────────────────────────────────────────────────────────────
@@ -89,7 +90,7 @@ function TodayVisitCard({ visit, onCheckIn }) {
 
 // ─── Visit Table ──────────────────────────────────────────────────────────────────
 
-function VisitTable({ visits, onCheckIn }) {
+function VisitTable({ visits, onCheckIn, zoomConfigured, onDeleteVisit, onCreateZoom }) {
     if (visits.length === 0) {
         return (
             <div className="text-center py-16 text-surface-400">
@@ -101,7 +102,7 @@ function VisitTable({ visits, onCheckIn }) {
     }
 
     return (
-        <div className="overflow-hidden rounded-xl border border-surface-200 bg-white">
+        <div className="overflow-hidden rounded-xl border border-surface-200 bg-white shadow-2xs">
             <table className="w-full text-sm">
                 <thead>
                     <tr className="border-b border-surface-200 bg-surface-50">
@@ -110,8 +111,9 @@ function VisitTable({ visits, onCheckIn }) {
                         <th className="px-4 py-3 text-left text-xs font-bold text-surface-500 uppercase tracking-wider">Agenda</th>
                         <th className="px-4 py-3 text-left text-xs font-bold text-surface-500 uppercase tracking-wider">Tanggal & Waktu</th>
                         <th className="px-4 py-3 text-left text-xs font-bold text-surface-500 uppercase tracking-wider">Lokasi</th>
+                        <th className="px-4 py-3 text-left text-xs font-bold text-surface-500 uppercase tracking-wider">Integrasi</th>
                         <th className="px-4 py-3 text-left text-xs font-bold text-surface-500 uppercase tracking-wider">Status</th>
-                        <th className="px-4 py-3 text-left text-xs font-bold text-surface-500 uppercase tracking-wider">Aksi</th>
+                        <th className="px-4 py-3 text-right text-xs font-bold text-surface-500 uppercase tracking-wider">Aksi</th>
                     </tr>
                 </thead>
                 <tbody className="divide-y divide-surface-100">
@@ -124,18 +126,20 @@ function VisitTable({ visits, onCheckIn }) {
                                     <div>
                                         <p className="font-semibold text-surface-800 text-sm">{visit.customer?.name || visit.lead?.title || '—'}</p>
                                         {visit.lead && (
-                                            <p className="text-xs text-brand-600">{visit.lead.lead_code} · {visit.lead.title}</p>
+                                            <Link href={route('leads.show', visit.lead.id)} className="text-xs text-brand-600 hover:underline">
+                                                [{visit.lead.lead_code}] {visit.lead.title}
+                                            </Link>
                                         )}
                                     </div>
                                 </td>
                                 <td className="px-4 py-3"><VisitTypeBadge type={visit.visit_type} /></td>
                                 <td className="px-4 py-3">
-                                    <p className="text-sm text-surface-700">{visit.subject}</p>
+                                    <p className="text-sm text-surface-700 font-medium">{visit.subject}</p>
                                     {visit.notes && <p className="text-xs text-surface-400 mt-0.5 line-clamp-1">{visit.notes}</p>}
                                 </td>
                                 <td className="px-4 py-3">
                                     <p className="text-sm text-surface-700">{formatDate(visit.scheduled_at)}</p>
-                                    <p className="text-xs text-surface-400">{formatTime(visit.scheduled_at)}</p>
+                                    <p className="text-xs text-surface-400 font-semibold">{formatTime(visit.scheduled_at)}</p>
                                 </td>
                                 <td className="px-4 py-3">
                                     {visit.location ? (
@@ -146,6 +150,35 @@ function VisitTable({ visits, onCheckIn }) {
                                     ) : (
                                         <span className="text-surface-300 text-xs">—</span>
                                     )}
+                                </td>
+                                <td className="px-4 py-3">
+                                    <div className="flex flex-col gap-1">
+                                        {visit.zoom_join_url ? (
+                                            <a
+                                                href={visit.zoom_join_url}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-bold bg-sky-50 text-sky-700 hover:bg-sky-100 border border-sky-200 transition-colors w-fit"
+                                            >
+                                                <Video className="w-3 h-3" />
+                                                Join Zoom
+                                            </a>
+                                        ) : zoomConfigured && (
+                                            <button
+                                                type="button"
+                                                onClick={() => onCreateZoom(visit.id)}
+                                                className="text-[11px] text-sky-600 hover:text-sky-800 font-semibold inline-flex items-center gap-1 hover:underline cursor-pointer w-fit"
+                                            >
+                                                <Video className="w-3 h-3" /> + Zoom
+                                            </button>
+                                        )}
+
+                                        {visit.gc_event_id && (
+                                            <span className="inline-flex items-center gap-1 text-[11px] text-blue-600 font-medium">
+                                                <Calendar className="w-3 h-3" /> G-Cal
+                                            </span>
+                                        )}
+                                    </div>
                                 </td>
                                 <td className="px-4 py-3">
                                     {isCheckedIn ? (
@@ -165,15 +198,25 @@ function VisitTable({ visits, onCheckIn }) {
                                         </span>
                                     )}
                                 </td>
-                                <td className="px-4 py-3">
-                                    {!isCheckedIn && (
+                                <td className="px-4 py-3 text-right">
+                                    <div className="flex items-center justify-end gap-1.5">
+                                        {!isCheckedIn && (
+                                            <button
+                                                onClick={() => onCheckIn(visit)}
+                                                className="px-2.5 py-1 text-xs font-semibold bg-brand-50 text-brand-700 hover:bg-brand-100 rounded-lg transition-colors flex items-center gap-1 cursor-pointer">
+                                                <Navigation className="w-3 h-3" />
+                                                Check-in
+                                            </button>
+                                        )}
                                         <button
-                                            onClick={() => onCheckIn(visit)}
-                                            className="px-3 py-1.5 text-xs font-semibold bg-brand-50 text-brand-700 hover:bg-brand-100 rounded-lg transition-colors flex items-center gap-1">
-                                            <Navigation className="w-3 h-3" />
-                                            Check-in
+                                            type="button"
+                                            onClick={() => onDeleteVisit(visit.id, visit.subject)}
+                                            className="p-1.5 text-surface-400 hover:text-red-600 hover:bg-surface-100 rounded-lg transition-colors cursor-pointer"
+                                            title="Hapus jadwal"
+                                        >
+                                            <Trash2 className="w-3.5 h-3.5" />
                                         </button>
-                                    )}
+                                    </div>
                                 </td>
                             </tr>
                         );
@@ -188,22 +231,30 @@ function VisitTable({ visits, onCheckIn }) {
 
 function CalendarPlaceholder() {
     return (
-        <div className="flex flex-col items-center justify-center py-24 text-surface-400">
-            <Calendar className="w-16 h-16 mb-4 opacity-30" />
-            <h3 className="text-base font-bold text-surface-500 mb-1">Fitur Kalender Segera Hadir</h3>
-            <p className="text-sm text-center max-w-xs">
-                Kalender interaktif untuk melihat jadwal kunjungan dan follow-up dalam tampilan bulanan atau mingguan.
+        <div className="flex flex-col items-center justify-center py-16 text-surface-400 bg-surface-50/50 rounded-xl border border-dashed border-surface-200">
+            <Calendar className="w-12 h-12 mb-3 text-brand-600 opacity-60" />
+            <h3 className="text-base font-bold text-surface-800 mb-1">Tampilan Kalender Tim Komprehensif</h3>
+            <p className="text-xs text-center max-w-sm text-surface-500 mb-4">
+                Lihat seluruh jadwal kunjungan dan meeting tim dalam kalender bulanan interaktif terpadu dengan sinkronisasi Google Calendar dan Zoom.
             </p>
+            <Link
+                href={route('team-calendar')}
+                className="px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white text-xs font-bold rounded-xl transition-all shadow-sm cursor-pointer"
+            >
+                Buka Kalender Tim Lengkap →
+            </Link>
         </div>
     );
 }
 
 // ─── Add Visit Modal ──────────────────────────────────────────────────────────────
 
-function AddVisitModal({ open, onClose, leads, customers }) {
+function AddVisitModal({ open, onClose, leads, customers, googleCalendarConfigured, zoomConfigured }) {
     const [form, setForm] = useState({
         lead_id: '', customer_id: '', visit_type: 'visit',
         subject: '', location: '', scheduled_at: '', notes: '',
+        sync_calendar: googleCalendarConfigured,
+        create_zoom: false,
     });
     const [submitting, setSubmitting] = useState(false);
     const [showDirectCustomer, setShowDirectCustomer] = useState(false);
@@ -216,6 +267,7 @@ function AddVisitModal({ open, onClose, leads, customers }) {
             const selected = leads.find(l => String(l.id) === String(leadId));
             if (selected?.customer_id) {
                 set('customer_id', selected.customer_id);
+                if (selected.customer?.address) set('location', selected.customer.address);
             }
         } else {
             set('customer_id', '');
@@ -228,7 +280,12 @@ function AddVisitModal({ open, onClose, leads, customers }) {
         e.preventDefault();
         setSubmitting(true);
         router.post(route('leads.visits.store'), form, {
-            onFinish: () => { setSubmitting(false); onClose(); },
+            preserveScroll: true,
+            onSuccess: () => {
+                toast.success('Kunjungan berhasil dijadwalkan!');
+                onClose();
+            },
+            onFinish: () => setSubmitting(false),
         });
     };
 
@@ -243,7 +300,7 @@ function AddVisitModal({ open, onClose, leads, customers }) {
                         <MapPin className="w-5 h-5 text-brand-600" />
                         Tambah Kunjungan
                     </h2>
-                    <button onClick={onClose} className="p-2 rounded-lg hover:bg-surface-100 text-surface-400">
+                    <button onClick={onClose} className="p-2 rounded-lg hover:bg-surface-100 text-surface-400 cursor-pointer">
                         <X className="w-4 h-4" />
                     </button>
                 </div>
@@ -251,7 +308,7 @@ function AddVisitModal({ open, onClose, leads, customers }) {
                     {/* Lead */}
                     <div>
                         <label className="block text-xs font-semibold text-surface-600 mb-1">Lead</label>
-                        <select className="w-full border border-surface-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+                        <select className="w-full border border-surface-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 bg-white"
                             value={form.lead_id} onChange={e => handleLeadChange(e.target.value)}>
                             <option value="">-- Pilih Lead (atau kosongkan untuk kunjungan langsung) --</option>
                             {leads.map(l => <option key={l.id} value={l.id}>{l.lead_code ? `[${l.lead_code}] ` : ''}{l.title}</option>)}
@@ -271,7 +328,7 @@ function AddVisitModal({ open, onClose, leads, customers }) {
                             <button
                                 type="button"
                                 onClick={() => setShowDirectCustomer(!showDirectCustomer)}
-                                className="text-[11px] text-brand-600 hover:underline font-semibold"
+                                className="text-[11px] text-brand-600 hover:underline font-semibold cursor-pointer"
                             >
                                 {showDirectCustomer ? 'Tutup' : 'Ubah'}
                             </button>
@@ -293,13 +350,13 @@ function AddVisitModal({ open, onClose, leads, customers }) {
                                         <button
                                             type="button"
                                             onClick={() => { setShowDirectCustomer(false); set('customer_id', ''); }}
-                                            className="text-[11px] text-surface-400 hover:text-red-500"
+                                            className="text-[11px] text-surface-400 hover:text-red-500 cursor-pointer"
                                         >
                                             Sembunyikan
                                         </button>
                                     </div>
                                     <select
-                                        className="w-full border border-surface-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+                                        className="w-full border border-surface-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 bg-white"
                                         value={form.customer_id}
                                         onChange={e => set('customer_id', e.target.value)}
                                     >
@@ -315,7 +372,7 @@ function AddVisitModal({ open, onClose, leads, customers }) {
                         <div className="mt-2 animate-fade-in">
                             <label className="block text-xs font-semibold text-surface-600 mb-1">Pilih Customer Pengganti</label>
                             <select
-                                className="w-full border border-surface-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+                                className="w-full border border-surface-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 bg-white"
                                 value={form.customer_id}
                                 onChange={e => set('customer_id', e.target.value)}
                             >
@@ -329,8 +386,17 @@ function AddVisitModal({ open, onClose, leads, customers }) {
                     <div className="grid grid-cols-2 gap-3">
                         <div>
                             <label className="block text-xs font-semibold text-surface-600 mb-1">Jenis <span className="text-red-500">*</span></label>
-                            <select className="w-full border border-surface-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
-                                value={form.visit_type} onChange={e => set('visit_type', e.target.value)} required>
+                            <select className="w-full border border-surface-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 bg-white"
+                                value={form.visit_type}
+                                onChange={e => {
+                                    const val = e.target.value;
+                                    setForm(f => ({
+                                        ...f,
+                                        visit_type: val,
+                                        create_zoom: (val === 'demo' || val === 'presentation') ? true : f.create_zoom
+                                    }));
+                                }}
+                                required>
                                 {Object.entries(VISIT_TYPES).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
                             </select>
                         </div>
@@ -362,13 +428,42 @@ function AddVisitModal({ open, onClose, leads, customers }) {
                             value={form.notes} onChange={e => set('notes', e.target.value)} />
                     </div>
 
+                    {/* Integration Options */}
+                    <div className="bg-surface-50 rounded-xl p-3 border border-surface-200 space-y-2">
+                        <label className="flex items-center gap-2 cursor-pointer select-none">
+                            <input
+                                type="checkbox"
+                                checked={form.sync_calendar}
+                                onChange={e => set('sync_calendar', e.target.checked)}
+                                className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500 cursor-pointer"
+                            />
+                            <span className="text-xs font-semibold text-surface-800 flex items-center gap-1.5">
+                                <Calendar className="w-3.5 h-3.5 text-blue-600" /> Sinkron ke Google Calendar Tim
+                            </span>
+                        </label>
+
+                        {zoomConfigured && (
+                            <label className="flex items-center gap-2 cursor-pointer select-none pt-1">
+                                <input
+                                    type="checkbox"
+                                    checked={form.create_zoom}
+                                    onChange={e => set('create_zoom', e.target.checked)}
+                                    className="w-4 h-4 rounded text-sky-600 focus:ring-sky-500 cursor-pointer"
+                                />
+                                <span className="text-xs font-semibold text-surface-800 flex items-center gap-1.5">
+                                    <Video className="w-3.5 h-3.5 text-sky-600" /> Buat Link Zoom Meeting Otomatis
+                                </span>
+                            </label>
+                        )}
+                    </div>
+
                     <div className="flex justify-end gap-2 pt-2 border-t border-surface-100">
                         <button type="button" onClick={onClose}
-                            className="px-4 py-2 text-sm font-medium text-surface-600 bg-surface-100 hover:bg-surface-200 rounded-lg transition-colors">
+                            className="px-4 py-2 text-sm font-medium text-surface-600 bg-surface-100 hover:bg-surface-200 rounded-lg transition-colors cursor-pointer">
                             Batal
                         </button>
                         <button type="submit" disabled={submitting}
-                            className="px-5 py-2 text-sm font-semibold text-white bg-brand-600 hover:bg-brand-700 rounded-lg transition-colors disabled:opacity-60 flex items-center gap-2">
+                            className="px-5 py-2 text-sm font-semibold text-white bg-brand-600 hover:bg-brand-700 rounded-lg transition-colors disabled:opacity-60 flex items-center gap-2 cursor-pointer">
                             {submitting ? 'Menyimpan...' : <><Plus className="w-4 h-4" /> Tambah Kunjungan</>}
                         </button>
                     </div>
@@ -380,7 +475,17 @@ function AddVisitModal({ open, onClose, leads, customers }) {
 
 // ─── Main Page ───────────────────────────────────────────────────────────────────
 
-export default function LeadVisits({ visits, stats, todayVisit, leads, customers, isManagerOrAdmin }) {
+export default function LeadVisits({ 
+    visits = [], 
+    stats = {}, 
+    todayVisit = null, 
+    leads = [], 
+    customers = [], 
+    isManagerOrAdmin = false,
+    googleCalendarConfigured = false,
+    zoomConfigured = false,
+    userHasZoomLicense = false
+}) {
     const [tab, setTab] = useState('visit');   // visit | follow_up | history
     const [subTab, setSubTab] = useState('table'); // table | calendar
     const [showForm, setShowForm] = useState(false);
@@ -402,6 +507,21 @@ export default function LeadVisits({ visits, stats, todayVisit, leads, customers
         } else {
             router.post(route('leads.visits.check-in', visit.id), { lat: null, lng: null });
         }
+    };
+
+    const handleDeleteVisit = (visitId, subject) => {
+        if (!confirm(`Hapus jadwal kunjungan "${subject}"? Event di Google Calendar dan Zoom akan ikut dibatalkan.`)) return;
+        router.delete(route('leads.visits.destroy', visitId), {
+            preserveScroll: true,
+            onSuccess: () => toast.success('Jadwal kunjungan berhasil dihapus')
+        });
+    };
+
+    const handleCreateZoom = (visitId) => {
+        router.post(route('leads.visits.zoom', visitId), {}, {
+            preserveScroll: true,
+            onSuccess: () => toast.success('Zoom meeting berhasil dibuat!')
+        });
     };
 
     const today = new Date().toDateString();
@@ -432,21 +552,30 @@ export default function LeadVisits({ visits, stats, todayVisit, leads, customers
                                 Visit & Follow-up
                             </h1>
                         </div>
-                        <button
-                            onClick={() => setShowForm(true)}
-                            className="flex items-center gap-2 px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white text-sm font-semibold rounded-xl transition-colors">
-                            <Plus className="w-4 h-4" />
-                            Tambah Visit
-                        </button>
+                        <div className="flex items-center gap-2">
+                            <Link
+                                href={route('team-calendar')}
+                                className="flex items-center gap-1.5 px-3.5 py-2 bg-surface-100 hover:bg-surface-200 text-surface-700 text-sm font-semibold rounded-xl transition-colors cursor-pointer"
+                            >
+                                <Calendar className="w-4 h-4 text-blue-600" />
+                                Kalender Tim
+                            </Link>
+                            <button
+                                onClick={() => setShowForm(true)}
+                                className="flex items-center gap-2 px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white text-sm font-semibold rounded-xl transition-colors cursor-pointer">
+                                <Plus className="w-4 h-4" />
+                                Tambah Visit
+                            </button>
+                        </div>
                     </div>
 
                     {/* Stats */}
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-4">
                         {[
-                            { label: 'Akan Datang', value: stats.upcoming, color: 'text-blue-600' },
-                            { label: 'Hari Ini',    value: stats.today,    color: 'text-brand-600' },
-                            { label: 'Minggu Ini',  value: stats.thisWeek, color: 'text-violet-600' },
-                            { label: 'Check-in',    value: stats.checkedIn, color: 'text-emerald-600' },
+                            { label: 'Akan Datang', value: stats.upcoming || 0, color: 'text-blue-600' },
+                            { label: 'Hari Ini',    value: stats.today || 0,    color: 'text-brand-600' },
+                            { label: 'Minggu Ini',  value: stats.thisWeek || 0, color: 'text-violet-600' },
+                            { label: 'Check-in',    value: stats.checkedIn || 0, color: 'text-emerald-600' },
                         ].map(s => (
                             <div key={s.label} className="bg-surface-50 rounded-xl px-4 py-3 border border-surface-200">
                                 <p className={`text-2xl font-bold ${s.color}`}>{s.value}</p>
@@ -471,7 +600,7 @@ export default function LeadVisits({ visits, stats, todayVisit, leads, customers
                             ].map(t => (
                                 <button key={t.key}
                                     onClick={() => setTab(t.key)}
-                                    className={`flex items-center gap-2 px-4 py-2.5 text-sm font-semibold border-b-2 transition-colors -mb-px ${tab === t.key ? 'border-brand-500 text-brand-700' : 'border-transparent text-surface-500 hover:text-surface-700'}`}>
+                                    className={`flex items-center gap-2 px-4 py-2.5 text-sm font-semibold border-b-2 transition-colors -mb-px cursor-pointer ${tab === t.key ? 'border-brand-500 text-brand-700' : 'border-transparent text-surface-500 hover:text-surface-700'}`}>
                                     <t.icon className="w-4 h-4" />
                                     {t.label}
                                     <span className={`text-xs px-1.5 py-0.5 rounded-full font-bold ${tab === t.key ? 'bg-brand-100 text-brand-700' : 'bg-surface-100 text-surface-500'}`}>{t.count}</span>
@@ -487,7 +616,7 @@ export default function LeadVisits({ visits, stats, todayVisit, leads, customers
                             ].map(st => (
                                 <button key={st.key}
                                     onClick={() => setSubTab(st.key)}
-                                    className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors ${subTab === st.key ? 'bg-brand-50 text-brand-700' : 'text-surface-500 hover:bg-surface-50'}`}>
+                                    className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors cursor-pointer ${subTab === st.key ? 'bg-brand-50 text-brand-700' : 'text-surface-500 hover:bg-surface-50'}`}>
                                     {st.label}
                                 </button>
                             ))}
@@ -496,7 +625,13 @@ export default function LeadVisits({ visits, stats, todayVisit, leads, customers
                         {/* Content */}
                         <div className="p-4">
                             {subTab === 'table' ? (
-                                <VisitTable visits={filteredVisits} onCheckIn={handleCheckIn} />
+                                <VisitTable
+                                    visits={filteredVisits}
+                                    onCheckIn={handleCheckIn}
+                                    zoomConfigured={zoomConfigured}
+                                    onDeleteVisit={handleDeleteVisit}
+                                    onCreateZoom={handleCreateZoom}
+                                />
                             ) : (
                                 <CalendarPlaceholder />
                             )}
@@ -511,6 +646,8 @@ export default function LeadVisits({ visits, stats, todayVisit, leads, customers
                 onClose={() => setShowForm(false)}
                 leads={leads}
                 customers={customers}
+                googleCalendarConfigured={googleCalendarConfigured}
+                zoomConfigured={zoomConfigured}
             />
         </AuthenticatedLayout>
     );

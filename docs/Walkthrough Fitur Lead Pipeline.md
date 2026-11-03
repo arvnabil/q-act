@@ -160,36 +160,38 @@ Menyelesaikan kendala formulir yang membingungkan ketika Lead sudah memiliki dat
 | **Smart Visit Customer Selection** | ✅ Selesai | Auto-hide dropdown customer jika lead dipilih, toggle link direct |
 | **Terminologi Standar** | ✅ Selesai | Menggunakan label "Quotation" / "Quot", bukan "SPH" |
 | **Standardisasi Toast Notification** | ✅ Selesai | Global white card style `#ffffff` dengan aksen teal `#009680` |
+| **Google Calendar Shared Integration** | ✅ Selesai | Service Account JWT sync, auto create/update/delete event kantor |
+| **Zoom Server-to-Server OAuth** | ✅ Selesai | Auto create Zoom meeting, 1-klik Join Zoom, inject link ke G-Cal & Timeline |
+| **Halaman Kalender Tim (`/team-calendar`)** | ✅ Selesai | Visual kalender bulanan terpadu seluruh jadwal kunjungan & meeting sales |
+| **Pengaturan Integrasi di Settings** | ✅ Selesai | Form kredensial Google Calendar & Zoom, matriks lisensi Zoom & email tim |
 
 ---
 
-## 8. Daftar Yang Belum Dikerjakan (Pending Roadmap)
+## 8. Panduan Integrasi Google Calendar & Zoom Server-to-Server
 
-Berikut adalah backlog fitur yang telah didiskusikan dan siap dikerjakan pada fase berikutnya:
+### A. Integrasi Google Calendar (Shared Company Calendar)
+1. Buka menu **Settings** (`/settings`) pada section **Integrasi Eksternal**.
+2. Masukkan **Calendar ID** (misal: `calendar@activ.co.id` atau ID kalender khusus di Google Calendar Settings).
+3. Paste isi file **Service Account JSON** dari Google Cloud Console.
+4. **PENTING**: Invite email service account tersebut ke kalender Google kantor dengan izin *"Make changes to events"*.
+5. Setiap kali sales menjadwalkan kunjungan di Lead atau menu Visit, event otomatis terbit di kalender bersama dan muncul di handphone seluruh tim sales.
 
-### A. Integrasi Google Calendar Tim (Shared Calendar)
-1. **Koneksi Akun Gmail Kantor (`calendar@kantor.com`)**:
-   - Modul OAuth / Service Account Google di menu **Settings → Integrasi**.
-   - Admin menghubungkan 1 akun Google Calendar kantor.
-2. **Sinkronisasi Dua Arah Kunjungan**:
-   - Setiap kali Sales menjadwalkan kunjungan di `/leads/visits`, otomatis membuat event di Google Calendar kantor.
-   - Karena sales lain sudah subscribe ke calendar kantor, jadwal otomatis muncul di aplikasi Google Calendar handphone masing-masing.
-   - Kolom `gc_event_id` pada tabel `lead_visits` untuk sinkronisasi update/cancel jadwal.
-3. **Halaman Kalender Tim (`/team-calendar`)**:
-   - Tampilan visual kalender bulanan/mingguan di dalam portal Q-Sales yang menggabungkan seluruh jadwal kunjungan dan meeting tim sales.
+### B. Integrasi Zoom Server-to-Server OAuth
+1. Buka **marketplace.zoom.us** → *Develop* → *Build App* → pilih **Server-to-Server OAuth**.
+2. Aktifkan scopes: `meeting:write:admin` dan `meeting:read:admin`.
+3. Salin **Account ID**, **Client ID**, dan **Client Secret** ke form Zoom di menu **Settings**.
+4. Centang checklist **Lisensi Zoom** untuk sales yang berhak membuat meeting pada tabel anggota tim.
+5. Saat membuat kunjungan dengan tipe Demo/Presentasi, opsi "Buat Link Zoom Meeting Otomatis" otomatis aktif dan menghasilkan link meeting instan.
 
-### B. Integrasi Zoom Server-to-Server
-1. **Setup Zoom Server-to-Server OAuth**:
-   - Input Client ID, Client Secret, dan Account ID dari Zoom App Marketplace di halaman Settings Admin.
-2. **Flag Lisensi User**:
-   - Checkbox pada User Management: *"Memiliki Lisensi Zoom"*.
-3. **Tombol "Jadwalkan Zoom Meeting"**:
-   - Pembuatan link meeting Zoom otomatis langsung dari form Visit atau Lead Detail.
-   - Link meeting otomatis ditempelkan ke event Google Calendar dan timeline Lead.
-4. **Zoom Webhook Handler**:
-   - Menerima webhook saat meeting berakhir (`meeting.ended`) untuk mencatat durasi aktual dan URL rekaman meeting ke timeline.
+### C. Halaman Kalender Tim (`/team-calendar`)
+- Akses via menu sidebar: **Lead Pipeline → Kalender Tim** (atau tombol di halaman Visit & Lead Detail).
+- Menampilkan grid bulanan dengan indikator warna per jenis kunjungan (Visit, Follow-up, Demo, Presentasi).
+- Klik tanggal manapun untuk langsung menjadwalkan kunjungan baru.
+- Klik event untuk melihat detail agenda, customer, link lead, status check-in, dan tombol 1-klik masuk Zoom.
 
-### C. Prosedur Deploy ke cPanel Production
+---
+
+## 9. Prosedur Deploy ke cPanel Production
 Saat melakukan rilis ke server production cPanel, lakukan urutan berikut:
 ```bash
 # 1. Jalankan merger duplikasi SEBELUM migrate (PENTING):

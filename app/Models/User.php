@@ -31,6 +31,8 @@ class User extends Authenticatable
         'target_sales',
         'achieved_sales',
         'is_active',
+        'has_zoom_license',
+        'google_calendar_email',
     ];
 
     protected $hidden = [
@@ -44,6 +46,7 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
             'is_active' => 'boolean',
+            'has_zoom_license' => 'boolean',
             'target_sales' => 'integer',
             'achieved_sales' => 'integer',
         ];

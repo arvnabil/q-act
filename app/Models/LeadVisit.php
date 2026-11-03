@@ -23,6 +23,10 @@ class LeadVisit extends Model
         'checked_in_lng',
         'notes',
         'outcome',
+        'gc_event_id',
+        'zoom_meeting_id',
+        'zoom_join_url',
+        'zoom_recording_url',
     ];
 
     protected $casts = [
