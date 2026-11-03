@@ -423,6 +423,14 @@ export default function LeadDetail({ lead, stages, sources }) {
     const handleActivityUpdated = (updatedAct) => setActivities(prev => prev.map(a => a.id === updatedAct.id ? updatedAct : a));
     const handleActivityDeleted = (id) => setActivities(prev => prev.filter(a => a.id !== id));
 
+    const allQuotations = (() => {
+        const list = [...(lead.quotations || [])];
+        if (lead.quotation && !list.some(q => q.id === lead.quotation.id)) {
+            list.unshift(lead.quotation);
+        }
+        return list;
+    })();
+
     return (
         <AuthenticatedLayout>
             <Head title={lead.title} />
@@ -451,6 +459,13 @@ export default function LeadDetail({ lead, stages, sources }) {
                             )}
                         </div>
                         <div className="flex items-center gap-2">
+                            <Link
+                                href={route('quotations.create', { lead_id: lead.id, customer_id: lead.customer_id || undefined })}
+                                className="flex items-center gap-1.5 px-3 py-2 bg-brand-600 hover:bg-brand-700 text-white text-sm font-semibold rounded-xl transition-all shadow-sm"
+                            >
+                                <Plus className="w-4 h-4" />
+                                Buat Quotation
+                            </Link>
                             <button onClick={() => setChangingStage(prev => !prev)}
                                 className={`flex items-center gap-2 px-3 py-2 border text-sm font-semibold rounded-xl transition-colors ${changingStage ? 'border-brand-500 bg-brand-50 text-brand-700' : 'border-surface-200 text-surface-700 hover:bg-surface-50'}`}>
                                 <TrendingUp className="w-4 h-4" />
@@ -569,23 +584,63 @@ export default function LeadDetail({ lead, stages, sources }) {
                             </div>
                         </div>
 
-                        {/* Quotation */}
-                        {lead.quotation && (
-                            <div className="bg-white rounded-2xl border border-surface-200 p-5">
-                                <h2 className="text-sm font-bold text-surface-700 mb-3 flex items-center gap-2">
+                        {/* Quotations Card */}
+                        <div className="bg-white rounded-2xl border border-surface-200 p-5">
+                            <div className="flex items-center justify-between mb-3">
+                                <h2 className="text-sm font-bold text-surface-700 flex items-center gap-2">
                                     <FileText className="w-4 h-4 text-brand-600" />
-                                    Quotation Terlampir
+                                    Quotation ({allQuotations.length})
                                 </h2>
-                                <Link href={route('quotations.show', lead.quotation_id)}
-                                    className="flex items-center justify-between p-3 bg-brand-50 rounded-xl hover:bg-brand-100 transition-colors">
-                                    <div>
-                                        <p className="text-sm font-bold text-brand-700">{lead.quotation_id}</p>
-                                        <p className="text-xs text-brand-500 capitalize">{lead.quotation.status}</p>
-                                    </div>
-                                    <ChevronRight className="w-4 h-4 text-brand-600" />
+                                <Link
+                                    href={route('quotations.create', { lead_id: lead.id, customer_id: lead.customer_id || undefined })}
+                                    className="flex items-center gap-1 text-xs font-semibold text-brand-600 hover:text-brand-700"
+                                >
+                                    <Plus className="w-3.5 h-3.5" /> Buat Baru
                                 </Link>
                             </div>
-                        )}
+
+                            {allQuotations.length > 0 ? (
+                                <div className="space-y-2">
+                                    {allQuotations.map(q => (
+                                        <Link
+                                            key={q.id}
+                                            href={route('quotations.show', q.id)}
+                                            className="flex items-center justify-between p-3 bg-surface-50 hover:bg-brand-50/60 rounded-xl border border-surface-100 transition-colors group"
+                                        >
+                                            <div className="min-w-0">
+                                                <div className="flex items-center gap-2">
+                                                    <p className="text-sm font-bold text-surface-800 group-hover:text-brand-700">{q.id}</p>
+                                                    {q.revision_no > 0 && (
+                                                        <span className="text-[10px] font-mono bg-surface-200 text-surface-700 px-1.5 py-0.2 rounded font-semibold">
+                                                            Rev {q.revision_no}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                <div className="flex items-center gap-2 mt-0.5">
+                                                    <span className="text-xs font-semibold text-brand-600">
+                                                        {formatRp(q.grand_total)}
+                                                    </span>
+                                                    <span className="text-[10px] text-surface-400 capitalize">
+                                                        · {q.status}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                            <ChevronRight className="w-4 h-4 text-surface-400 group-hover:text-brand-600 transition-colors shrink-0" />
+                                        </Link>
+                                    ))}
+                                </div>
+                            ) : (
+                                <div className="text-center py-4 text-surface-400">
+                                    <p className="text-xs">Belum ada quotation untuk lead ini</p>
+                                    <Link
+                                        href={route('quotations.create', { lead_id: lead.id, customer_id: lead.customer_id || undefined })}
+                                        className="inline-flex items-center gap-1 mt-2 text-xs font-semibold text-brand-600 hover:underline"
+                                    >
+                                        <Plus className="w-3 h-3" /> Buat quotation pertama
+                                    </Link>
+                                </div>
+                            )}
+                        </div>
 
                         {/* Notes */}
                         {lead.notes && (

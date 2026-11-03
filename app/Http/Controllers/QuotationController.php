@@ -7,6 +7,8 @@ use App\Models\ActivityLog;
 use App\Models\CompanyBankAccount;
 use App\Models\Customer;
 use App\Models\CustomerPic;
+use App\Models\Lead;
+use App\Models\LeadActivity;
 use App\Models\Product;
 use App\Models\Quotation;
 use App\Models\QuotationItem;
@@ -356,9 +358,22 @@ class QuotationController extends Controller
             'is_default' => $b->is_default ?? false,
         ]);
 
+        $leadsQuery = Lead::active();
+        if (! $isManagerOrAdmin) {
+            $leadsQuery->forUser($user->id);
+        }
+        $leads = $leadsQuery->select('id', 'title', 'lead_code', 'customer_id', 'pic_name', 'pic_phone')
+            ->orderBy('title')
+            ->get();
+
+        $leadId = $request->query('lead_id');
+        $prefilledLead = $leadId ? Lead::with('customer.pics')->find($leadId) : null;
+
         return Inertia::render('QuotationCreate', [
             'customers' => $customers,
             'bankAccounts' => $bankAccounts,
+            'leads' => $leads,
+            'prefilledLead' => $prefilledLead,
             'currentUser' => [
                 'id' => $user->id,
                 'name' => $user->name,
@@ -378,6 +393,7 @@ class QuotationController extends Controller
     public function store(Request $request)
     {
         $request->validate([
+            'lead_id' => 'nullable|uuid|exists:leads,id',
             'customer_id' => 'required_without:new_customer_name|nullable|string|exists:customers,id',
             'pic_id' => 'nullable|string',
             'expiry_days' => 'nullable|integer|min:1|max:365',
@@ -435,6 +451,7 @@ class QuotationController extends Controller
 
         $quotation = Quotation::create([
             'id' => $id,
+            'lead_id' => $request->input('lead_id') ?: null,
             'customer_id' => $customerId,
             'pic_id' => $picId ?: null,
             'notes' => $request->notes,
@@ -448,6 +465,22 @@ class QuotationController extends Controller
             'show_tax' => true,
             'ppn_rate' => 0.11,
         ]);
+
+        if ($quotation->lead_id) {
+            $lead = Lead::find($quotation->lead_id);
+            if ($lead) {
+                if (! $lead->quotation_id) {
+                    $lead->update(['quotation_id' => $quotation->id]);
+                }
+                LeadActivity::create([
+                    'lead_id' => $lead->id,
+                    'user_id' => $user->id,
+                    'type' => 'quotation_linked',
+                    'title' => "Quotation dibuat: {$quotation->id}",
+                    'description' => "Quotation {$quotation->id} dibuat dan terhubung ke lead ini.",
+                ]);
+            }
+        }
 
         ActivityLog::create([
             'user_id' => $user->id,

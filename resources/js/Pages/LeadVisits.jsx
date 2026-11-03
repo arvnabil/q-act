@@ -206,8 +206,23 @@ function AddVisitModal({ open, onClose, leads, customers }) {
         subject: '', location: '', scheduled_at: '', notes: '',
     });
     const [submitting, setSubmitting] = useState(false);
+    const [showDirectCustomer, setShowDirectCustomer] = useState(false);
 
     const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+
+    const handleLeadChange = (leadId) => {
+        set('lead_id', leadId);
+        if (leadId) {
+            const selected = leads.find(l => String(l.id) === String(leadId));
+            if (selected?.customer_id) {
+                set('customer_id', selected.customer_id);
+            }
+        } else {
+            set('customer_id', '');
+        }
+    };
+
+    const selectedLead = leads.find(l => String(l.id) === String(form.lead_id));
 
     const handleSubmit = (e) => {
         e.preventDefault();
@@ -235,23 +250,80 @@ function AddVisitModal({ open, onClose, leads, customers }) {
                 <form onSubmit={handleSubmit} className="px-6 py-4 space-y-4">
                     {/* Lead */}
                     <div>
-                        <label className="block text-xs font-semibold text-surface-600 mb-1">Lead (opsional)</label>
+                        <label className="block text-xs font-semibold text-surface-600 mb-1">Lead</label>
                         <select className="w-full border border-surface-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
-                            value={form.lead_id} onChange={e => set('lead_id', e.target.value)}>
-                            <option value="">-- Pilih Lead --</option>
+                            value={form.lead_id} onChange={e => handleLeadChange(e.target.value)}>
+                            <option value="">-- Pilih Lead (atau kosongkan untuk kunjungan langsung) --</option>
                             {leads.map(l => <option key={l.id} value={l.id}>{l.lead_code ? `[${l.lead_code}] ` : ''}{l.title}</option>)}
                         </select>
                     </div>
 
-                    {/* Customer */}
-                    <div>
-                        <label className="block text-xs font-semibold text-surface-600 mb-1">Customer (opsional)</label>
-                        <select className="w-full border border-surface-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
-                            value={form.customer_id} onChange={e => set('customer_id', e.target.value)}>
-                            <option value="">-- Pilih Customer --</option>
-                            {customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                        </select>
-                    </div>
+                    {/* Customer info or direct customer selector */}
+                    {selectedLead?.customer ? (
+                        <div className="bg-surface-50 border border-surface-200 rounded-xl p-3 flex items-center justify-between">
+                            <div className="flex items-center gap-2.5">
+                                <Building2 className="w-4 h-4 text-brand-600 shrink-0" />
+                                <div>
+                                    <p className="text-[10px] text-surface-400 font-medium">Customer otomatis dari Lead:</p>
+                                    <p className="text-xs font-bold text-surface-800">{selectedLead.customer.name}</p>
+                                </div>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => setShowDirectCustomer(!showDirectCustomer)}
+                                className="text-[11px] text-brand-600 hover:underline font-semibold"
+                            >
+                                {showDirectCustomer ? 'Tutup' : 'Ubah'}
+                            </button>
+                        </div>
+                    ) : !form.lead_id ? (
+                        <div>
+                            {!showDirectCustomer ? (
+                                <button
+                                    type="button"
+                                    onClick={() => setShowDirectCustomer(true)}
+                                    className="text-xs font-semibold text-brand-600 hover:underline flex items-center gap-1 cursor-pointer"
+                                >
+                                    <Plus className="w-3.5 h-3.5" /> Kunjungan langsung ke Customer (tanpa Lead)
+                                </button>
+                            ) : (
+                                <div>
+                                    <div className="flex items-center justify-between mb-1">
+                                        <label className="text-xs font-semibold text-surface-600">Pilih Customer</label>
+                                        <button
+                                            type="button"
+                                            onClick={() => { setShowDirectCustomer(false); set('customer_id', ''); }}
+                                            className="text-[11px] text-surface-400 hover:text-red-500"
+                                        >
+                                            Sembunyikan
+                                        </button>
+                                    </div>
+                                    <select
+                                        className="w-full border border-surface-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+                                        value={form.customer_id}
+                                        onChange={e => set('customer_id', e.target.value)}
+                                    >
+                                        <option value="">-- Pilih Customer --</option>
+                                        {customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                                    </select>
+                                </div>
+                            )}
+                        </div>
+                    ) : null}
+
+                    {showDirectCustomer && selectedLead?.customer && (
+                        <div className="mt-2 animate-fade-in">
+                            <label className="block text-xs font-semibold text-surface-600 mb-1">Pilih Customer Pengganti</label>
+                            <select
+                                className="w-full border border-surface-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+                                value={form.customer_id}
+                                onChange={e => set('customer_id', e.target.value)}
+                            >
+                                <option value={selectedLead.customer_id}>-- Gunakan Customer dari Lead ({selectedLead.customer.name}) --</option>
+                                {customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                            </select>
+                        </div>
+                    )}
 
                     {/* Type & Subject */}
                     <div className="grid grid-cols-2 gap-3">

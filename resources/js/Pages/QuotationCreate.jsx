@@ -5,23 +5,51 @@ import { Head, router, usePage } from '@inertiajs/react';
 import { X, ChevronRight, Plus, Trash2, Info, Loader2, ArrowLeft } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 
-export default function QuotationCreate({ customers, bankAccounts, currentUser }) {
+export default function QuotationCreate({ customers, bankAccounts, currentUser, leads = [], prefilledLead = null }) {
     const { flash } = usePage().props;
 
     const isManagerOrAdmin = ['Administrator', 'Sales Manager', 'Manager'].includes(currentUser?.role);
     const [mode, setMode] = useState('existing'); // 'existing' | 'new'
     const [isSubmitting, setIsSubmitting] = useState(false);
 
+    // Lead linkage
+    const [selectedLeadId, setSelectedLeadId] = useState(prefilledLead?.id || '');
+
     // Existing customer fields
-    const [selectedCustomerId, setSelectedCustomerId] = useState('');
+    const [selectedCustomerId, setSelectedCustomerId] = useState(prefilledLead?.customer_id || '');
     const [selectedPicId, setSelectedPicId] = useState('');
     const [picForm, setPicForm] = useState({ name: '', phone: '', email: '' });
     const [editCompanyAddress, setEditCompanyAddress] = useState('');
 
     // New customer fields
-    const [newCompanyName, setNewCompanyName] = useState('');
-    const [newCompanyAddress, setNewCompanyAddress] = useState('');
-    const [newPics, setNewPics] = useState([{ name: '', phone: '', email: '' }]);
+    const [newCompanyName, setNewCompanyName] = useState(!prefilledLead?.customer_id && prefilledLead?.customer_name ? prefilledLead.customer_name : '');
+    const [newCompanyAddress, setNewCompanyAddress] = useState(!prefilledLead?.customer_id && prefilledLead?.customer_address ? prefilledLead.customer_address : '');
+    const [newPics, setNewPics] = useState([{
+        name: prefilledLead?.pic_name || '',
+        phone: prefilledLead?.pic_phone || '',
+        email: prefilledLead?.customer_email || ''
+    }]);
+
+    // If prefilled lead has no existing customer but has a name, default to 'new' mode
+    useEffect(() => {
+        if (prefilledLead) {
+            if (prefilledLead.customer_id) {
+                setMode('existing');
+                setSelectedCustomerId(prefilledLead.customer_id);
+            } else if (prefilledLead.customer_name) {
+                setMode('new');
+                setNewCompanyName(prefilledLead.customer_name);
+                if (prefilledLead.customer_address) setNewCompanyAddress(prefilledLead.customer_address);
+                if (prefilledLead.pic_name || prefilledLead.pic_phone || prefilledLead.customer_email) {
+                    setNewPics([{
+                        name: prefilledLead.pic_name || '',
+                        phone: prefilledLead.pic_phone || '',
+                        email: prefilledLead.customer_email || ''
+                    }]);
+                }
+            }
+        }
+    }, [prefilledLead]);
 
     // Quotation info
     const [expiryDays, setExpiryDays] = useState(7);
@@ -60,6 +88,16 @@ export default function QuotationCreate({ customers, bankAccounts, currentUser }
     const handleNewPicChange = (index, field, value) =>
         setNewPics(prev => prev.map((p, i) => i === index ? { ...p, [field]: value } : p));
 
+    const handleLeadSelectChange = (leadId) => {
+        setSelectedLeadId(leadId);
+        if (!leadId) return;
+        const ld = leads?.find(l => String(l.id) === String(leadId));
+        if (ld?.customer_id) {
+            setMode('existing');
+            setSelectedCustomerId(ld.customer_id);
+        }
+    };
+
     const handleSubmit = (e) => {
         e.preventDefault();
         if (mode === 'existing' && !selectedCustomerId) {
@@ -78,6 +116,7 @@ export default function QuotationCreate({ customers, bankAccounts, currentUser }
         setIsSubmitting(true);
 
         const payload = {
+            lead_id: selectedLeadId || null,
             customer_id: selectedCustomerId,
             pic_id: selectedPicId && selectedPicId !== 'new' ? selectedPicId : null,
             expiry_days: expiryDays,
@@ -124,6 +163,32 @@ export default function QuotationCreate({ customers, bankAccounts, currentUser }
 
                 <form onSubmit={handleSubmit} className="bg-white rounded-2xl border border-surface-200 shadow-sm overflow-hidden">
                     <div className="px-6 py-5 flex flex-col gap-6">
+                        {/* Optional Lead Link */}
+                        {leads && leads.length > 0 && (
+                            <div className="bg-brand-50/50 border border-brand-100 rounded-xl p-3.5 flex flex-col gap-1.5">
+                                <div className="flex items-center justify-between">
+                                    <label className="text-xs font-bold text-brand-800">Hubungkan ke Lead Pipeline (Opsional)</label>
+                                    {selectedLeadId && (
+                                        <button type="button" onClick={() => setSelectedLeadId('')} className="text-[11px] text-surface-400 hover:text-red-500">
+                                            Lepas hubungan
+                                        </button>
+                                    )}
+                                </div>
+                                <select
+                                    value={selectedLeadId}
+                                    onChange={e => handleLeadSelectChange(e.target.value)}
+                                    className="bg-white border border-brand-200 rounded-lg px-3 py-2 text-sm text-surface-800 outline-none focus:ring-2 focus:ring-brand-500 cursor-pointer"
+                                >
+                                    <option value="">-- Tanpa Lead (Langsung ke Customer) --</option>
+                                    {leads.map(l => (
+                                        <option key={l.id} value={l.id}>
+                                            {l.lead_code ? `[${l.lead_code}] ` : ''}{l.title}
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+                        )}
+
                         {/* Step 1: Data Customer */}
                         <div>
                             <div className="flex items-center gap-2 mb-4">

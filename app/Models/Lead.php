@@ -86,6 +86,16 @@ class Lead extends Model
         return $this->belongsTo(Quotation::class);
     }
 
+    public function quotations(): HasMany
+    {
+        return $this->hasMany(Quotation::class, 'lead_id')->latest();
+    }
+
+    public function pics(): HasMany
+    {
+        return $this->hasMany(LeadPic::class, 'lead_id');
+    }
+
     public function creator(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by');

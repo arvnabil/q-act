@@ -13,7 +13,7 @@ class Quotation extends Model
     public $incrementing = false;
 
     protected $fillable = [
-        'id', 'customer_id', 'pic_id', 'sales_id', 'bu_id', 'bank_account_id',
+        'id', 'lead_id', 'customer_id', 'pic_id', 'sales_id', 'bu_id', 'bank_account_id',
         'status', 'po_status', 'po_number', 'po_date', 'po_document_path', 'date', 'expired', 'calc_tax', 'show_tax', 'ppn_rate',
         'calc_pph', 'show_pph', 'pph_rate', 'notes', 'terms',
         'subtotal', 'tax_amount', 'grand_total',
@@ -53,6 +53,11 @@ class Quotation extends Model
     public function customer(): BelongsTo
     {
         return $this->belongsTo(Customer::class);
+    }
+
+    public function lead(): BelongsTo
+    {
+        return $this->belongsTo(Lead::class, 'lead_id');
     }
 
     public function pic(): BelongsTo

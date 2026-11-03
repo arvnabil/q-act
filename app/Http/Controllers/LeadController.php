@@ -253,7 +253,9 @@ class LeadController extends Controller
         $lead->load([
             'sales:id,name',
             'customer:id,name,address',
-            'quotation:id,status,total_price',
+            'quotation:id,status,grand_total,revision_no',
+            'quotations:id,lead_id,status,grand_total,created_at,revision_no,relation_type',
+            'pics.customerPic',
             'visits.user:id,name',
         ]);
 
@@ -494,7 +496,7 @@ class LeadController extends Controller
             'visits'           => $visits,
             'stats'            => $stats,
             'todayVisit'       => $todayVisit,
-            'leads'            => Lead::active()->select('id', 'title', 'lead_code')->orderBy('title')->get(),
+            'leads'            => Lead::active()->select('id', 'title', 'lead_code', 'customer_id', 'customer_name')->with('customer:id,name')->orderBy('title')->get(),
             'customers'        => Customer::select('id', 'name')->orderBy('name')->get(),
             'isManagerOrAdmin' => $isManagerOrAdmin,
         ]);
@@ -515,6 +517,13 @@ class LeadController extends Controller
         ]);
 
         $data['user_id'] = Auth::id();
+
+        if (!empty($data['lead_id']) && empty($data['customer_id'])) {
+            $ld = Lead::find($data['lead_id']);
+            if ($ld && $ld->customer_id) {
+                $data['customer_id'] = $ld->customer_id;
+            }
+        }
 
         $visit = LeadVisit::create($data);
 
