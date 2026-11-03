@@ -1,223 +1,211 @@
-# 📖 Walkthrough: Fitur Lead Pipeline — Q-Sales (ACTiV)
+# 📖 Walkthrough Lengkap: Fitur Lead Pipeline & Lead 360° — Q-Sales (ACTiV)
 
-Dokumen ini berisi panduan lengkap dan rangkuman implementasi teknis untuk **Fitur Lead Pipeline** pada portal **Q-Sales (ACTiV)**. Fitur ini dirancang untuk mengelola alur prospek (leads) mulai dari prospek pertama kali masuk hingga deal/menang dan terkonversi menjadi Customer & Quotation secara terintegrasi.
+Dokumen ini berisi panduan komprehensif, arsitektur data, dan dokumentasi operasional untuk seluruh pembaruan **Fitur Lead Pipeline, Timeline Aktivitas, Integrasi Quotation (Lead 360° Phase 1), serta Pembersihan Duplikasi Customer** pada sistem **Q-Sales (ACTiV)**.
 
 ---
 
 ## 📑 Daftar Isi
 
-1. [Gambaran Umum & Alur Kerja](#1-gambaran-umum--alur-kerja)
-2. [Struktur Menu & Navigasi](#2-struktur-menu--navigasi)
-3. [Dashboard Pipeline Board (Kanban & List)](#3-dashboard-pipeline-board-kanban--list)
-4. [Halaman Detail Lead & Timeline Aktivitas](#4-halaman-detail-lead--timeline-aktivitas)
-5. [Manajemen Visit & Follow-up](#5-manajemen-visit--follow-up)
-6. [Menu Laporan Pencapaian (Achievements)](#6-menu-laporan-pencapaian-achievements)
-7. [Pengaturan Tahap Pipeline (Manager & Admin)](#7-pengaturan-tahap-pipeline-manager--admin)
-8. [Standardisasi Sistem Notifikasi (Toast)](#8-standardisasi-sistem-notifikasi-toast)
-9. [Hak Akses & Matrix Permission (RBAC)](#9-hak-akses--matrix-permission-rbac)
-10. [Spesifikasi Teknis & Endpoints](#10-spesifikasi-teknis--endpoints)
+1. [Arsitektur & Konsep Lead 360°](#1-arsitektur--konsep-lead-360)
+2. [Pencegahan & Penggabungan Duplikasi Customer (Deduplication)](#2-pencegahan--penggabungan-duplikasi-customer-deduplication)
+3. [Pipeline Board (Kanban & List View)](#3-pipeline-board-kanban--list-view)
+4. [Detail Lead & Timeline Aktivitas Interaktif](#4-detail-lead--timeline-aktivitas-interaktif)
+5. [Integrasi Lead ⇄ Quotation (Phase 1)](#5-integrasi-lead--quotation-phase-1)
+6. [Smart Visit & Follow-up (Kunjungan Lapangan)](#6-smart-visit--follow-up-kunjungan-lapangan)
+7. [Daftar Yang Sudah Dikerjakan (Completed)](#7-daftar-yang-sudah-dikerjakan-completed)
+8. [Daftar Yang Belum Dikerjakan (Pending Roadmap)](#8-daftar-yang-belum-dikerjakan-pending-roadmap)
 
 ---
 
-## 1. Gambaran Umum & Alur Kerja
+## 1. Arsitektur & Konsep Lead 360°
 
-Lead Pipeline menjembatani proses penjualan awal sebelum penawaran (Quotation) dan Sales Order (SO) diterbitkan.
+Fitur Lead berfungsi sebagai **Cockpit Komersial** terpadu bagi tim sales. Siklus hidup prospek terhubung langsung dengan Customer, Aktivitas Lapangan, Penawaran (Quotation), hingga Sales Order (SO).
 
 ```mermaid
-flowchart LR
-    A["🌱 1. Data Masuk\n(Lead prospek baru)"] --> B["📨 2. SPH Terlayang\n(Penawaran dikirim)"]
-    B --> C["🔥 3. Hot Progress\n(Negosiasi aktif)"]
-    C --> D["🤝 4. Proyek Deal\n(PO diterima / Menang)"]
-    D --> E["⚙️ 5. Proyek Berjalan\n(Sales Order aktif)"]
-    E --> F["✅ 6. Proyek Selesai\n(Pekerjaan rampung)"]
-    C -.-> G["❌ No Deal\n(Batal / Kalah kompetisi)"]
-    B -.-> G
-```
-
-### Integrasi Otomatis dengan Modul Lain:
-* **Auto Customer Conversion:** Ketika sebuah lead masuk ke tahap **Proyek Deal**, sistem otomatis memeriksa apakah perusahaan sudah terdaftar sebagai Customer. Jika belum, sistem otomatis membuat data Customer baru (`C100xxx`) tanpa perlu input ulang manual.
-* **Integrasi Quotation:** Lead dapat ditautkan dengan Quotation (SPH) yang sudah dibuat, sehingga status dokumen dapat langsung dicek dari papan pipeline.
-
----
-
-## 2. Struktur Menu & Navigasi
-
-Sidebar aplikasi diperbarui dengan pengelompokan yang rapi dan hak akses berbasis role:
-
-```
-MAIN
-├── 📊 Dashboard
-├── 📈 Lead Pipeline (Submenu Expandable)
-│   ├── • Pipeline Board       -> /leads
-│   └── • Visit & Follow-up    -> /leads/visits
-├── 📄 Quotations              -> /quotations
-├── 📦 Sales Orders            -> /sales-orders
-├── 👥 Customers               -> /customers
-└── 🏷️ Products                -> /products
-
-REPORTS
-├── 📊 Analytics               -> /analytics
-├── 🏆 Pencapaian              -> /achievements (Khusus Sales Manager & Admin)
-└── 🛡️ Manager View            -> /manager (Khusus Manager View)
-
-SYSTEM
-├── 👥 User Management         -> /users
-└── ⚙️ Settings                -> /settings
+flowchart TD
+    L["🌱 Lead (Prospek)"] -->|"Pilih / Auto-create"| C["🏢 Customer"]
+    L -->|"Quick Log / Observer"| T["📋 Timeline Aktivitas\n(Catatan, Call, WA, Email, Meeting)"]
+    L -->|"Jadwalkan Kunjungan"| V["📍 Visit & Follow-up\n(Check-in GPS, Smart Customer)"]
+    L -->|"1 Lead to Many"| Q["📄 Quotations (Penawaran)\n(Q.MMYY.SEQ - Nomor Tidak Berubah)"]
+    Q -->|"PO Diterima"| SO["📦 Sales Order"]
+    L -.->|"Future Integration"| GC["🗓️ Google Calendar Tim"]
+    L -.->|"Future Integration"| ZM["🎥 Zoom Meeting & Notes"]
 ```
 
 ---
 
-## 3. Dashboard Pipeline Board (Kanban & List)
+## 2. Pencegahan & Penggabungan Duplikasi Customer (Deduplication)
+
+Untuk menjamin integritas data (tidak ada nama PT ganda seperti *ExxonMobil* atau *FWD Insurance*):
+
+### A. Proteksi Database & Validasi
+* **Database Migration**: Index unik `customers_name_unique` pada kolom `customers.name`.
+* **Backend Validation**:
+  - `CustomerController::store()`: `'name' => 'required|string|max:255|unique:customers,name'`
+  - `CustomerController::update()`: `'name' => 'required|string|max:255|unique:customers,name,' . $customer->id`
+
+### B. Otomatisasi CLI Merger untuk cPanel / Production
+Perintah artisan khusus untuk memindai dan menggabungkan data ganda tanpa menghilangkan relasi Quotation atau SO:
+```bash
+# Simulasi pengecekan duplikat tanpa mengubah database:
+php artisan customers:merge-duplicates --dry-run
+
+# Eksekusi penggabungan otomatis:
+php artisan customers:merge-duplicates --force
+```
+*Aturan Merge:* Customer tertua dipertahankan (**KEEP**), PIC dipindahkan (duplikat email dibersihkan), seluruh Quotation, Sales Order, dan Lead dialihkan ke ID yang dipertahankan, lalu data duplikat dihapus (**REMOVE**).
+
+### C. Antarmuka UI (Khusus Administrator & Sales Manager)
+* Tombol **"Gabung Duplikat"** pada halaman `/customers` (ikon git-merge amber).
+* Membuka modal pemindai real-time yang menampilkan grup nama kembar, perbandingan jumlah transaksi/PIC, dan tombol 1-klik gabung.
+
+---
+
+## 3. Pipeline Board (Kanban & List View)
 
 URL: `/leads`
 
-### A. 4 Card Ringkasan Cerdas di Header
-Bagian atas menampilkan 4 metrik performa yang **100% dinamis**:
-1. **Total Lead:** Menghitung jumlah seluruh lead yang tampil sesuai filter pencarian/sales yang sedang aktif.
-2. **Card Status Pilihan 1 (Dinamis):**
-   - Menampilkan jumlah lead pada stage terpilih (default: *Hot Progress*).
-   - **Quick Switcher (Manager/Admin):** Terdapat dropdown langsung di kartu untuk mengganti status stage yang ingin dipantau tanpa harus membuka menu pengaturan.
-3. **Card Status Pilihan 2 (Dinamis):**
-   - Menampilkan jumlah lead pada stage terpilih (default: *Proyek Deal*).
-   - Dilengkapi selector cepat untuk Manager/Admin.
-4. **Est. Total Nilai:** Akumulasi nilai nominal rupiah dari semua lead yang tampil.
-
-### B. Fitur Unggulan Kanban Board
-* **Tampilan Full-Height:** Tinggi kolom kanban otomatis mengisi layar ke bawah (`calc(100vh - 270px)`), rapi dan tidak terpotong.
-* **Top Scroll Controller (Navigasi Horizontal Atas):**
-  - Tombol navigasi panah kiri `<` dan kanan `>`.
-  - Slider kontrol posisi horizontal.
-  - Indikator kolom yang sedang terlihat di layar (contoh: *"Tahap 1–4 dari 7"*).
-* **Drag-and-Drop Instan (Silent Background AJAX):**
-  - Kartu lead dapat digeser langsung dari satu kolom stage ke stage lain.
-  - Nilai statistik pada card header dan kolom kanban langsung ter-update secara **optimistic**.
-  - Request tersimpan di background via Axios tanpa kedipan layar (*zero page reload*) dan tanpa memicu loading bar atas Inertia.
-  - Muncul notifikasi toast hijau elegan yang mengonfirmasi perubahan.
-
-### C. List View & Toolbar Filter
-* Toggle view antara **Kanban** dan **List Tabel**.
-* Pencarian cepat berdasarkan nama lead, nama perusahaan customer, atau no lead code (`L2611.xxx`).
-* Filter per Tahap Stage.
-* Filter per Sales Rep (khusus akun Manager & Admin).
+* **Dynamic Header Cards**: Menampilkan Total Lead, 2 kartu pilihan dinamis (default: *Hot Progress* & *Proyek Deal* dengan dropdown switcher langsung di kartu), dan Total Estimasi Nilai.
+* **Full-Height Responsive Kanban**: Mengisi viewport layar tanpa terpotong dengan slider navigasi horizontal atas.
+* **Silent Background Drag & Drop**: Menggeser kartu antar stage menggunakan Axios background AJAX tanpa reload halaman dan tanpa memicu progress bar Inertia.
+* **Auto Customer Conversion**: Ketika lead digeser ke tahap `proyek_deal`, jika lead belum memiliki `customer_id`, sistem otomatis mendaftarkan perusahaan menjadi Customer baru.
 
 ---
 
-## 4. Halaman Detail Lead & Timeline Aktivitas
+## 4. Detail Lead & Timeline Aktivitas Interaktif
 
-URL: `/leads/{lead_id}`
+URL: `/leads/{lead}`
 
-Halaman ini berfungsi sebagai pusat informasi komprehensif untuk satu prospek:
-* **Informasi Profil Lead:** Data perusahaan, telepon, email, nama Sales penanggung jawab, sumber prospek (Referral, Website, Cold Call, dll), dan tanggal dibuat.
-* **Tautan SPH / Dokumen Penawaran:** Shortcut langsung ke halaman detail Quotation jika SPH sudah dilampirkan.
-* **Ubah Stage Cepat Tanpa Loading:**
-  - Klik tombol **"Ubah Stage"** untuk membuka deretan tombol tahapan pipeline.
-  - Memilih stage baru akan mengubah badge dan mencatat aktivitas di timeline secara **instan & senyap** tanpa reload halaman.
-* **Timeline Aktivitas Interaktif:**
-  - Riwayat kronologis lengkap dari perubahan status, log telepon, catatan internal, dan hasil follow-up.
-  - Tombol **"+ Tambah Aktivitas"**: Modal popup untuk menambah catatan, telepon, email, follow-up, atau visit yang langsung muncul di feed paling atas.
+### A. Quick Log Bar (Tanpa Pop-up Modal)
+Sales dapat langsung merekam aktivitas harian secara instan melalui 5 tombol aksi:
+* 📝 **Catatan** (`note`): Catatan internal atau progress proyek.
+* 📞 **Log Telepon** (`call`): Ringkasan panggilan telepon dengan customer.
+* 💬 **Log WhatsApp** (`whatsapp`): Ringkasan percakapan chat/WA.
+* 📧 **Log Email** (`email`): Notulen korespondensi email.
+* 🎥 **Meeting** (`meeting`): Hasil meeting tatap muka atau video conference.
+
+### B. Inline Editing & Hover Actions
+* **Edit Cepat**: Arahkan kursor ke item aktivitas → klik ✏️ → form edit inline menggantikan item tanpa pop-up.
+* **Hapus Aman**: Klik 🗑️ dengan konfirmasi.
+* **System Safeguard**: Aktivitas yang dibuat oleh sistem (`stage_change`, `quotation_linked`, `deal_won`, `deal_lost`) tidak dapat diedit atau dihapus secara manual.
+
+### C. Timeline Grouping by Date
+Aktivitas dikelompokkan berdasarkan tanggal kejadian:
+* **Hari ini**
+* **Kemarin**
+* **Tanggal lengkap (contoh: 3 November 2026)**
 
 ---
 
-## 5. Manajemen Visit & Follow-up
+## 5. Integrasi Lead ⇄ Quotation (Phase 1)
+
+### A. Skema Relasi Database
+* Kolom `quotations.lead_id` (`UUID`, nullable, foreign key ke `leads.id`).
+* Relasi Eloquent:
+  - `Lead::quotations()` -> `hasMany(Quotation::class, 'lead_id')`
+  - `Quotation::lead()` -> `belongsTo(Lead::class, 'lead_id')`
+* **Format Penomoran Quotation**: Standar `{CODE}.{MMYY}.{SEQ}` (contoh: `Q.1126.001`) tetap dipertahankan 100%.
+
+### B. Pembuatan Quotation dari Lead
+1. Di halaman **Lead Detail**, terdapat tombol **`+ Buat Quotation`** di header dan di card Quotation.
+2. Mengarahkan ke `/quotations/create?lead_id={lead_id}&customer_id={customer_id}`.
+3. Form pembuatan Quotation otomatis mengunci Lead dan mengisi Customer serta PIC terkait.
+4. Begitu Quotation tersimpan, sistem otomatis mencatat aktivitas pada timeline Lead:
+   > *"Quotation dibuat: Q.1126.001 dan terhubung ke lead ini."*
+
+### C. Card Quotation di Lead Detail
+Sidebar menampilkan card **Quotation ({count})** yang merangkum:
+* Nomor Quotation (`Q.xxxx`)
+* Label revisi jika ada (`Rev 1`, `Rev 2`)
+* Nominal Grand Total terformat (`Rp xx.xxx.xxx`)
+* Status dokumen (`created`, `sent`, `approved`, dll.)
+* Link satu klik menuju halaman detail Quotation.
+
+---
+
+## 6. Smart Visit & Follow-up (Kunjungan Lapangan)
 
 URL: `/leads/visits`
 
-Fitur khusus untuk menjadwalkan dan memantau agenda pertemuan tatap muka maupun follow-up sales:
-
-* **Ringkasan Aktivitas:**
-  - `Akan Datang`: Jadwal kunjungan di masa mendatang.
-  - `Hari Ini`: Agenda yang harus dilaksanakan hari ini.
-  - `Minggu Ini`: Total agenda pekan berjalan.
-  - `Sudah Check-In`: Kunjungan yang telah berhasil diverifikasi.
-* **Form Tambah Jadwal:** Menautkan rencana kunjungan ke Lead terkait atau data Customer yang ada.
-* **Verifikasi Check-in GPS:** Tombol *"Check-in"* dengan verifikasi titik koordinat latitude/longitude perangkat sales saat tiba di lokasi prospek.
+Menyelesaikan kendala formulir yang membingungkan ketika Lead sudah memiliki data Customer:
+* **Otomatisasi Customer**: Saat Sales memilih **Lead**, dropdown Customer otomatis **disembunyikan** dan digantikan informasi ringkas:
+  > *"Customer otomatis dari Lead: PT. ExxonMobil"* (dengan tombol kecil *"Ubah"* jika ingin override).
+* **Kunjungan Langsung**: Jika tidak memilih Lead, form tetap ringkas dengan link toggle:
+  > *`+ Kunjungan langsung ke Customer (tanpa Lead)`*
+* **Fallback Backend**: Jika request menyimpan kunjungan dengan `lead_id` tanpa `customer_id`, backend otomatis mengambil `customer_id` dari data Lead terkait.
 
 ---
 
-## 6. Menu Laporan Pencapaian (Achievements)
+## 7. Daftar Yang Sudah Dikerjakan (Completed)
 
-URL: `/achievements`
-
-Menu laporan khusus di bawah grup **REPORTS** yang diperuntukkan bagi **Sales Manager** dan **Administrator**:
-* **Visualisasi Target vs Realisasi:** Tampilan kartu gelap modern dengan grafik performa bulanan dan perbandingan dengan bulan sebelumnya.
-* **Filter Waktu & Pembayaran:** Filter berdasarkan rentang tanggal (`Dari tanggal` - `Sampai tanggal`) dan tipe pembayaran (Semua, Cash, Bertahap).
-* **Tab Proyek Deal & Proyek Selesai:** Membedakan perhitungan omzet yang masuk dari tahap closing deal maupun tahap pekerjaan yang telah tuntas.
-
----
-
-## 7. Pengaturan Tahap Pipeline (Manager & Admin)
-
-Fitur konfigurasi fleksibel agar alur pipeline dapat disesuaikan dengan SOP perusahaan tanpa perlu mengubah kode sumber:
-
-### Cara Mengakses:
-1. Klik tombol **"⚙️ Pengaturan Pipeline"** di header [Lead Pipeline](/leads).
-2. Atau buka menu [Settings](/settings) pada section **"Tahap pipeline"**.
-
-### Konfigurasi yang Tersedia:
-* **Penentuan Card Ringkasan:** Menentukan 2 stage mana yang ingin di-highlight pada card header dashboard.
-* **Kustomisasi Tahap Pipeline:**
-  - Ubah **Nama Tahap** (contoh: *"Data Masuk"*, *"SPH Terlayang"*, *"Hot Progress"*, dll).
-  - Tentukan **Tipe Tahap**:
-    - `Normal`: Prospek sedang aktif berjalan.
-    - `Deal (menang)`: Prospek berhasil dimenangkan (menghitung deal masuk).
-    - `Lost`: Prospek gugur / batal.
-* Pengaturan tersimpan secara terpusat di tabel `system_settings` dengan key `lead_pipeline_settings`.
+| Fitur / Komponen | Status | Catatan Teknis |
+|---|---|---|
+| **Merge Customer Duplikat** | ✅ Selesai | Script CLI & migration selesai dijalankan, 0 duplikat tersisa |
+| **Unique Constraint Customer Name** | ✅ Selesai | Index unik `customers_name_unique` aktif di DB & validasi controller |
+| **Admin UI Gabung Duplikat** | ✅ Selesai | Modal scan & merge 1-klik di `/customers` (Role Admin/Manager) |
+| **Artisan Command CLI** | ✅ Selesai | `php artisan customers:merge-duplicates` siap untuk deploy cPanel |
+| **Kanban Pipeline Board** | ✅ Selesai | Drag-and-drop silent AJAX, dynamic header cards, scroll controller |
+| **Quick Log Bar Lead Timeline** | ✅ Selesai | 5 tipe aktivitas: Catatan, Call, WA, Email, Meeting |
+| **Inline Edit/Delete Activity** | ✅ Selesai | Role/ownership guard, system activity protection |
+| **Date Grouping Timeline** | ✅ Selesai | Grouping "Hari ini", "Kemarin", "Tanggal" |
+| **Migration `quotations.lead_id`** | ✅ Selesai | Kolom UUID nullable aktif dengan foreign key |
+| **Migration `lead_pics`** | ✅ Selesai | Tabel pivot PIC level lead dengan role context aktif |
+| **Prefill Lead di Buat Quotation** | ✅ Selesai | Param `?lead_id=` auto-select lead & customer di `QuotationCreate.jsx` |
+| **Dropdown Lead di Buat Quotation** | ✅ Selesai | Sales bisa menghubungkan penawaran baru ke Lead manapun |
+| **Quotation Card di Lead Detail** | ✅ Selesai | Daftar quotation terhubung, status, revisi, dan total rupiah |
+| **Smart Visit Customer Selection** | ✅ Selesai | Auto-hide dropdown customer jika lead dipilih, toggle link direct |
+| **Terminologi Standar** | ✅ Selesai | Menggunakan label "Quotation" / "Quot", bukan "SPH" |
+| **Standardisasi Toast Notification** | ✅ Selesai | Global white card style `#ffffff` dengan aksen teal `#009680` |
 
 ---
 
-## 8. Standardisasi Sistem Notifikasi (Toast)
+## 8. Daftar Yang Belum Dikerjakan (Pending Roadmap)
 
-Seluruh notifikasi di aplikasi ACTiV kini telah distandarkan:
-* **Desain:** Clean White Card (`#ffffff`) dengan border halus `#e2e8f0` dan soft drop-shadow.
-* **Aksen Warna:** Brand Teal ACTiV (`#009680`) untuk notifikasi sukses, dan merah (`#ef4444`) untuk pesan error.
-* **Konsistensi Global:** Diatur secara terpusat di `AuthenticatedLayout.jsx`, sehingga notifikasi dari aksi JavaScript (Axios) maupun pesan bawaan server (*session flash*) tampil dengan visual yang seragam dan elegan di bagian bawah layar (*bottom-center*).
+Berikut adalah backlog fitur yang telah didiskusikan dan siap dikerjakan pada fase berikutnya:
 
----
+### A. Lead 360° Cockpit (Fase Lanjutan)
+1. **Backlink dari Quotation ke Lead**:
+   - Di halaman detail Quotation (`/quotations/{id}`), tambahkan banner/link: *"Penawaran ini terhubung dengan Lead: [L2611.001] Proyek UPVC Gedung A"*.
+2. **Tabbed Navigation di Lead Detail**:
+   - Transformasi halaman Lead Detail menjadi mode tab:
+     - `Overview`: Ringkasan profil, PIC, estimasi nilai, dan status.
+     - `Quotation`: Tabel lengkap semua penawaran & riwayat revisi.
+     - `PO & SO`: Riwayat purchase order customer dan status sales order operasional.
+     - `Timeline & Kunjungan`: Seluruh jejak audit dan jadwal kunjungan.
+3. **Manajemen PIC Multi-Peran (`lead_pics`)**:
+   - Form modal untuk menambahkan beberapa PIC sekaligus ke dalam satu Lead dengan peranan spesifik (*Primary Contact*, *User Teknis*, *Purchasing/Pengadaan*, *Finance/Pembayaran*).
 
-## 9. Hak Akses & Matrix Permission (RBAC)
+### B. Integrasi Google Calendar Tim (Shared Calendar)
+1. **Koneksi Akun Gmail Kantor (`calendar@kantor.com`)**:
+   - Modul OAuth / Service Account Google di menu **Settings → Integrasi**.
+   - Admin menghubungkan 1 akun Google Calendar kantor.
+2. **Sinkronisasi Dua Arah Kunjungan**:
+   - Setiap kali Sales menjadwalkan kunjungan di `/leads/visits`, otomatis membuat event di Google Calendar kantor.
+   - Karena sales lain sudah subscribe ke calendar kantor, jadwal otomatis muncul di aplikasi Google Calendar handphone masing-masing.
+   - Kolom `gc_event_id` pada tabel `lead_visits` untuk sinkronisasi update/cancel jadwal.
+3. **Halaman Kalender Tim (`/team-calendar`)**:
+   - Tampilan visual kalender bulanan/mingguan di dalam portal Q-Sales yang menggabungkan seluruh jadwal kunjungan dan meeting tim sales.
 
-| Modul / Tindakan | Sales Rep | Sales Manager | Administrator |
-| :--- | :---: | :---: | :---: |
-| Lihat Lead Milik Sendiri | ✅ | ✅ | ✅ |
-| Lihat Lead Semua Sales | ❌ | ✅ | ✅ |
-| Filter Kanban Berdasarkan Sales | ❌ | ✅ | ✅ |
-| Buat & Geser Lead (Drag-and-Drop) | ✅ | ✅ | ✅ |
-| Tambah Aktivitas & Jadwal Visit | ✅ | ✅ | ✅ |
-| Akses Menu Pencapaian (`/achievements`) | ❌ | ✅ | ✅ |
-| Ubah Stage pada Card Ringkasan (Header) | ❌ | ✅ | ✅ |
-| Buka Modal & Halaman Pengaturan Pipeline | ❌ | ✅ | ✅ |
-| Arsipkan / Hapus Lead | ❌ | ✅ | ✅ |
+### C. Integrasi Zoom Server-to-Server
+1. **Setup Zoom Server-to-Server OAuth**:
+   - Input Client ID, Client Secret, dan Account ID dari Zoom App Marketplace di halaman Settings Admin.
+2. **Flag Lisensi User**:
+   - Checkbox pada User Management: *"Memiliki Lisensi Zoom"*.
+3. **Tombol "Jadwalkan Zoom Meeting"**:
+   - Pembuatan link meeting Zoom otomatis langsung dari form Visit atau Lead Detail.
+   - Link meeting otomatis ditempelkan ke event Google Calendar dan timeline Lead.
+4. **Zoom Webhook Handler**:
+   - Menerima webhook saat meeting berakhir (`meeting.ended`) untuk mencatat durasi aktual dan URL rekaman meeting ke timeline.
 
----
+### D. Prosedur Deploy ke cPanel Production
+Saat melakukan rilis ke server production cPanel, lakukan urutan berikut:
+```bash
+# 1. Jalankan merger duplikasi SEBELUM migrate (PENTING):
+php artisan customers:merge-duplicates --force
 
-## 10. Spesifikasi Teknis & Endpoints
+# 2. Baru jalankan migration database:
+php artisan migrate
 
-### Route List:
-| Method | URI | Name | Controller & Action | Keterangan |
-| :--- | :--- | :--- | :--- | :--- |
-| `GET` | `/leads` | `leads.index` | `LeadController@index` | Halaman utama Kanban & List |
-| `POST` | `/leads` | `leads.store` | `LeadController@store` | Simpan lead baru |
-| `GET` | `/leads/visits` | `leads.visits` | `LeadController@indexVisits` | Halaman jadwal visit |
-| `POST` | `/leads/visits` | `leads.visits.store` | `LeadController@storeVisit` | Simpan jadwal visit |
-| `POST` | `/leads/visits/{visit}/check-in` | `leads.visits.check-in` | `LeadController@checkIn` | Check-in GPS kunjungan |
-| `GET` | `/leads/{lead}` | `leads.show` | `LeadController@show` | Detail lead & timeline |
-| `PUT` | `/leads/{lead}` | `leads.update` | `LeadController@update` | Update informasi lead |
-| `PATCH`| `/leads/{lead}/stage` | `leads.stage.update` | `LeadController@updateStage` | Update stage (mendukung JSON AJAX) |
-| `DELETE`| `/leads/{lead}` | `leads.destroy` | `LeadController@destroy` | Arsipkan lead |
-| `POST` | `/leads/{lead}/activities` | `leads.activities.store`| `LeadController@addActivity` | Tambah log aktivitas |
-| `POST` | `/leads/settings` | `leads.settings.update`| `LeadController@updateSettings` | Simpan pengaturan tahap pipeline |
-| `GET` | `/achievements` | `achievements.index` | `AchievementController@index` | Laporan pencapaian sales manager |
-
-### File Utama Terkait:
-* `app/Models/Lead.php` & `app/Models/LeadActivity.php` & `app/Models/LeadVisit.php`
-* `app/Http/Controllers/LeadController.php`
-* `app/Http/Controllers/AchievementController.php`
-* `app/Http/Controllers/SettingController.php`
-* `resources/js/Pages/Leads.jsx`
-* `resources/js/Pages/LeadDetail.jsx`
-* `resources/js/Pages/LeadVisits.jsx`
-* `resources/js/Pages/Achievements.jsx`
-* `resources/js/Pages/Settings.jsx`
-* `resources/js/Components/Sidebar.jsx`
-* `resources/js/Layouts/AuthenticatedLayout.jsx`
-
+# 3. Build assets (atau upload folder public/build hasil lokal):
+bun run build
+```
