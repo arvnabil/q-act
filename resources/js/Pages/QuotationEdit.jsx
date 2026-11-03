@@ -6,6 +6,7 @@ import {
     ArrowLeft, Plus, Trash2, Save, Loader2, Info, ChevronDown,
     Check, Search, X, FileText, BookmarkPlus, AlertTriangle, Edit3,
     Box, UploadCloud, GripVertical, CircleHelp, Layers, ArrowRightLeft,
+    TrendingUp,
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { formatMoney, roundMoney } from '@/utils/money';
@@ -57,7 +58,7 @@ const EditableCurrencyInput = ({ value, onChange, className, placeholder, disabl
     );
 };
 
-export default function QuotationEdit({ quotation, customers, products, brands, bankAccounts, currentUser, masterTerms = [], personalTerms = [] }) {
+export default function QuotationEdit({ quotation, customers, leads = [], products, brands, bankAccounts, currentUser, masterTerms = [], personalTerms = [] }) {
     const { flash } = usePage().props;
 
     // ─── State ────────────────────────────────────────────────────────────────
@@ -68,6 +69,7 @@ export default function QuotationEdit({ quotation, customers, products, brands, 
     const [poDocument, setPoDocument] = useState(null);
     const [poFormErrors, setPoFormErrors] = useState({});
     const [customerId, setCustomerId] = useState(quotation?.customer_id || '');
+    const [leadId, setLeadId] = useState(quotation?.lead_id || '');
     const [picId, setPicId] = useState(quotation?.pic_id ? String(quotation.pic_id) : '');
     const [expiryDays, setExpiryDays] = useState(7);
     const [bankAccountId, setBankAccountId] = useState(quotation?.bank_account_id || '');
@@ -867,6 +869,7 @@ const getProductDisplayName = (prod) => {
 
         const payload = {
             customer_id: customerId || quotation.customer_id,
+            lead_id: leadId || null,
             pic_id: picId && picId !== '' && picId !== '0' ? picId : null,
             status: targetStatus,
             po_status: targetStatus === 'approved' ? poStatus : quotation?.po_status || null,
@@ -1190,6 +1193,32 @@ const getProductDisplayName = (prod) => {
                                 min="1" max="90"
                                 className="w-full bg-surface-50 border border-surface-200 rounded-lg px-3 py-2.5 text-sm text-surface-700 outline-none focus:border-brand-500"
                             />
+                        </div>
+
+                        {/* Tautkan ke Lead Pipeline */}
+                        <div className="sm:col-span-2 md:col-span-4 bg-teal-50/60 border border-teal-100 rounded-xl p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                            <div className="flex items-center gap-2.5">
+                                <div className="w-8 h-8 rounded-lg bg-teal-100 text-teal-700 flex items-center justify-center shrink-0">
+                                    <TrendingUp className="w-4 h-4" />
+                                </div>
+                                <div>
+                                    <p className="text-xs font-bold text-teal-900">Tautkan ke Lead Pipeline</p>
+                                    <p className="text-[11px] text-teal-700">Menghubungkan penawaran ini dengan siklus deal & timeline di Lead Pipeline</p>
+                                </div>
+                            </div>
+                            <div className="w-full sm:w-80">
+                                <select
+                                    value={leadId || ''}
+                                    onChange={e => setLeadId(e.target.value)}
+                                    disabled={isQuotationLocked}
+                                    className="w-full bg-white border border-teal-200 rounded-lg px-3 py-1.5 text-xs text-surface-800 font-semibold focus:border-brand-500 outline-none cursor-pointer"
+                                >
+                                    <option value="">-- Tanpa Lead (Penawaran Mandiri) --</option>
+                                    {leads.map(l => (
+                                        <option key={l.id} value={l.id}>[{l.lead_code}] {l.title}</option>
+                                    ))}
+                                </select>
+                            </div>
                         </div>
                     </div>
 

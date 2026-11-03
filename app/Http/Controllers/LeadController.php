@@ -880,5 +880,66 @@ class LeadController extends Controller
 
         return back()->with('message', 'Check-in berhasil.');
     }
+
+    // ─── Zoom Webhook Handler ────────────────────────────────────────────────────
+
+    public function handleZoomWebhook(Request $request)
+    {
+        $event = $request->input('event');
+        $payload = $request->input('payload');
+
+        // 1. Zoom URL Validation Challenge
+        if ($event === 'endpoint.url_validation') {
+            $plainToken = $payload['plainToken'] ?? '';
+            $secretSetting = SystemSetting::find('zoom_credentials')?->value ?? [];
+            $secret = $secretSetting['webhook_secret_token'] ?? $secretSetting['client_secret'] ?? '';
+            $encryptedToken = hash_hmac('sha256', $plainToken, $secret);
+
+            return response()->json([
+                'plainToken'     => $plainToken,
+                'encryptedToken' => $encryptedToken,
+            ]);
+        }
+
+        // 2. Meeting Ended Event
+        if ($event === 'meeting.ended') {
+            $meetingId = (string) ($payload['object']['id'] ?? '');
+            if ($meetingId) {
+                $visit = LeadVisit::where('zoom_meeting_id', $meetingId)->first();
+                if ($visit && $visit->lead_id) {
+                    $lead = Lead::find($visit->lead_id);
+                    if ($lead) {
+                        $duration = $payload['object']['duration'] ?? null;
+                        $desc = 'Zoom Meeting selesai';
+                        if ($duration) $desc .= " (Durasi: {$duration} menit)";
+                        $this->logActivity($lead, 'meeting', $desc, null, ['meeting_id' => $meetingId]);
+                    }
+                }
+            }
+        }
+
+        // 3. Cloud Recording Completed Event
+        if ($event === 'recording.completed') {
+            $meetingId = (string) ($payload['object']['id'] ?? '');
+            $shareUrl  = $payload['object']['share_url'] ?? null;
+            if ($meetingId && $shareUrl) {
+                $visit = LeadVisit::where('zoom_meeting_id', $meetingId)->first();
+                if ($visit) {
+                    $visit->update(['zoom_recording_url' => $shareUrl]);
+                    if ($visit->lead_id) {
+                        $lead = Lead::find($visit->lead_id);
+                        if ($lead) {
+                            $this->logActivity($lead, 'meeting', 'Rekaman Zoom Meeting tersedia: ' . $shareUrl, null, [
+                                'recording_url' => $shareUrl,
+                                'meeting_id'    => $meetingId,
+                            ]);
+                        }
+                    }
+                }
+            }
+        }
+
+        return response()->json(['status' => 'success']);
+    }
 }
 

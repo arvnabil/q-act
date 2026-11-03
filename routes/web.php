@@ -193,4 +193,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     });
 });
 
+// Zoom Webhook (Unauthenticated, CSRF excluded)
+Route::post('/webhooks/zoom', [LeadController::class, 'handleZoomWebhook'])->name('webhooks.zoom');
+
 require __DIR__.'/auth.php';

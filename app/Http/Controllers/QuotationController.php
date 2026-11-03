@@ -658,6 +658,7 @@ class QuotationController extends Controller
         return Inertia::render('QuotationEdit', [
             'quotation' => $this->serializeFull($quotation),
             'customers' => $customers,
+            'leads' => Lead::active()->select('id', 'title', 'lead_code', 'customer_id')->orderBy('title')->get(),
             'products' => $products,
             'brands' => $brands,
             'bankAccounts' => $bankAccounts,
@@ -688,6 +689,7 @@ class QuotationController extends Controller
     {
         $data = $request->validate([
             'customer_id' => 'sometimes|string|exists:customers,id',
+            'lead_id' => 'nullable|uuid|exists:leads,id',
             'pic_id' => 'nullable|string',
             'notes' => 'nullable|string',
             'status' => 'sometimes|in:created,revision_draft,sent,approved,rejected,expired,cancelled,superseded',
@@ -759,7 +761,15 @@ class QuotationController extends Controller
             $quotation->po_document_path = $request->file('po_document')->store('po-documents', 'public');
         }
         $quotation->updated_by = $request->user()->id;
+        $leadChanged = $quotation->isDirty('lead_id');
         $quotation->save();
+
+        if ($leadChanged && $quotation->lead_id) {
+            $lead = Lead::find($quotation->lead_id);
+            if ($lead) {
+                (new LeadController())->logActivity($lead, 'quotation_linked', "Quotation {$quotation->id} ditautkan ke lead");
+            }
+        }
 
         // Handle items upsert if provided
         if ($request->has('items') && is_array($data['items'] ?? null)) {
