@@ -254,9 +254,13 @@ class LeadController extends Controller
             'sales:id,name',
             'customer:id,name,address',
             'quotation:id,status,total_price',
-            'activities.user:id,name',
             'visits.user:id,name',
         ]);
+
+        // Load activities sorted newest first
+        $lead->setRelation('activities',
+            $lead->activities()->with('user:id,name')->orderByDesc('created_at')->get()
+        );
 
         return Inertia::render('LeadDetail', [
             'lead'    => $lead,
@@ -373,15 +377,54 @@ class LeadController extends Controller
 
         $activity = LeadActivity::create($data);
 
-        if (!$request->header('X-Inertia') && ($request->wantsJson() || $request->ajax())) {
-            return response()->json([
-                'success'  => true,
-                'message'  => 'Aktivitas berhasil ditambahkan.',
-                'activity' => $activity->load('user:id,name'),
-            ]);
+        // Always return JSON — axios calls from frontend don't send X-Inertia header
+        return response()->json([
+            'success'  => true,
+            'message'  => 'Aktivitas berhasil ditambahkan.',
+            'activity' => $activity->load('user:id,name'),
+        ]);
+    }
+
+    // ─── Update Activity ─────────────────────────────────────────────────────────
+
+    public function updateActivity(Request $request, Lead $lead, LeadActivity $activity): \Illuminate\Http\JsonResponse
+    {
+        if ($activity->user_id !== Auth::id() && !$this->isManagerOrAdmin()) {
+            return response()->json(['message' => 'Tidak diizinkan.'], 403);
         }
 
-        return back()->with('message', 'Aktivitas berhasil ditambahkan.');
+        $systemTypes = ['stage_change', 'deal_won', 'deal_lost', 'quotation_linked'];
+        if (in_array($activity->type, $systemTypes)) {
+            return response()->json(['message' => 'Aktivitas sistem tidak dapat diedit.'], 422);
+        }
+
+        $validated = $request->validate([
+            'title'       => 'required|string|max:255',
+            'description' => 'nullable|string',
+            'metadata'    => 'nullable|array',
+        ]);
+
+        $activity->update($validated);
+        return response()->json(['activity' => $activity->load('user:id,name')]);
+    }
+
+    // ─── Delete Activity ─────────────────────────────────────────────────────────
+
+    public function destroyActivity(Request $request, Lead $lead, LeadActivity $activity): \Illuminate\Http\JsonResponse
+    {
+        // Only the owner or admin can delete
+        if ($activity->user_id !== Auth::id() && !$this->isManagerOrAdmin()) {
+            return response()->json(['message' => 'Tidak diizinkan.'], 403);
+        }
+
+        // Prevent deleting system activities
+        $systemTypes = ['stage_change', 'deal_won', 'deal_lost', 'quotation_linked'];
+        if (in_array($activity->type, $systemTypes)) {
+            return response()->json(['message' => 'Aktivitas sistem tidak dapat dihapus.'], 422);
+        }
+
+        $activity->delete();
+        return response()->json(['message' => 'Aktivitas dihapus.']);
     }
 
     // ─── Pipeline Settings ───────────────────────────────────────────────────────

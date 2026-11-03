@@ -14,6 +14,8 @@ class LeadActivity extends Model
         'note',
         'call',
         'email',
+        'whatsapp',
+        'meeting',
         'visit',
         'follow_up',
         'stage_change',

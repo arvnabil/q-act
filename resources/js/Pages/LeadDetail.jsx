@@ -1,15 +1,17 @@
-import React, { useState, useEffect } from 'react';
-import { Head, router, Link } from '@inertiajs/react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Head, router, Link, usePage } from '@inertiajs/react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import axios from 'axios';
 import { toast } from 'react-hot-toast';
 import {
     TrendingUp, ArrowLeft, Building2, User, DollarSign, FileText,
     Clock, Plus, X, ChevronRight, Edit2, Trash2, MapPin,
-    Phone, Mail, MessageSquare, Calendar, CheckCircle2, Tag
+    Phone, Mail, MessageSquare, Calendar, CheckCircle2, Tag,
+    MessageCircle, Video, Send, ChevronDown, Pencil, Check,
+    Navigation, AlertCircle
 } from 'lucide-react';
 
-// ─── Helpers ────────────────────────────────────────────────────────────────────
+// ─── Constants ───────────────────────────────────────────────────────────────────
 
 const STAGE_META = {
     data_masuk:     { label: 'Data Masuk',      color: 'bg-surface-100 text-surface-600', dot: 'bg-surface-400' },
@@ -21,29 +23,29 @@ const STAGE_META = {
     no_deal:        { label: 'No Deal',         color: 'bg-red-100 text-red-600',         dot: 'bg-red-500' },
 };
 
-const ACTIVITY_ICON = {
-    note:             MessageSquare,
-    call:             Phone,
-    email:            Mail,
-    visit:            MapPin,
-    follow_up:        Clock,
-    stage_change:     ChevronRight,
-    quotation_linked: FileText,
-    deal_won:         CheckCircle2,
-    deal_lost:        X,
+const ACTIVITY_CONFIG = {
+    note:             { label: 'Catatan',              Icon: MessageSquare, color: 'bg-surface-100',  iconColor: 'text-surface-500',  system: false },
+    call:             { label: 'Log Telepon',           Icon: Phone,         color: 'bg-blue-50',      iconColor: 'text-blue-500',     system: false },
+    whatsapp:         { label: 'Log WhatsApp',          Icon: MessageCircle, color: 'bg-emerald-50',   iconColor: 'text-emerald-500',  system: false },
+    email:            { label: 'Log Email',             Icon: Mail,          color: 'bg-violet-50',    iconColor: 'text-violet-500',   system: false },
+    meeting:          { label: 'Meeting',               Icon: Video,         color: 'bg-amber-50',     iconColor: 'text-amber-500',    system: false },
+    follow_up:        { label: 'Follow-up',             Icon: Clock,         color: 'bg-orange-50',    iconColor: 'text-orange-500',   system: false },
+    visit:            { label: 'Kunjungan',             Icon: MapPin,        color: 'bg-teal-50',      iconColor: 'text-teal-500',     system: false },
+    stage_change:     { label: 'Perubahan Stage',       Icon: ChevronRight,  color: 'bg-surface-100',  iconColor: 'text-surface-400',  system: true  },
+    quotation_linked: { label: 'Quotation Dilampirkan', Icon: FileText,      color: 'bg-brand-50',     iconColor: 'text-brand-500',    system: true  },
+    deal_won:         { label: 'Deal Menang',           Icon: CheckCircle2,  color: 'bg-emerald-50',   iconColor: 'text-emerald-500',  system: true  },
+    deal_lost:        { label: 'Deal Gagal',            Icon: X,             color: 'bg-red-50',       iconColor: 'text-red-500',      system: true  },
 };
 
-const ACTIVITY_TYPE_LABEL = {
-    note:             'Catatan',
-    call:             'Telepon',
-    email:            'Email',
-    visit:            'Kunjungan',
-    follow_up:        'Follow-up',
-    stage_change:     'Perubahan Stage',
-    quotation_linked: 'SPH Dilampirkan',
-    deal_won:         'Deal Menang',
-    deal_lost:        'Deal Gagal',
-};
+const QUICK_LOG_TYPES = [
+    { key: 'note',     label: 'Catatan',   Icon: MessageSquare, placeholder: 'Tulis catatan...' },
+    { key: 'call',     label: 'Telepon',   Icon: Phone,         placeholder: 'Ringkasan pembicaraan...' },
+    { key: 'whatsapp', label: 'WhatsApp',  Icon: MessageCircle, placeholder: 'Ringkasan pesan WhatsApp...' },
+    { key: 'email',    label: 'Email',     Icon: Mail,          placeholder: 'Ringkasan email...' },
+    { key: 'meeting',  label: 'Meeting',   Icon: Video,         placeholder: 'Hasil / agenda meeting...' },
+];
+
+// ─── Helpers ────────────────────────────────────────────────────────────────────
 
 const formatRp = (n) => {
     if (!n) return 'Rp 0';
@@ -57,6 +59,24 @@ const formatDateTime = (d) => {
     return new Date(d).toLocaleString('id-ID', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 };
 
+const formatTimeOnly = (d) => {
+    if (!d) return '';
+    return new Date(d).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
+};
+
+const getDateGroup = (dateStr) => {
+    const d = new Date(dateStr);
+    const today = new Date();
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+
+    if (d.toDateString() === today.toDateString()) return 'Hari ini';
+    if (d.toDateString() === yesterday.toDateString()) return 'Kemarin';
+    return d.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
+};
+
+// ─── StageBadge ───────────────────────────────────────────────────────────────────
+
 function StageBadge({ stage }) {
     const meta = STAGE_META[stage] || { label: stage, color: 'bg-surface-100 text-surface-600', dot: 'bg-surface-400' };
     return (
@@ -67,108 +87,290 @@ function StageBadge({ stage }) {
     );
 }
 
-// ─── Activity Item ────────────────────────────────────────────────────────────────
+// ─── Quick Log Bar ────────────────────────────────────────────────────────────────
 
-function ActivityItem({ activity }) {
-    const Icon = ACTIVITY_ICON[activity.type] || MessageSquare;
-    const isSystem = ['stage_change', 'quotation_linked', 'deal_won', 'deal_lost'].includes(activity.type);
-
-    return (
-        <div className={`flex gap-3 ${isSystem ? 'opacity-70' : ''}`}>
-            <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 mt-0.5 ${isSystem ? 'bg-surface-100' : 'bg-brand-50'}`}>
-                <Icon className={`w-4 h-4 ${isSystem ? 'text-surface-400' : 'text-brand-600'}`} />
-            </div>
-            <div className="flex-1 min-w-0">
-                <div className="flex items-center justify-between gap-2 flex-wrap">
-                    <p className="text-sm font-semibold text-surface-800">{activity.title}</p>
-                    <span className="text-[10px] text-surface-400 whitespace-nowrap">{formatDateTime(activity.created_at)}</span>
-                </div>
-                {activity.description && (
-                    <p className="text-xs text-surface-500 mt-0.5">{activity.description}</p>
-                )}
-                <p className="text-[10px] text-surface-400 mt-0.5">
-                    {ACTIVITY_TYPE_LABEL[activity.type] || activity.type}
-                    {activity.user && ` · ${activity.user.name}`}
-                </p>
-            </div>
-        </div>
-    );
-}
-
-// ─── Add Activity Modal ───────────────────────────────────────────────────────────
-
-function AddActivityModal({ open, onClose, leadId, onActivityAdded }) {
-    const [form, setForm] = useState({ type: 'note', title: '', description: '', scheduled_at: '' });
+function QuickLogBar({ leadId, onActivityAdded }) {
+    const [activeType, setActiveType] = useState(null);
+    const [title, setTitle] = useState('');
+    const [description, setDescription] = useState('');
     const [submitting, setSubmitting] = useState(false);
+    const inputRef = useRef(null);
 
-    const TYPES = [
-        { key: 'note', label: 'Catatan' },
-        { key: 'call', label: 'Telepon' },
-        { key: 'email', label: 'Email' },
-        { key: 'follow_up', label: 'Follow-up' },
-        { key: 'visit', label: 'Kunjungan' },
-    ];
+    useEffect(() => {
+        if (activeType && inputRef.current) {
+            inputRef.current.focus();
+        }
+    }, [activeType]);
+
+    const handleTypeClick = (key) => {
+        if (activeType === key) {
+            setActiveType(null);
+            setTitle('');
+            setDescription('');
+        } else {
+            setActiveType(key);
+            setTitle('');
+            setDescription('');
+        }
+    };
 
     const handleSubmit = async (e) => {
         e.preventDefault();
+        if (!title.trim()) return;
         setSubmitting(true);
         try {
-            const res = await axios.post(route('leads.activities.store', leadId), form);
-            toast.success('Aktivitas berhasil ditambahkan');
-            if (res.data?.activity && onActivityAdded) {
-                onActivityAdded(res.data.activity);
-            }
-            setForm({ type: 'note', title: '', description: '', scheduled_at: '' });
-            onClose();
-        } catch (err) {
-            console.error('Failed to add activity:', err);
-            toast.error('Gagal menambahkan aktivitas');
+            const res = await axios.post(route('leads.activities.store', leadId), {
+                type: activeType,
+                title: title.trim(),
+                description: description.trim() || null,
+            });
+            toast.success('Aktivitas ditambahkan');
+            if (res.data?.activity && onActivityAdded) onActivityAdded(res.data.activity);
+            setActiveType(null);
+            setTitle('');
+            setDescription('');
+        } catch {
+            toast.error('Gagal menyimpan aktivitas');
         } finally {
             setSubmitting(false);
         }
     };
 
-    if (!open) return null;
+    const activeConfig = activeType ? QUICK_LOG_TYPES.find(t => t.key === activeType) : null;
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center">
-            <div className="absolute inset-0 bg-black/40" onClick={onClose} />
-            <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4">
-                <div className="flex items-center justify-between px-6 py-4 border-b border-surface-100">
-                    <h2 className="text-sm font-bold text-surface-800">Tambah Aktivitas</h2>
-                    <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-surface-100 text-surface-400"><X className="w-4 h-4" /></button>
-                </div>
-                <form onSubmit={handleSubmit} className="px-6 py-4 space-y-3">
-                    <div className="flex gap-2 flex-wrap">
-                        {TYPES.map(t => (
-                            <button key={t.key} type="button"
-                                className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors ${form.type === t.key ? 'bg-brand-600 text-white' : 'bg-surface-100 text-surface-600 hover:bg-surface-200'}`}
-                                onClick={() => setForm(f => ({ ...f, type: t.key }))}>
-                                {t.label}
-                            </button>
-                        ))}
-                    </div>
-                    <div>
-                        <label className="block text-xs font-semibold text-surface-600 mb-1">Judul <span className="text-red-500">*</span></label>
-                        <input className="w-full border border-surface-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
-                            placeholder="Ringkasan aktivitas..."
-                            value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} required />
-                    </div>
-                    <div>
-                        <label className="block text-xs font-semibold text-surface-600 mb-1">Keterangan</label>
-                        <textarea className="w-full border border-surface-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 resize-none"
-                            rows={3} placeholder="Detail aktivitas..."
-                            value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} />
-                    </div>
-                    <div className="flex justify-end gap-2 pt-2">
-                        <button type="button" onClick={onClose} className="px-4 py-2 text-sm font-medium text-surface-600 bg-surface-100 hover:bg-surface-200 rounded-lg">Batal</button>
-                        <button type="submit" disabled={submitting}
-                            className="px-4 py-2 text-sm font-semibold text-white bg-brand-600 hover:bg-brand-700 rounded-lg disabled:opacity-60">
-                            {submitting ? 'Menyimpan...' : 'Simpan'}
+        <div className="mb-4">
+            {/* Type buttons */}
+            <div className="flex gap-1.5 flex-wrap mb-2">
+                {QUICK_LOG_TYPES.map(({ key, label, Icon }) => (
+                    <button
+                        key={key}
+                        onClick={() => handleTypeClick(key)}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                            activeType === key
+                                ? 'bg-brand-600 text-white shadow-sm'
+                                : 'bg-surface-100 text-surface-600 hover:bg-surface-200'
+                        }`}
+                    >
+                        <Icon className="w-3.5 h-3.5" />
+                        {label}
+                    </button>
+                ))}
+            </div>
+
+            {/* Inline form */}
+            {activeType && activeConfig && (
+                <form onSubmit={handleSubmit} className="bg-surface-50 border border-surface-200 rounded-xl p-3 space-y-2 animate-fade-in-up">
+                    <input
+                        ref={inputRef}
+                        className="w-full bg-white border border-surface-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 placeholder-surface-400"
+                        placeholder={activeConfig.placeholder}
+                        value={title}
+                        onChange={e => setTitle(e.target.value)}
+                        required
+                    />
+                    <textarea
+                        className="w-full bg-white border border-surface-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 resize-none placeholder-surface-400"
+                        placeholder="Detail tambahan (opsional)..."
+                        rows={2}
+                        value={description}
+                        onChange={e => setDescription(e.target.value)}
+                    />
+                    <div className="flex items-center justify-end gap-2">
+                        <button type="button" onClick={() => setActiveType(null)}
+                            className="px-3 py-1.5 text-xs font-medium text-surface-600 hover:bg-surface-200 rounded-lg transition-colors">
+                            Batal
+                        </button>
+                        <button type="submit" disabled={submitting || !title.trim()}
+                            className="flex items-center gap-1.5 px-4 py-1.5 text-xs font-semibold bg-brand-600 text-white hover:bg-brand-700 rounded-lg transition-colors disabled:opacity-60">
+                            {submitting ? <Clock className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
+                            Simpan
                         </button>
                     </div>
                 </form>
+            )}
+        </div>
+    );
+}
+
+// ─── Activity Item ────────────────────────────────────────────────────────────────
+
+function ActivityItem({ activity, currentUserId, isManagerOrAdmin, onDelete, onUpdate }) {
+    const config = ACTIVITY_CONFIG[activity.type] || ACTIVITY_CONFIG.note;
+    const { Icon, color, iconColor, system } = config;
+    const [isEditing, setIsEditing] = useState(false);
+    const [editTitle, setEditTitle] = useState(activity.title || '');
+    const [editDesc, setEditDesc] = useState(activity.description || '');
+    const [saving, setSaving] = useState(false);
+    const [showActions, setShowActions] = useState(false);
+
+    const canEdit = !system && (activity.user_id === currentUserId || isManagerOrAdmin);
+
+    const handleSaveEdit = async () => {
+        if (!editTitle.trim()) return;
+        setSaving(true);
+        try {
+            const res = await axios.patch(
+                route('leads.activities.update', { lead: activity.lead_id, activity: activity.id }),
+                { title: editTitle.trim(), description: editDesc.trim() || null }
+            );
+            toast.success('Aktivitas diperbarui');
+            onUpdate(res.data.activity);
+            setIsEditing(false);
+        } catch {
+            toast.error('Gagal memperbarui');
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const handleDelete = async () => {
+        if (!confirm('Hapus aktivitas ini?')) return;
+        try {
+            await axios.delete(
+                route('leads.activities.destroy', { lead: activity.lead_id, activity: activity.id })
+            );
+            toast.success('Aktivitas dihapus');
+            onDelete(activity.id);
+        } catch {
+            toast.error('Gagal menghapus');
+        }
+    };
+
+    if (isEditing) {
+        return (
+            <div className="flex gap-3">
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 mt-0.5 ${color}`}>
+                    <Icon className={`w-4 h-4 ${iconColor}`} />
+                </div>
+                <div className="flex-1 bg-surface-50 border border-surface-200 rounded-xl p-3 space-y-2">
+                    <input
+                        className="w-full bg-white border border-surface-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+                        value={editTitle}
+                        onChange={e => setEditTitle(e.target.value)}
+                        autoFocus
+                    />
+                    <textarea
+                        className="w-full bg-white border border-surface-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 resize-none"
+                        rows={2}
+                        value={editDesc}
+                        onChange={e => setEditDesc(e.target.value)}
+                        placeholder="Detail (opsional)..."
+                    />
+                    <div className="flex gap-2 justify-end">
+                        <button onClick={() => setIsEditing(false)} className="px-3 py-1.5 text-xs font-medium text-surface-600 hover:bg-surface-200 rounded-lg">Batal</button>
+                        <button onClick={handleSaveEdit} disabled={saving || !editTitle.trim()}
+                            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-brand-600 text-white hover:bg-brand-700 rounded-lg disabled:opacity-60">
+                            <Check className="w-3.5 h-3.5" /> Simpan
+                        </button>
+                    </div>
+                </div>
             </div>
+        );
+    }
+
+    return (
+        <div
+            className="flex gap-3 group"
+            onMouseEnter={() => setShowActions(true)}
+            onMouseLeave={() => setShowActions(false)}
+        >
+            <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 mt-0.5 ${color}`}>
+                <Icon className={`w-4 h-4 ${iconColor}`} />
+            </div>
+            <div className="flex-1 min-w-0">
+                <div className="flex items-start justify-between gap-2">
+                    <div className="flex-1 min-w-0">
+                        <p className={`text-sm font-semibold ${system ? 'text-surface-500' : 'text-surface-800'}`}>
+                            {activity.title}
+                        </p>
+                        {activity.description && (
+                            <p className="text-xs text-surface-500 mt-0.5 leading-relaxed">{activity.description}</p>
+                        )}
+                        <div className="flex items-center gap-2 mt-1 flex-wrap">
+                            <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${
+                                system ? 'bg-surface-100 text-surface-400' : `${color} ${iconColor}`
+                            }`}>
+                                {config.label}
+                            </span>
+                            {activity.user && (
+                                <span className="text-[10px] text-surface-400">{activity.user.name}</span>
+                            )}
+                            <span className="text-[10px] text-surface-300">{formatTimeOnly(activity.created_at)}</span>
+                        </div>
+                    </div>
+                    {/* Action buttons — show on hover, only for non-system activities */}
+                    {canEdit && (
+                        <div className={`flex items-center gap-1 shrink-0 transition-opacity ${showActions ? 'opacity-100' : 'opacity-0'}`}>
+                            <button
+                                onClick={() => { setEditTitle(activity.title || ''); setEditDesc(activity.description || ''); setIsEditing(true); }}
+                                className="p-1 rounded-md hover:bg-surface-100 text-surface-400 hover:text-surface-600 transition-colors"
+                                title="Edit"
+                            >
+                                <Pencil className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                                onClick={handleDelete}
+                                className="p-1 rounded-md hover:bg-red-50 text-surface-400 hover:text-red-500 transition-colors"
+                                title="Hapus"
+                            >
+                                <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                        </div>
+                    )}
+                </div>
+            </div>
+        </div>
+    );
+}
+
+// ─── Timeline grouped by date ─────────────────────────────────────────────────────
+
+function Timeline({ activities, leadId, currentUserId, isManagerOrAdmin, onActivityAdded, onActivityUpdated, onActivityDeleted }) {
+    // Group activities by date
+    const grouped = activities.reduce((acc, act) => {
+        const group = getDateGroup(act.created_at);
+        if (!acc[group]) acc[group] = [];
+        acc[group].push(act);
+        return acc;
+    }, {});
+
+    const groups = Object.entries(grouped);
+
+    return (
+        <div>
+            <QuickLogBar leadId={leadId} onActivityAdded={onActivityAdded} />
+
+            {groups.length === 0 ? (
+                <div className="text-center py-12 text-surface-400">
+                    <MessageSquare className="w-10 h-10 mx-auto mb-3 opacity-30" />
+                    <p className="text-sm font-semibold">Belum ada aktivitas</p>
+                    <p className="text-xs mt-1">Mulai log aktivitas pertama di atas</p>
+                </div>
+            ) : (
+                <div className="space-y-6">
+                    {groups.map(([dateLabel, items]) => (
+                        <div key={dateLabel}>
+                            <div className="flex items-center gap-2 mb-3">
+                                <span className="text-[10px] font-bold text-surface-400 uppercase tracking-wider">{dateLabel}</span>
+                                <div className="flex-1 h-px bg-surface-100" />
+                            </div>
+                            <div className="space-y-4">
+                                {items.map(act => (
+                                    <ActivityItem
+                                        key={act.id}
+                                        activity={act}
+                                        currentUserId={currentUserId}
+                                        isManagerOrAdmin={isManagerOrAdmin}
+                                        onDelete={onActivityDeleted}
+                                        onUpdate={onActivityUpdated}
+                                    />
+                                ))}
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            )}
         </div>
     );
 }
@@ -176,44 +378,36 @@ function AddActivityModal({ open, onClose, leadId, onActivityAdded }) {
 // ─── Main Page ───────────────────────────────────────────────────────────────────
 
 export default function LeadDetail({ lead, stages, sources }) {
-    const [showActivityModal, setShowActivityModal] = useState(false);
+    const { auth } = usePage().props;
+    const currentUser = auth?.user;
+    const isManagerOrAdmin = ['Administrator', 'Sales Manager', 'Manager', 'Super Admin'].includes(currentUser?.role);
+    const currentUserId = currentUser?.id;
+
     const [changingStage, setChangingStage] = useState(false);
     const [currentStage, setCurrentStage] = useState(lead.stage);
     const [activities, setActivities] = useState(lead.activities || []);
 
-    useEffect(() => {
-        setCurrentStage(lead.stage);
-    }, [lead.stage]);
-
-    useEffect(() => {
-        setActivities(lead.activities || []);
-    }, [lead.activities]);
+    useEffect(() => { setCurrentStage(lead.stage); }, [lead.stage]);
+    useEffect(() => { setActivities(lead.activities || []); }, [lead.activities]);
 
     const handleStageChange = async (newStage) => {
-        if (newStage === currentStage) {
-            setChangingStage(false);
-            return;
-        }
-
+        if (newStage === currentStage) { setChangingStage(false); return; }
         const oldStage = currentStage;
         setCurrentStage(newStage);
         setChangingStage(false);
-
-        // Optimistically insert stage change activity to timeline
-        const optimisticActivity = {
+        const optimistic = {
             id: 'temp-' + Date.now(),
+            lead_id: lead.id,
             type: 'stage_change',
-            title: `Stage diubah: ${oldStage} → ${newStage}`,
+            title: `Stage diubah: ${STAGE_META[oldStage]?.label || oldStage} → ${STAGE_META[newStage]?.label || newStage}`,
             created_at: new Date().toISOString(),
             user: { name: 'Anda' },
         };
-        setActivities(prev => [optimisticActivity, ...prev]);
-
+        setActivities(prev => [optimistic, ...prev]);
         try {
             await axios.patch(route('leads.stage.update', lead.id), { stage: newStage });
-            toast.success(`Stage berhasil diubah ke "${STAGE_META[newStage]?.label || newStage}"`);
-        } catch (err) {
-            console.error('Failed to update stage:', err);
+            toast.success(`Stage diubah ke "${STAGE_META[newStage]?.label || newStage}"`);
+        } catch {
             toast.error('Gagal mengubah stage lead.');
             setCurrentStage(oldStage);
             setActivities(lead.activities || []);
@@ -224,6 +418,10 @@ export default function LeadDetail({ lead, stages, sources }) {
         if (!confirm('Arsipkan lead ini?')) return;
         router.delete(route('leads.destroy', lead.id));
     };
+
+    const handleActivityAdded = (newAct) => setActivities(prev => [newAct, ...prev]);
+    const handleActivityUpdated = (updatedAct) => setActivities(prev => prev.map(a => a.id === updatedAct.id ? updatedAct : a));
+    const handleActivityDeleted = (id) => setActivities(prev => prev.filter(a => a.id !== id));
 
     return (
         <AuthenticatedLayout>
@@ -274,7 +472,7 @@ export default function LeadDetail({ lead, stages, sources }) {
                             {stages.map(s => (
                                 <button key={s}
                                     onClick={() => handleStageChange(s)}
-                                    className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors ${s === currentStage ? 'ring-2 ring-brand-500 bg-brand-50 text-brand-700 font-bold' : 'bg-white border border-surface-200 text-surface-700 hover:bg-surface-50'}`}>
+                                    className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors ${s === currentStage ? 'ring-2 ring-brand-500 bg-brand-50 text-brand-700' : 'bg-white border border-surface-200 text-surface-700 hover:bg-surface-50'}`}>
                                     {STAGE_META[s]?.label || s}
                                 </button>
                             ))}
@@ -307,6 +505,17 @@ export default function LeadDetail({ lead, stages, sources }) {
                                                 Lihat profil customer →
                                             </Link>
                                         )}
+                                    </div>
+                                </div>
+                            )}
+
+                            {lead.pic_name && (
+                                <div className="flex items-start gap-3">
+                                    <User className="w-4 h-4 text-surface-400 mt-0.5 shrink-0" />
+                                    <div>
+                                        <p className="text-xs text-surface-400">PIC</p>
+                                        <p className="text-sm font-semibold text-surface-800">{lead.pic_name}</p>
+                                        {lead.pic_phone && <p className="text-xs text-surface-500">{lead.pic_phone}</p>}
                                     </div>
                                 </div>
                             )}
@@ -365,7 +574,7 @@ export default function LeadDetail({ lead, stages, sources }) {
                             <div className="bg-white rounded-2xl border border-surface-200 p-5">
                                 <h2 className="text-sm font-bold text-surface-700 mb-3 flex items-center gap-2">
                                     <FileText className="w-4 h-4 text-brand-600" />
-                                    SPH Terlampir
+                                    Quotation Terlampir
                                 </h2>
                                 <Link href={route('quotations.show', lead.quotation_id)}
                                     className="flex items-center justify-between p-3 bg-brand-50 rounded-xl hover:bg-brand-100 transition-colors">
@@ -381,49 +590,56 @@ export default function LeadDetail({ lead, stages, sources }) {
                         {/* Notes */}
                         {lead.notes && (
                             <div className="bg-white rounded-2xl border border-surface-200 p-5">
-                                <h2 className="text-sm font-bold text-surface-700 mb-2">Catatan</h2>
+                                <h2 className="text-sm font-bold text-surface-700 mb-2">Catatan Lead</h2>
                                 <p className="text-sm text-surface-600 leading-relaxed">{lead.notes}</p>
+                            </div>
+                        )}
+
+                        {/* Visits linked */}
+                        {lead.visits && lead.visits.length > 0 && (
+                            <div className="bg-white rounded-2xl border border-surface-200 p-5">
+                                <h2 className="text-sm font-bold text-surface-700 mb-3 flex items-center gap-2">
+                                    <MapPin className="w-4 h-4 text-teal-600" />
+                                    Kunjungan ({lead.visits.length})
+                                </h2>
+                                <div className="space-y-2">
+                                    {lead.visits.slice(0, 3).map(v => (
+                                        <div key={v.id} className="flex items-center justify-between p-2.5 bg-surface-50 rounded-lg">
+                                            <div>
+                                                <p className="text-xs font-semibold text-surface-700">{v.subject}</p>
+                                                <p className="text-[10px] text-surface-400">
+                                                    {new Date(v.scheduled_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })}
+                                                    {v.checked_in_at && ' · ✅ Check-in'}
+                                                </p>
+                                            </div>
+                                            {v.user && <span className="text-[10px] text-surface-400">{v.user.name}</span>}
+                                        </div>
+                                    ))}
+                                    {lead.visits.length > 3 && (
+                                        <p className="text-xs text-brand-600 text-center pt-1">+{lead.visits.length - 3} kunjungan lainnya</p>
+                                    )}
+                                </div>
                             </div>
                         )}
                     </div>
 
-                    {/* Right: Activity feed */}
+                    {/* Right: Timeline */}
                     <div className="lg:col-span-2">
                         <div className="bg-white rounded-2xl border border-surface-200 p-5">
-                            <div className="flex items-center justify-between mb-4">
-                                <h2 className="text-sm font-bold text-surface-700">Timeline Aktivitas</h2>
-                                <button onClick={() => setShowActivityModal(true)}
-                                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-brand-50 text-brand-700 hover:bg-brand-100 rounded-lg transition-colors">
-                                    <Plus className="w-3.5 h-3.5" />
-                                    Tambah Aktivitas
-                                </button>
-                            </div>
-
-                            <div className="space-y-4">
-                                {activities && activities.length > 0 ? (
-                                    activities.map(activity => (
-                                        <ActivityItem key={activity.id} activity={activity} />
-                                    ))
-                                ) : (
-                                    <div className="text-center py-12 text-surface-400">
-                                        <MessageSquare className="w-10 h-10 mx-auto mb-3 opacity-30" />
-                                        <p className="text-sm font-semibold">Belum ada aktivitas</p>
-                                        <p className="text-xs mt-1">Tambahkan catatan atau log aktivitas pertama</p>
-                                    </div>
-                                )}
-                            </div>
+                            <h2 className="text-sm font-bold text-surface-700 mb-4">Timeline Aktivitas</h2>
+                            <Timeline
+                                activities={activities}
+                                leadId={lead.id}
+                                currentUserId={currentUserId}
+                                isManagerOrAdmin={isManagerOrAdmin}
+                                onActivityAdded={handleActivityAdded}
+                                onActivityUpdated={handleActivityUpdated}
+                                onActivityDeleted={handleActivityDeleted}
+                            />
                         </div>
                     </div>
                 </div>
             </div>
-
-            <AddActivityModal
-                open={showActivityModal}
-                onClose={() => setShowActivityModal(false)}
-                leadId={lead.id}
-                onActivityAdded={(newAct) => setActivities(prev => [newAct, ...prev])}
-            />
         </AuthenticatedLayout>
     );
 }
-
