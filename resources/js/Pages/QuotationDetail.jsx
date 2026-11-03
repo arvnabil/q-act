@@ -438,6 +438,30 @@ export default function QuotationDetail({ quotation, printDocuments = [], bankAc
                         <span className="text-[11px] text-surface-400 italic hidden md:inline">Pengaturan cetak PDF</span>
                     </div>
 
+                    {/* Lead Connection Banner */}
+                    {quotation.lead && (
+                        <div className="bg-brand-50/70 border-b border-brand-100 px-6 py-2.5 flex items-center justify-between gap-3 text-xs">
+                            <div className="flex items-center gap-2 flex-wrap">
+                                <span className="w-2 h-2 rounded-full bg-brand-500 animate-pulse" />
+                                <span className="font-semibold text-brand-800">
+                                    Terhubung ke Lead:
+                                </span>
+                                <span className="font-mono text-brand-700 bg-white px-2 py-0.5 rounded border border-brand-200 font-bold">
+                                    {quotation.lead.lead_code || 'LEAD'}
+                                </span>
+                                <span className="font-medium text-surface-800">
+                                    {quotation.lead.title}
+                                </span>
+                            </div>
+                            <Link
+                                href={route('leads.show', quotation.lead.id)}
+                                className="font-bold text-brand-600 hover:text-brand-700 hover:underline flex items-center gap-1 shrink-0"
+                            >
+                                Buka Lead Detail →
+                            </Link>
+                        </div>
+                    )}
+
                     {/* 4 Column Info Grid */}
                     <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 divide-y sm:divide-y-0 sm:divide-x divide-surface-100">
                         <div className="p-5">

@@ -153,6 +153,10 @@ Menyelesaikan kendala formulir yang membingungkan ketika Lead sudah memiliki dat
 | **Prefill Lead di Buat Quotation** | ✅ Selesai | Param `?lead_id=` auto-select lead & customer di `QuotationCreate.jsx` |
 | **Dropdown Lead di Buat Quotation** | ✅ Selesai | Sales bisa menghubungkan penawaran baru ke Lead manapun |
 | **Quotation Card di Lead Detail** | ✅ Selesai | Daftar quotation terhubung, status, revisi, dan total rupiah |
+| **Backlink di Detail Quotation** | ✅ Selesai | Banner terhubung ke Lead di `QuotationDetail.jsx` dengan link 1-klik |
+| **Lead 360° Cockpit Tab System** | ✅ Selesai | 5 Tab interaktif di `LeadDetail`: Timeline, Quotation, PO & SO, Kunjungan, PIC |
+| **Multi-PIC Management (`lead_pics`)**| ✅ Selesai | Modal tambah PIC dari Customer/lapangan, role badge, tombol WA/Telp/Email, unlink |
+| **PO & Sales Order Tracker Tab** | ✅ Selesai | Tracking nomor PO customer & Sales Order yang terbit dari penawaran lead |
 | **Smart Visit Customer Selection** | ✅ Selesai | Auto-hide dropdown customer jika lead dipilih, toggle link direct |
 | **Terminologi Standar** | ✅ Selesai | Menggunakan label "Quotation" / "Quot", bukan "SPH" |
 | **Standardisasi Toast Notification** | ✅ Selesai | Global white card style `#ffffff` dengan aksen teal `#009680` |
@@ -163,19 +167,7 @@ Menyelesaikan kendala formulir yang membingungkan ketika Lead sudah memiliki dat
 
 Berikut adalah backlog fitur yang telah didiskusikan dan siap dikerjakan pada fase berikutnya:
 
-### A. Lead 360° Cockpit (Fase Lanjutan)
-1. **Backlink dari Quotation ke Lead**:
-   - Di halaman detail Quotation (`/quotations/{id}`), tambahkan banner/link: *"Penawaran ini terhubung dengan Lead: [L2611.001] Proyek UPVC Gedung A"*.
-2. **Tabbed Navigation di Lead Detail**:
-   - Transformasi halaman Lead Detail menjadi mode tab:
-     - `Overview`: Ringkasan profil, PIC, estimasi nilai, dan status.
-     - `Quotation`: Tabel lengkap semua penawaran & riwayat revisi.
-     - `PO & SO`: Riwayat purchase order customer dan status sales order operasional.
-     - `Timeline & Kunjungan`: Seluruh jejak audit dan jadwal kunjungan.
-3. **Manajemen PIC Multi-Peran (`lead_pics`)**:
-   - Form modal untuk menambahkan beberapa PIC sekaligus ke dalam satu Lead dengan peranan spesifik (*Primary Contact*, *User Teknis*, *Purchasing/Pengadaan*, *Finance/Pembayaran*).
-
-### B. Integrasi Google Calendar Tim (Shared Calendar)
+### A. Integrasi Google Calendar Tim (Shared Calendar)
 1. **Koneksi Akun Gmail Kantor (`calendar@kantor.com`)**:
    - Modul OAuth / Service Account Google di menu **Settings → Integrasi**.
    - Admin menghubungkan 1 akun Google Calendar kantor.
@@ -186,7 +178,7 @@ Berikut adalah backlog fitur yang telah didiskusikan dan siap dikerjakan pada fa
 3. **Halaman Kalender Tim (`/team-calendar`)**:
    - Tampilan visual kalender bulanan/mingguan di dalam portal Q-Sales yang menggabungkan seluruh jadwal kunjungan dan meeting tim sales.
 
-### C. Integrasi Zoom Server-to-Server
+### B. Integrasi Zoom Server-to-Server
 1. **Setup Zoom Server-to-Server OAuth**:
    - Input Client ID, Client Secret, dan Account ID dari Zoom App Marketplace di halaman Settings Admin.
 2. **Flag Lisensi User**:
@@ -197,7 +189,7 @@ Berikut adalah backlog fitur yang telah didiskusikan dan siap dikerjakan pada fa
 4. **Zoom Webhook Handler**:
    - Menerima webhook saat meeting berakhir (`meeting.ended`) untuk mencatat durasi aktual dan URL rekaman meeting ke timeline.
 
-### D. Prosedur Deploy ke cPanel Production
+### C. Prosedur Deploy ke cPanel Production
 Saat melakukan rilis ke server production cPanel, lakukan urutan berikut:
 ```bash
 # 1. Jalankan merger duplikasi SEBELUM migrate (PENTING):

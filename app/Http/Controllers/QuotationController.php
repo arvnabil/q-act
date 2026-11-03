@@ -209,6 +209,13 @@ class QuotationController extends Controller
             'pph_rate' => $q->pph_rate ?? 0.02,
             'notes' => $q->notes,
             'terms' => is_array($q->terms) ? $q->terms : [],
+            'lead_id' => $q->lead_id,
+            'lead' => $q->lead ? [
+                'id' => $q->lead->id,
+                'lead_code' => $q->lead->lead_code,
+                'title' => $q->lead->title,
+                'stage' => $q->lead->stage,
+            ] : null,
             'customer_id' => $q->customer_id,
             'pic_id' => $q->pic_id,
             'sales_id' => $q->sales_id,
@@ -514,7 +521,7 @@ class QuotationController extends Controller
                 ->with('message', 'Quotation tersebut sudah berada di Sampah.');
         }
 
-        $quotation->load(['customer.pics', 'pic', 'sales', 'creator', 'items.product.brand', 'bankAccount', 'parentQuotation', 'revisions', 'salesOrders', 'purchaseOrders', 'changeRequests.requester', 'changeRequests.approver']);
+        $quotation->load(['customer.pics', 'pic', 'sales', 'creator', 'items.product.brand', 'bankAccount', 'parentQuotation', 'revisions', 'salesOrders', 'purchaseOrders', 'changeRequests.requester', 'changeRequests.approver', 'lead']);
 
         $rootQuotationId = ($quotation->relation_type ?? 'main') === 'split' && $quotation->parent_quotation_id
             ? $quotation->parent_quotation_id

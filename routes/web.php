@@ -142,6 +142,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('/{lead}/activities',            [LeadController::class, 'addActivity'])->name('activities.store');
         Route::patch('/{lead}/activities/{activity}', [LeadController::class, 'updateActivity'])->name('activities.update');
         Route::delete('/{lead}/activities/{activity}',[LeadController::class, 'destroyActivity'])->name('activities.destroy');
+        Route::post('/{lead}/pics',                  [LeadController::class, 'storePic'])->name('pics.store');
+        Route::delete('/{lead}/pics/{pic}',          [LeadController::class, 'destroyPic'])->name('pics.destroy');
         Route::post('/settings',                     [LeadController::class, 'updateSettings'])->name('settings.update');
     });
 

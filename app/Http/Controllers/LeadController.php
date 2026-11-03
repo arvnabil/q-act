@@ -3,8 +3,10 @@
 namespace App\Http\Controllers;
 
 use App\Models\Customer;
+use App\Models\CustomerPic;
 use App\Models\Lead;
 use App\Models\LeadActivity;
+use App\Models\LeadPic;
 use App\Models\LeadVisit;
 use App\Models\SystemSetting;
 use App\Models\User;
@@ -254,7 +256,11 @@ class LeadController extends Controller
             'sales:id,name',
             'customer:id,name,address',
             'quotation:id,status,grand_total,revision_no',
-            'quotations:id,lead_id,status,grand_total,created_at,revision_no,relation_type',
+            'quotations' => function ($q) {
+                $q->select(['id', 'lead_id', 'status', 'grand_total', 'created_at', 'revision_no', 'relation_type', 'po_number', 'po_status', 'po_date'])
+                  ->with('salesOrders:id,quotation_id,status,created_at')
+                  ->latest();
+            },
             'pics.customerPic',
             'visits.user:id,name',
         ]);
@@ -264,11 +270,48 @@ class LeadController extends Controller
             $lead->activities()->with('user:id,name')->orderByDesc('created_at')->get()
         );
 
+        $customerPics = $lead->customer_id ? CustomerPic::where('customer_id', $lead->customer_id)->get() : [];
+
         return Inertia::render('LeadDetail', [
-            'lead'    => $lead,
-            'stages'  => Lead::STAGES,
-            'sources' => Lead::SOURCES,
+            'lead'         => $lead,
+            'customerPics' => $customerPics,
+            'stages'       => Lead::STAGES,
+            'sources'      => Lead::SOURCES,
         ]);
+    }
+
+    // ─── Lead PICs ───────────────────────────────────────────────────────────────
+
+    public function storePic(Request $request, Lead $lead)
+    {
+        $validated = $request->validate([
+            'customer_pic_id' => 'nullable|exists:customer_pics,id',
+            'name'            => 'required|string|max:255',
+            'phone'           => 'nullable|string|max:50',
+            'email'           => 'nullable|email|max:100',
+            'position'        => 'nullable|string|max:100',
+            'role'            => 'required|string|in:primary,technical,purchasing,finance,other',
+            'is_primary'      => 'nullable|boolean',
+        ]);
+
+        if (!empty($validated['is_primary'])) {
+            $lead->pics()->update(['is_primary' => false]);
+        }
+
+        $validated['lead_id'] = $lead->id;
+        $validated['created_by'] = Auth::id();
+
+        LeadPic::create($validated);
+
+        return back()->with('message', 'PIC berhasil ditambahkan ke lead.');
+    }
+
+    public function destroyPic(Lead $lead, LeadPic $pic)
+    {
+        if ($pic->lead_id === $lead->id) {
+            $pic->delete();
+        }
+        return back()->with('message', 'PIC berhasil dihapus dari lead.');
     }
 
     // ─── Update ─────────────────────────────────────────────────────────────────

@@ -8,7 +8,8 @@ import {
     Clock, Plus, X, ChevronRight, Edit2, Trash2, MapPin,
     Phone, Mail, MessageSquare, Calendar, CheckCircle2, Tag,
     MessageCircle, Video, Send, ChevronDown, Pencil, Check,
-    Navigation, AlertCircle
+    Navigation, AlertCircle, ShoppingCart, Users, Briefcase,
+    ExternalLink, ShieldCheck
 } from 'lucide-react';
 
 // ─── Constants ───────────────────────────────────────────────────────────────────
@@ -38,12 +39,30 @@ const ACTIVITY_CONFIG = {
 };
 
 const QUICK_LOG_TYPES = [
-    { key: 'note',     label: 'Catatan',   Icon: MessageSquare, placeholder: 'Tulis catatan...' },
-    { key: 'call',     label: 'Telepon',   Icon: Phone,         placeholder: 'Ringkasan pembicaraan...' },
-    { key: 'whatsapp', label: 'WhatsApp',  Icon: MessageCircle, placeholder: 'Ringkasan pesan WhatsApp...' },
-    { key: 'email',    label: 'Email',     Icon: Mail,          placeholder: 'Ringkasan email...' },
-    { key: 'meeting',  label: 'Meeting',   Icon: Video,         placeholder: 'Hasil / agenda meeting...' },
+    { key: 'note',     label: 'Catatan',   Icon: MessageSquare, placeholder: 'Tulis catatan progress proyek...' },
+    { key: 'call',     label: 'Telepon',   Icon: Phone,         placeholder: 'Ringkasan hasil panggilan telepon...' },
+    { key: 'whatsapp', label: 'WhatsApp',  Icon: MessageCircle, placeholder: 'Ringkasan pesan WhatsApp dengan klien...' },
+    { key: 'email',    label: 'Email',     Icon: Mail,          placeholder: 'Ringkasan email / dokumen terkirim...' },
+    { key: 'meeting',  label: 'Meeting',   Icon: Video,         placeholder: 'Notulen meeting tatap muka atau video call...' },
 ];
+
+const PIC_ROLES = {
+    primary:    { label: 'Kontak Utama',         color: 'bg-teal-50 text-teal-700 border-teal-200' },
+    technical:  { label: 'User Teknis',          color: 'bg-blue-50 text-blue-700 border-blue-200' },
+    purchasing: { label: 'Purchasing / Pengadaan',color: 'bg-amber-50 text-amber-700 border-amber-200' },
+    finance:    { label: 'Keuangan / Finance',   color: 'bg-violet-50 text-violet-700 border-violet-200' },
+    other:      { label: 'Lainnya',              color: 'bg-surface-100 text-surface-600 border-surface-200' },
+};
+
+const QUOT_STATUS_COLORS = {
+    created:     'bg-surface-100 text-surface-700',
+    draft:       'bg-surface-100 text-surface-700',
+    pending:     'bg-amber-100 text-amber-700',
+    sent:        'bg-blue-100 text-blue-700',
+    approved:    'bg-emerald-100 text-emerald-700',
+    rejected:    'bg-red-100 text-red-700',
+    revised:     'bg-purple-100 text-purple-700',
+};
 
 // ─── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -51,7 +70,7 @@ const formatRp = (n) => {
     if (!n) return 'Rp 0';
     if (n >= 1_000_000_000) return `Rp ${(n / 1_000_000_000).toFixed(1)}M`;
     if (n >= 1_000_000)     return `Rp ${(n / 1_000_000).toFixed(1)}jt`;
-    return `Rp ${n.toLocaleString('id-ID')}`;
+    return `Rp ${Number(n).toLocaleString('id-ID')}`;
 };
 
 const formatDateTime = (d) => {
@@ -146,7 +165,7 @@ function QuickLogBar({ leadId, onActivityAdded }) {
                     <button
                         key={key}
                         onClick={() => handleTypeClick(key)}
-                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
                             activeType === key
                                 ? 'bg-brand-600 text-white shadow-sm'
                                 : 'bg-surface-100 text-surface-600 hover:bg-surface-200'
@@ -178,11 +197,11 @@ function QuickLogBar({ leadId, onActivityAdded }) {
                     />
                     <div className="flex items-center justify-end gap-2">
                         <button type="button" onClick={() => setActiveType(null)}
-                            className="px-3 py-1.5 text-xs font-medium text-surface-600 hover:bg-surface-200 rounded-lg transition-colors">
+                            className="px-3 py-1.5 text-xs font-medium text-surface-600 hover:bg-surface-200 rounded-lg transition-colors cursor-pointer">
                             Batal
                         </button>
                         <button type="submit" disabled={submitting || !title.trim()}
-                            className="flex items-center gap-1.5 px-4 py-1.5 text-xs font-semibold bg-brand-600 text-white hover:bg-brand-700 rounded-lg transition-colors disabled:opacity-60">
+                            className="flex items-center gap-1.5 px-4 py-1.5 text-xs font-semibold bg-brand-600 text-white hover:bg-brand-700 rounded-lg transition-colors disabled:opacity-60 cursor-pointer">
                             {submitting ? <Clock className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
                             Simpan
                         </button>
@@ -327,7 +346,6 @@ function ActivityItem({ activity, currentUserId, isManagerOrAdmin, onDelete, onU
 // ─── Timeline grouped by date ─────────────────────────────────────────────────────
 
 function Timeline({ activities, leadId, currentUserId, isManagerOrAdmin, onActivityAdded, onActivityUpdated, onActivityDeleted }) {
-    // Group activities by date
     const grouped = activities.reduce((acc, act) => {
         const group = getDateGroup(act.created_at);
         if (!acc[group]) acc[group] = [];
@@ -342,10 +360,10 @@ function Timeline({ activities, leadId, currentUserId, isManagerOrAdmin, onActiv
             <QuickLogBar leadId={leadId} onActivityAdded={onActivityAdded} />
 
             {groups.length === 0 ? (
-                <div className="text-center py-12 text-surface-400">
-                    <MessageSquare className="w-10 h-10 mx-auto mb-3 opacity-30" />
-                    <p className="text-sm font-semibold">Belum ada aktivitas</p>
-                    <p className="text-xs mt-1">Mulai log aktivitas pertama di atas</p>
+                <div className="text-center py-12 text-surface-400 bg-surface-50/50 rounded-xl border border-dashed border-surface-200">
+                    <MessageSquare className="w-8 h-8 mx-auto mb-2 text-surface-300" />
+                    <p className="text-xs font-semibold text-surface-600">Belum ada aktivitas tercatat</p>
+                    <p className="text-[11px] text-surface-400 mt-0.5">Mulai catat interaksi dengan menekan salah satu tombol di atas</p>
                 </div>
             ) : (
                 <div className="space-y-6">
@@ -375,14 +393,610 @@ function Timeline({ activities, leadId, currentUserId, isManagerOrAdmin, onActiv
     );
 }
 
-// ─── Main Page ───────────────────────────────────────────────────────────────────
+// ─── Quotations Tab ───────────────────────────────────────────────────────────────
 
-export default function LeadDetail({ lead, stages, sources }) {
+function QuotationsTab({ allQuotations, lead }) {
+    const totalValue = allQuotations.reduce((sum, q) => sum + (Number(q.grand_total) || 0), 0);
+    const approvedCount = allQuotations.filter(q => q.status === 'approved' || q.po_status === 'approved').length;
+
+    return (
+        <div className="space-y-4">
+            <div className="flex items-center justify-between flex-wrap gap-3">
+                <div>
+                    <h3 className="text-sm font-bold text-surface-800">Daftar Quotation / Penawaran</h3>
+                    <p className="text-xs text-surface-400">Semua penawaran harga & revisi terikat ke lead ini</p>
+                </div>
+                <Link
+                    href={route('quotations.create', { lead_id: lead.id, customer_id: lead.customer_id || undefined })}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-brand-600 hover:bg-brand-700 text-white rounded-lg text-xs font-semibold shadow-sm transition-colors cursor-pointer"
+                >
+                    <Plus className="w-3.5 h-3.5" />
+                    Buat Quotation Baru
+                </Link>
+            </div>
+
+            {/* Quick Metrics */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="bg-surface-50 rounded-xl p-3 border border-surface-200">
+                    <p className="text-[10px] font-bold text-surface-400 uppercase tracking-wider">Total Dokumen</p>
+                    <p className="text-base font-bold text-surface-900 mt-0.5">{allQuotations.length} Quotation</p>
+                </div>
+                <div className="bg-surface-50 rounded-xl p-3 border border-surface-200">
+                    <p className="text-[10px] font-bold text-surface-400 uppercase tracking-wider">Total Nilai Penawaran</p>
+                    <p className="text-base font-bold text-brand-600 mt-0.5">{formatRp(totalValue)}</p>
+                </div>
+                <div className="bg-surface-50 rounded-xl p-3 border border-surface-200">
+                    <p className="text-[10px] font-bold text-surface-400 uppercase tracking-wider">Deal / PO Masuk</p>
+                    <p className="text-base font-bold text-emerald-600 mt-0.5">{approvedCount} Selesai</p>
+                </div>
+            </div>
+
+            {allQuotations.length === 0 ? (
+                <div className="text-center py-12 text-surface-400 bg-surface-50/50 rounded-xl border border-dashed border-surface-200">
+                    <FileText className="w-8 h-8 mx-auto mb-2 text-surface-300" />
+                    <p className="text-xs font-semibold text-surface-600">Belum ada quotation terhubung</p>
+                    <p className="text-[11px] text-surface-400 mt-0.5">Buat penawaran harga pertama untuk memulai transaksi lead ini</p>
+                    <Link
+                        href={route('quotations.create', { lead_id: lead.id, customer_id: lead.customer_id || undefined })}
+                        className="mt-3 inline-flex items-center gap-1 text-xs font-bold text-brand-600 hover:underline"
+                    >
+                        <Plus className="w-3 h-3" /> Buat Quotation Sekarang
+                    </Link>
+                </div>
+            ) : (
+                <div className="overflow-hidden rounded-xl border border-surface-200 bg-white">
+                    <table className="w-full text-xs text-left">
+                        <thead>
+                            <tr className="bg-surface-50 border-b border-surface-200 text-surface-500 font-bold uppercase tracking-wider text-[10px]">
+                                <th className="px-4 py-3">No. Quotation</th>
+                                <th className="px-4 py-3">Status</th>
+                                <th className="px-4 py-3">Status PO</th>
+                                <th className="px-4 py-3 text-right">Nilai Total</th>
+                                <th className="px-4 py-3">Tanggal</th>
+                                <th className="px-4 py-3 text-right">Aksi</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-surface-100">
+                            {allQuotations.map(q => (
+                                <tr key={q.id} className="hover:bg-surface-50 transition-colors">
+                                    <td className="px-4 py-3 font-semibold">
+                                        <div className="flex items-center gap-1.5">
+                                            <span className="font-mono font-bold text-surface-800">{q.id}</span>
+                                            {q.revision_no > 0 && (
+                                                <span className="text-[9px] font-bold px-1.5 py-0.5 bg-surface-200 text-surface-700 rounded">
+                                                    Rev {q.revision_no}
+                                                </span>
+                                            )}
+                                        </div>
+                                    </td>
+                                    <td className="px-4 py-3">
+                                        <span className={`inline-flex px-2 py-0.5 rounded text-[10px] font-bold uppercase ${QUOT_STATUS_COLORS[q.status] || 'bg-surface-100 text-surface-700'}`}>
+                                            {q.status}
+                                        </span>
+                                    </td>
+                                    <td className="px-4 py-3">
+                                        {q.po_number ? (
+                                            <span className="font-mono text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200 font-bold">
+                                                PO: {q.po_number}
+                                            </span>
+                                        ) : (
+                                            <span className="text-surface-400 text-[11px]">—</span>
+                                        )}
+                                    </td>
+                                    <td className="px-4 py-3 text-right font-bold text-brand-600">
+                                        {formatRp(q.grand_total)}
+                                    </td>
+                                    <td className="px-4 py-3 text-surface-500 whitespace-nowrap">
+                                        {q.created_at ? new Date(q.created_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }) : '—'}
+                                    </td>
+                                    <td className="px-4 py-3 text-right">
+                                        <Link
+                                            href={route('quotations.show', q.id)}
+                                            className="inline-flex items-center gap-1 text-xs font-bold text-brand-600 hover:text-brand-700 hover:underline"
+                                        >
+                                            Lihat <ExternalLink className="w-3 h-3" />
+                                        </Link>
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+            )}
+        </div>
+    );
+}
+
+// ─── PO & Sales Order Tab ─────────────────────────────────────────────────────────
+
+function PoSoTab({ allPurchaseOrders, allSalesOrders }) {
+    const hasAny = allPurchaseOrders.length > 0 || allSalesOrders.length > 0;
+
+    return (
+        <div className="space-y-6">
+            <div>
+                <h3 className="text-sm font-bold text-surface-800">Status PO & Sales Order (SO)</h3>
+                <p className="text-xs text-surface-400">Jejak dokumen Purchase Order dari customer dan Sales Order yang diterbitkan</p>
+            </div>
+
+            {!hasAny ? (
+                <div className="text-center py-12 text-surface-400 bg-surface-50/50 rounded-xl border border-dashed border-surface-200">
+                    <ShoppingCart className="w-8 h-8 mx-auto mb-2 text-surface-300" />
+                    <p className="text-xs font-semibold text-surface-600">Belum ada PO / SO terbit</p>
+                    <p className="text-[11px] text-surface-400 mt-1 max-w-sm mx-auto">
+                        Ketika customer menyetujui penawaran harga dan nomor PO dimasukkan ke sistem, dokumen transaksi penjualan akan otomatis terhubung di sini.
+                    </p>
+                </div>
+            ) : (
+                <>
+                    {/* Purchase Orders */}
+                    {allPurchaseOrders.length > 0 && (
+                        <div>
+                            <h4 className="text-xs font-bold text-surface-700 uppercase tracking-wider mb-2.5 flex items-center gap-1.5">
+                                <ShieldCheck className="w-4 h-4 text-emerald-600" />
+                                Purchase Order (PO) Customer ({allPurchaseOrders.length})
+                            </h4>
+                            <div className="space-y-2">
+                                {allPurchaseOrders.map(q => (
+                                    <div key={q.id} className="p-3.5 rounded-xl border border-surface-200 bg-white flex items-center justify-between gap-3">
+                                        <div>
+                                            <div className="flex items-center gap-2">
+                                                <span className="font-mono text-sm font-bold text-surface-900">
+                                                    PO: {q.po_number || 'Dalam Proses'}
+                                                </span>
+                                                <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-100 text-emerald-700">
+                                                    {q.po_status || 'Diterima'}
+                                                </span>
+                                            </div>
+                                            <p className="text-xs text-surface-400 mt-0.5">
+                                                Dari Quotation: <Link href={route('quotations.show', q.id)} className="font-mono text-brand-600 hover:underline">{q.id}</Link>
+                                                {q.po_date && ` · Tanggal PO: ${q.po_date}`}
+                                            </p>
+                                        </div>
+                                        <div className="text-right font-bold text-brand-600 text-sm">
+                                            {formatRp(q.grand_total)}
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Sales Orders */}
+                    {allSalesOrders.length > 0 && (
+                        <div>
+                            <h4 className="text-xs font-bold text-surface-700 uppercase tracking-wider mb-2.5 flex items-center gap-1.5">
+                                <ShoppingCart className="w-4 h-4 text-brand-600" />
+                                Sales Order (SO) Terbit ({allSalesOrders.length})
+                            </h4>
+                            <div className="overflow-hidden rounded-xl border border-surface-200 bg-white">
+                                <table className="w-full text-xs text-left">
+                                    <thead>
+                                        <tr className="bg-surface-50 border-b border-surface-200 text-surface-500 font-bold uppercase tracking-wider text-[10px]">
+                                            <th className="px-4 py-2.5">No. SO</th>
+                                            <th className="px-4 py-2.5">Quotation Asal</th>
+                                            <th className="px-4 py-2.5">Status SO</th>
+                                            <th className="px-4 py-2.5">Tanggal</th>
+                                            <th className="px-4 py-2.5 text-right">Aksi</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-surface-100">
+                                        {allSalesOrders.map(so => (
+                                            <tr key={so.id} className="hover:bg-surface-50 transition-colors">
+                                                <td className="px-4 py-3 font-mono font-bold text-surface-900">{so.id}</td>
+                                                <td className="px-4 py-3 font-mono text-surface-600">{so.quotation_id}</td>
+                                                <td className="px-4 py-3">
+                                                    <span className="inline-flex px-2 py-0.5 rounded text-[10px] font-bold bg-brand-50 text-brand-700 uppercase">
+                                                        {so.status || 'Active'}
+                                                    </span>
+                                                </td>
+                                                <td className="px-4 py-3 text-surface-500">
+                                                    {so.created_at ? new Date(so.created_at).toLocaleDateString('id-ID') : '—'}
+                                                </td>
+                                                <td className="px-4 py-3 text-right">
+                                                    <Link
+                                                        href={route('sales-orders.show', so.id)}
+                                                        className="font-bold text-brand-600 hover:underline inline-flex items-center gap-1"
+                                                    >
+                                                        Lihat SO <ExternalLink className="w-3 h-3" />
+                                                    </Link>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    )}
+                </>
+            )}
+        </div>
+    );
+}
+
+// ─── Visits Tab ───────────────────────────────────────────────────────────────────
+
+function VisitsTab({ visits = [], leadId }) {
+    return (
+        <div className="space-y-4">
+            <div className="flex items-center justify-between flex-wrap gap-3">
+                <div>
+                    <h3 className="text-sm font-bold text-surface-800">Jadwal & Riwayat Kunjungan</h3>
+                    <p className="text-xs text-surface-400">Aktivitas visit, demo, dan survey lapangan untuk lead ini</p>
+                </div>
+                <Link
+                    href={route('leads.visits')}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-brand-600 hover:bg-brand-700 text-white rounded-lg text-xs font-semibold shadow-sm transition-colors cursor-pointer"
+                >
+                    <Plus className="w-3.5 h-3.5" />
+                    Jadwalkan Kunjungan Baru
+                </Link>
+            </div>
+
+            {visits.length === 0 ? (
+                <div className="text-center py-12 text-surface-400 bg-surface-50/50 rounded-xl border border-dashed border-surface-200">
+                    <MapPin className="w-8 h-8 mx-auto mb-2 text-surface-300" />
+                    <p className="text-xs font-semibold text-surface-600">Belum ada jadwal kunjungan untuk lead ini</p>
+                    <p className="text-[11px] text-surface-400 mt-0.5">Jadwalkan presentasi, demo produk, atau survey lapangan</p>
+                    <Link
+                        href={route('leads.visits')}
+                        className="mt-3 inline-flex items-center gap-1 text-xs font-bold text-brand-600 hover:underline"
+                    >
+                        <Plus className="w-3 h-3" /> Buat Jadwal Kunjungan
+                    </Link>
+                </div>
+            ) : (
+                <div className="overflow-hidden rounded-xl border border-surface-200 bg-white">
+                    <table className="w-full text-xs text-left">
+                        <thead>
+                            <tr className="bg-surface-50 border-b border-surface-200 text-surface-500 font-bold uppercase tracking-wider text-[10px]">
+                                <th className="px-4 py-3">Agenda / Subject</th>
+                                <th className="px-4 py-3">Jenis</th>
+                                <th className="px-4 py-3">Waktu Pelaksanaan</th>
+                                <th className="px-4 py-3">Lokasi</th>
+                                <th className="px-4 py-3">Status Check-in</th>
+                                <th className="px-4 py-3">Petugas</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-surface-100">
+                            {visits.map(v => (
+                                <tr key={v.id} className="hover:bg-surface-50 transition-colors">
+                                    <td className="px-4 py-3 font-semibold text-surface-900">{v.subject}</td>
+                                    <td className="px-4 py-3">
+                                        <span className="capitalize px-2 py-0.5 bg-surface-100 text-surface-700 rounded text-[10px] font-semibold">
+                                            {v.visit_type}
+                                        </span>
+                                    </td>
+                                    <td className="px-4 py-3 text-surface-600 whitespace-nowrap">
+                                        {formatDateTime(v.scheduled_at)}
+                                    </td>
+                                    <td className="px-4 py-3 text-surface-500">
+                                        {v.location ? (
+                                            <span className="flex items-center gap-1">
+                                                <Navigation className="w-3 h-3 text-surface-400" />
+                                                {v.location}
+                                            </span>
+                                        ) : '—'}
+                                    </td>
+                                    <td className="px-4 py-3">
+                                        {v.checked_in_at ? (
+                                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-700">
+                                                <CheckCircle2 className="w-3 h-3" /> Check-in: {formatTimeOnly(v.checked_in_at)}
+                                            </span>
+                                        ) : (
+                                            <span className="text-[10px] text-surface-400">Belum check-in</span>
+                                        )}
+                                    </td>
+                                    <td className="px-4 py-3 text-surface-700 font-medium">
+                                        {v.user?.name || '—'}
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+            )}
+        </div>
+    );
+}
+
+// ─── Pics Tab ─────────────────────────────────────────────────────────────────────
+
+function PicsTab({ lead, pics, onOpenAdd }) {
+    const handleDeletePic = (picId) => {
+        if (!confirm('Hapus kontak PIC ini dari lead?')) return;
+        router.delete(route('leads.pics.destroy', { lead: lead.id, pic: picId }), {
+            preserveScroll: true,
+            onSuccess: () => toast.success('PIC berhasil dihapus'),
+        });
+    };
+
+    return (
+        <div className="space-y-4">
+            <div className="flex items-center justify-between flex-wrap gap-3">
+                <div>
+                    <h3 className="text-sm font-bold text-surface-800">Daftar PIC & Stakeholder Proyek</h3>
+                    <p className="text-xs text-surface-400">Kontak pengambil keputusan teknis, purchasing, dan keuangan</p>
+                </div>
+                <button
+                    onClick={onOpenAdd}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-brand-600 hover:bg-brand-700 text-white rounded-lg text-xs font-semibold shadow-sm transition-colors cursor-pointer"
+                >
+                    <Plus className="w-3.5 h-3.5" />
+                    Tambah PIC Lead
+                </button>
+            </div>
+
+            {pics.length === 0 ? (
+                <div className="text-center py-12 text-surface-400 bg-surface-50/50 rounded-xl border border-dashed border-surface-200">
+                    <Users className="w-8 h-8 mx-auto mb-2 text-surface-300" />
+                    <p className="text-xs font-semibold text-surface-600">Belum ada kontak PIC tersimpan di Lead ini</p>
+                    <p className="text-[11px] text-surface-400 mt-0.5">Tambahkan kontak dari data customer atau personil proyek</p>
+                    <button
+                        onClick={onOpenAdd}
+                        className="mt-3 inline-flex items-center gap-1 text-xs font-bold text-brand-600 hover:underline cursor-pointer"
+                    >
+                        <Plus className="w-3 h-3" /> Tambah PIC Pertama
+                    </button>
+                </div>
+            ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {pics.map(p => {
+                        const roleMeta = PIC_ROLES[p.role] || PIC_ROLES.other;
+                        return (
+                            <div key={p.id} className="p-4 rounded-xl border border-surface-200 bg-white hover:border-brand-200 transition-all flex flex-col justify-between">
+                                <div>
+                                    <div className="flex items-start justify-between gap-2 mb-1.5">
+                                        <div className="flex items-center gap-1.5 flex-wrap">
+                                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${roleMeta.color}`}>
+                                                {roleMeta.label}
+                                            </span>
+                                            {p.is_primary && (
+                                                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700">
+                                                    UTAMA
+                                                </span>
+                                            )}
+                                        </div>
+                                        <button
+                                            onClick={() => handleDeletePic(p.id)}
+                                            className="text-surface-300 hover:text-red-500 p-1 rounded transition-colors cursor-pointer"
+                                            title="Hapus PIC"
+                                        >
+                                            <Trash2 className="w-3.5 h-3.5" />
+                                        </button>
+                                    </div>
+                                    <h4 className="text-sm font-bold text-surface-800">{p.name}</h4>
+                                    {p.position && <p className="text-xs text-surface-500 font-medium">{p.position}</p>}
+                                </div>
+
+                                <div className="mt-3 pt-2.5 border-t border-surface-100 flex items-center justify-between text-xs">
+                                    <div className="space-y-1">
+                                        {p.phone && (
+                                            <a href={`tel:${p.phone}`} className="flex items-center gap-1.5 text-surface-600 hover:text-brand-600">
+                                                <Phone className="w-3 h-3 text-surface-400" />
+                                                <span>{p.phone}</span>
+                                            </a>
+                                        )}
+                                        {p.email && (
+                                            <a href={`mailto:${p.email}`} className="flex items-center gap-1.5 text-surface-600 hover:text-brand-600">
+                                                <Mail className="w-3 h-3 text-surface-400" />
+                                                <span className="truncate max-w-[170px]">{p.email}</span>
+                                            </a>
+                                        )}
+                                    </div>
+                                    {p.phone && (
+                                        <a
+                                            href={`https://wa.me/${p.phone.replace(/[^0-9]/g, '').replace(/^0/, '62')}`}
+                                            target="_blank"
+                                            rel="noreferrer"
+                                            className="flex items-center gap-1 px-2.5 py-1 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 rounded-lg text-xs font-semibold transition-colors"
+                                        >
+                                            <MessageCircle className="w-3 h-3" /> Chat WA
+                                        </a>
+                                    )}
+                                </div>
+                            </div>
+                        );
+                    })}
+                </div>
+            )}
+        </div>
+    );
+}
+
+// ─── Add Lead Pic Modal ───────────────────────────────────────────────────────────
+
+function AddLeadPicModal({ open, onClose, lead, customerPics = [] }) {
+    const [source, setSource] = useState(customerPics.length > 0 ? 'customer' : 'manual');
+    const [selectedCustomerPicId, setSelectedCustomerPicId] = useState('');
+    const [form, setForm] = useState({
+        name: '', phone: '', email: '', position: '', role: 'primary', is_primary: false,
+    });
+    const [submitting, setSubmitting] = useState(false);
+
+    useEffect(() => {
+        if (selectedCustomerPicId) {
+            const pic = customerPics.find(p => String(p.id) === String(selectedCustomerPicId));
+            if (pic) {
+                setForm(f => ({
+                    ...f,
+                    name: pic.name || '',
+                    phone: pic.phone || '',
+                    email: pic.email || '',
+                    position: pic.position || '',
+                }));
+            }
+        }
+    }, [selectedCustomerPicId]);
+
+    if (!open) return null;
+
+    const handleSubmit = (e) => {
+        e.preventDefault();
+        setSubmitting(true);
+        router.post(route('leads.pics.store', lead.id), {
+            customer_pic_id: source === 'customer' ? (selectedCustomerPicId || null) : null,
+            ...form,
+        }, {
+            preserveScroll: true,
+            onSuccess: () => {
+                toast.success('PIC berhasil ditambahkan ke Lead');
+                onClose();
+            },
+            onError: (err) => {
+                Object.values(err).forEach(m => toast.error(m));
+            },
+            onFinish: () => setSubmitting(false),
+        });
+    };
+
+    return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-fade-in">
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-scale-in">
+                <div className="flex items-center justify-between px-6 py-4 border-b border-surface-100">
+                    <h3 className="text-sm font-bold text-surface-800 flex items-center gap-2">
+                        <Users className="w-4 h-4 text-brand-600" />
+                        Tambah Kontak PIC ke Lead
+                    </h3>
+                    <button onClick={onClose} className="p-1 rounded-lg hover:bg-surface-100 text-surface-400 cursor-pointer">
+                        <X className="w-4 h-4" />
+                    </button>
+                </div>
+                <form onSubmit={handleSubmit} className="p-6 space-y-4">
+                    {customerPics.length > 0 && (
+                        <div className="flex rounded-lg bg-surface-100 p-1 text-xs">
+                            <button
+                                type="button"
+                                onClick={() => setSource('customer')}
+                                className={`flex-1 py-1.5 rounded-md font-semibold transition-all cursor-pointer ${source === 'customer' ? 'bg-white shadow text-brand-700' : 'text-surface-600'}`}
+                            >
+                                Dari Customer ({customerPics.length})
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setSource('manual')}
+                                className={`flex-1 py-1.5 rounded-md font-semibold transition-all cursor-pointer ${source === 'manual' ? 'bg-white shadow text-brand-700' : 'text-surface-600'}`}
+                            >
+                                PIC Lapangan / Baru
+                            </button>
+                        </div>
+                    )}
+
+                    {source === 'customer' && customerPics.length > 0 && (
+                        <div>
+                            <label className="block text-xs font-semibold text-surface-600 mb-1">Pilih PIC Customer</label>
+                            <select
+                                className="w-full border border-surface-200 rounded-lg px-3 py-2 text-sm text-surface-800 outline-none focus:ring-2 focus:ring-brand-500 cursor-pointer"
+                                value={selectedCustomerPicId}
+                                onChange={e => setSelectedCustomerPicId(e.target.value)}
+                                required
+                            >
+                                <option value="">-- Pilih PIC Customer --</option>
+                                {customerPics.map(cp => (
+                                    <option key={cp.id} value={cp.id}>
+                                        {cp.name} {cp.position ? `(${cp.position})` : ''} {cp.phone ? `· ${cp.phone}` : ''}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+                    )}
+
+                    <div>
+                        <label className="block text-xs font-semibold text-surface-600 mb-1">Nama Lengkap <span className="text-red-500">*</span></label>
+                        <input
+                            type="text"
+                            required
+                            value={form.name}
+                            onChange={e => setForm({ ...form, name: e.target.value })}
+                            placeholder="Nama kontak PIC..."
+                            className="w-full border border-surface-200 rounded-lg px-3 py-2 text-sm text-surface-800 outline-none focus:ring-2 focus:ring-brand-500"
+                        />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                        <div>
+                            <label className="block text-xs font-semibold text-surface-600 mb-1">Peran di Proyek <span className="text-red-500">*</span></label>
+                            <select
+                                value={form.role}
+                                onChange={e => setForm({ ...form, role: e.target.value })}
+                                className="w-full border border-surface-200 rounded-lg px-3 py-2 text-xs text-surface-800 outline-none focus:ring-2 focus:ring-brand-500 cursor-pointer"
+                            >
+                                <option value="primary">Kontak Utama</option>
+                                <option value="technical">User Teknis</option>
+                                <option value="purchasing">Purchasing</option>
+                                <option value="finance">Keuangan</option>
+                                <option value="other">Lainnya</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label className="block text-xs font-semibold text-surface-600 mb-1">Jabatan / Posisi</label>
+                            <input
+                                type="text"
+                                value={form.position}
+                                onChange={e => setForm({ ...form, position: e.target.value })}
+                                placeholder="e.g. Site Manager"
+                                className="w-full border border-surface-200 rounded-lg px-3 py-2 text-xs text-surface-800 outline-none focus:ring-2 focus:ring-brand-500"
+                            />
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                        <div>
+                            <label className="block text-xs font-semibold text-surface-600 mb-1">No. Telepon / WA</label>
+                            <input
+                                type="text"
+                                value={form.phone}
+                                onChange={e => setForm({ ...form, phone: e.target.value })}
+                                placeholder="08xxxxxxxx"
+                                className="w-full border border-surface-200 rounded-lg px-3 py-2 text-xs text-surface-800 outline-none focus:ring-2 focus:ring-brand-500"
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-xs font-semibold text-surface-600 mb-1">Email</label>
+                            <input
+                                type="email"
+                                value={form.email}
+                                onChange={e => setForm({ ...form, email: e.target.value })}
+                                placeholder="email@perusahaan.com"
+                                className="w-full border border-surface-200 rounded-lg px-3 py-2 text-xs text-surface-800 outline-none focus:ring-2 focus:ring-brand-500"
+                            />
+                        </div>
+                    </div>
+
+                    <label className="flex items-center gap-2 cursor-pointer pt-1">
+                        <input
+                            type="checkbox"
+                            checked={form.is_primary}
+                            onChange={e => setForm({ ...form, is_primary: e.target.checked })}
+                            className="w-4 h-4 rounded text-brand-600 focus:ring-brand-500 accent-brand-600 cursor-pointer"
+                        />
+                        <span className="text-xs text-surface-700 font-medium">Jadikan Kontak Utama untuk Lead ini</span>
+                    </label>
+
+                    <div className="flex justify-end gap-2 pt-2 border-t border-surface-100">
+                        <button type="button" onClick={onClose} className="px-4 py-2 text-xs font-semibold text-surface-600 hover:bg-surface-100 rounded-lg cursor-pointer">
+                            Batal
+                        </button>
+                        <button type="submit" disabled={submitting} className="px-4 py-2 text-xs font-bold text-white bg-brand-600 hover:bg-brand-700 rounded-lg shadow-sm disabled:opacity-60 cursor-pointer">
+                            {submitting ? 'Menyimpan...' : 'Simpan Kontak PIC'}
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    );
+}
+
+// ─── Main Page: Lead 360° Cockpit ────────────────────────────────────────────────
+
+export default function LeadDetail({ lead, customerPics = [], stages = [], sources = [] }) {
     const { auth } = usePage().props;
     const currentUser = auth?.user;
     const isManagerOrAdmin = ['Administrator', 'Sales Manager', 'Manager', 'Super Admin'].includes(currentUser?.role);
     const currentUserId = currentUser?.id;
 
+    const [activeTab, setActiveTab] = useState('timeline');
+    const [showAddPicModal, setShowAddPicModal] = useState(false);
     const [changingStage, setChangingStage] = useState(false);
     const [currentStage, setCurrentStage] = useState(lead.stage);
     const [activities, setActivities] = useState(lead.activities || []);
@@ -423,6 +1037,7 @@ export default function LeadDetail({ lead, stages, sources }) {
     const handleActivityUpdated = (updatedAct) => setActivities(prev => prev.map(a => a.id === updatedAct.id ? updatedAct : a));
     const handleActivityDeleted = (id) => setActivities(prev => prev.filter(a => a.id !== id));
 
+    // Deduplicate quotations
     const allQuotations = (() => {
         const list = [...(lead.quotations || [])];
         if (lead.quotation && !list.some(q => q.id === lead.quotation.id)) {
@@ -430,6 +1045,25 @@ export default function LeadDetail({ lead, stages, sources }) {
         }
         return list;
     })();
+
+    // All Sales Orders extracted from allQuotations
+    const allSalesOrders = allQuotations.flatMap(q =>
+        (q.sales_orders || []).map(so => ({ ...so, quotation: q }))
+    );
+
+    // All Purchase Orders
+    const allPurchaseOrders = allQuotations.filter(q => q.po_number || q.po_status);
+
+    // All Lead PICs
+    const allLeadPics = lead.pics || [];
+
+    const TABS = [
+        { key: 'timeline',   label: 'Timeline & Aktivitas', icon: MessageSquare, count: activities.length },
+        { key: 'quotations', label: 'Quotation',            icon: FileText,      count: allQuotations.length },
+        { key: 'poso',       label: 'PO & Sales Order',     icon: ShoppingCart,  count: allPurchaseOrders.length + allSalesOrders.length },
+        { key: 'visits',     label: 'Kunjungan',            icon: MapPin,        count: (lead.visits || []).length },
+        { key: 'pics',       label: 'Kontak PIC',           icon: Users,         count: allLeadPics.length },
+    ];
 
     return (
         <AuthenticatedLayout>
@@ -449,30 +1083,30 @@ export default function LeadDetail({ lead, stages, sources }) {
                         <div>
                             <div className="flex items-center gap-2 mb-1 flex-wrap">
                                 {lead.lead_code && (
-                                    <span className="text-xs font-mono text-surface-400 bg-surface-100 px-2 py-0.5 rounded">{lead.lead_code}</span>
+                                    <span className="text-xs font-mono text-surface-500 bg-surface-100 px-2 py-0.5 rounded font-bold">{lead.lead_code}</span>
                                 )}
                                 <StageBadge stage={currentStage} />
                             </div>
-                            <h1 className="text-xl font-bold text-surface-800">{lead.title}</h1>
+                            <h1 className="text-xl font-bold text-surface-900">{lead.title}</h1>
                             {lead.estimated_value > 0 && (
-                                <p className="text-brand-600 font-bold mt-0.5">{formatRp(lead.estimated_value)}</p>
+                                <p className="text-brand-600 font-bold mt-0.5 text-sm">Estimasi Nilai: {formatRp(lead.estimated_value)}</p>
                             )}
                         </div>
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 flex-wrap">
                             <Link
                                 href={route('quotations.create', { lead_id: lead.id, customer_id: lead.customer_id || undefined })}
-                                className="flex items-center gap-1.5 px-3 py-2 bg-brand-600 hover:bg-brand-700 text-white text-sm font-semibold rounded-xl transition-all shadow-sm"
+                                className="flex items-center gap-1.5 px-3.5 py-2 bg-brand-600 hover:bg-brand-700 text-white text-xs font-bold rounded-xl transition-all shadow-sm"
                             >
                                 <Plus className="w-4 h-4" />
                                 Buat Quotation
                             </Link>
                             <button onClick={() => setChangingStage(prev => !prev)}
-                                className={`flex items-center gap-2 px-3 py-2 border text-sm font-semibold rounded-xl transition-colors ${changingStage ? 'border-brand-500 bg-brand-50 text-brand-700' : 'border-surface-200 text-surface-700 hover:bg-surface-50'}`}>
+                                className={`flex items-center gap-2 px-3 py-2 border text-xs font-semibold rounded-xl transition-colors cursor-pointer ${changingStage ? 'border-brand-500 bg-brand-50 text-brand-700' : 'border-surface-200 text-surface-700 hover:bg-surface-50'}`}>
                                 <TrendingUp className="w-4 h-4" />
                                 Ubah Stage
                             </button>
                             <button onClick={handleArchive}
-                                className="p-2 text-surface-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-colors" title="Arsipkan">
+                                className="p-2 text-surface-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-colors cursor-pointer" title="Arsipkan">
                                 <Trash2 className="w-4 h-4" />
                             </button>
                         </div>
@@ -487,12 +1121,12 @@ export default function LeadDetail({ lead, stages, sources }) {
                             {stages.map(s => (
                                 <button key={s}
                                     onClick={() => handleStageChange(s)}
-                                    className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors ${s === currentStage ? 'ring-2 ring-brand-500 bg-brand-50 text-brand-700' : 'bg-white border border-surface-200 text-surface-700 hover:bg-surface-50'}`}>
+                                    className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors cursor-pointer ${s === currentStage ? 'ring-2 ring-brand-500 bg-brand-50 text-brand-700 font-bold' : 'bg-white border border-surface-200 text-surface-700 hover:bg-surface-50'}`}>
                                     {STAGE_META[s]?.label || s}
                                 </button>
                             ))}
                             <button onClick={() => setChangingStage(false)}
-                                className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-surface-200 text-surface-600 hover:bg-surface-300">
+                                className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-surface-200 text-surface-600 hover:bg-surface-300 cursor-pointer">
                                 Batal
                             </button>
                         </div>
@@ -500,11 +1134,11 @@ export default function LeadDetail({ lead, stages, sources }) {
                 )}
 
                 <div className="p-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
-                    {/* Left: Info */}
+                    {/* Left: Info Card */}
                     <div className="lg:col-span-1 space-y-4">
                         {/* Lead Info */}
-                        <div className="bg-white rounded-2xl border border-surface-200 p-5 space-y-4">
-                            <h2 className="text-sm font-bold text-surface-700">Informasi Lead</h2>
+                        <div className="bg-white rounded-2xl border border-surface-200 p-5 space-y-4 shadow-sm">
+                            <h2 className="text-sm font-bold text-surface-800">Informasi Lead</h2>
 
                             {(lead.customer_name || lead.customer) && (
                                 <div className="flex items-start gap-3">
@@ -516,8 +1150,8 @@ export default function LeadDetail({ lead, stages, sources }) {
                                         </p>
                                         {lead.customer_id && (
                                             <Link href={route('customers.show', lead.customer_id)}
-                                                className="text-xs text-brand-600 hover:underline">
-                                                Lihat profil customer →
+                                                className="text-xs text-brand-600 hover:underline inline-flex items-center gap-1 mt-0.5">
+                                                Profil Customer <ExternalLink className="w-3 h-3" />
                                             </Link>
                                         )}
                                     </div>
@@ -528,7 +1162,7 @@ export default function LeadDetail({ lead, stages, sources }) {
                                 <div className="flex items-start gap-3">
                                     <User className="w-4 h-4 text-surface-400 mt-0.5 shrink-0" />
                                     <div>
-                                        <p className="text-xs text-surface-400">PIC</p>
+                                        <p className="text-xs text-surface-400">PIC Utama</p>
                                         <p className="text-sm font-semibold text-surface-800">{lead.pic_name}</p>
                                         {lead.pic_phone && <p className="text-xs text-surface-500">{lead.pic_phone}</p>}
                                     </div>
@@ -539,7 +1173,7 @@ export default function LeadDetail({ lead, stages, sources }) {
                                 <div className="flex items-center gap-3">
                                     <Phone className="w-4 h-4 text-surface-400 shrink-0" />
                                     <div>
-                                        <p className="text-xs text-surface-400">Telepon</p>
+                                        <p className="text-xs text-surface-400">Telepon Perusahaan</p>
                                         <p className="text-sm text-surface-800">{lead.customer_phone}</p>
                                     </div>
                                 </div>
@@ -549,7 +1183,7 @@ export default function LeadDetail({ lead, stages, sources }) {
                                 <div className="flex items-center gap-3">
                                     <Mail className="w-4 h-4 text-surface-400 shrink-0" />
                                     <div>
-                                        <p className="text-xs text-surface-400">Email</p>
+                                        <p className="text-xs text-surface-400">Email Perusahaan</p>
                                         <p className="text-sm text-surface-800">{lead.customer_email}</p>
                                     </div>
                                 </div>
@@ -557,9 +1191,9 @@ export default function LeadDetail({ lead, stages, sources }) {
 
                             {lead.sales && (
                                 <div className="flex items-center gap-3">
-                                    <User className="w-4 h-4 text-surface-400 shrink-0" />
+                                    <Briefcase className="w-4 h-4 text-surface-400 shrink-0" />
                                     <div>
-                                        <p className="text-xs text-surface-400">Sales</p>
+                                        <p className="text-xs text-surface-400">Sales In-charge</p>
                                         <p className="text-sm font-semibold text-surface-800">{lead.sales.name}</p>
                                     </div>
                                 </div>
@@ -569,7 +1203,7 @@ export default function LeadDetail({ lead, stages, sources }) {
                                 <div className="flex items-center gap-3">
                                     <Tag className="w-4 h-4 text-surface-400 shrink-0" />
                                     <div>
-                                        <p className="text-xs text-surface-400">Sumber</p>
+                                        <p className="text-xs text-surface-400">Sumber Lead</p>
                                         <p className="text-sm text-surface-800 capitalize">{lead.source.replace('_', ' ')}</p>
                                     </div>
                                 </div>
@@ -584,117 +1218,102 @@ export default function LeadDetail({ lead, stages, sources }) {
                             </div>
                         </div>
 
-                        {/* Quotations Card */}
-                        <div className="bg-white rounded-2xl border border-surface-200 p-5">
-                            <div className="flex items-center justify-between mb-3">
-                                <h2 className="text-sm font-bold text-surface-700 flex items-center gap-2">
-                                    <FileText className="w-4 h-4 text-brand-600" />
-                                    Quotation ({allQuotations.length})
-                                </h2>
-                                <Link
-                                    href={route('quotations.create', { lead_id: lead.id, customer_id: lead.customer_id || undefined })}
-                                    className="flex items-center gap-1 text-xs font-semibold text-brand-600 hover:text-brand-700"
-                                >
-                                    <Plus className="w-3.5 h-3.5" /> Buat Baru
-                                </Link>
-                            </div>
-
-                            {allQuotations.length > 0 ? (
-                                <div className="space-y-2">
-                                    {allQuotations.map(q => (
-                                        <Link
-                                            key={q.id}
-                                            href={route('quotations.show', q.id)}
-                                            className="flex items-center justify-between p-3 bg-surface-50 hover:bg-brand-50/60 rounded-xl border border-surface-100 transition-colors group"
-                                        >
-                                            <div className="min-w-0">
-                                                <div className="flex items-center gap-2">
-                                                    <p className="text-sm font-bold text-surface-800 group-hover:text-brand-700">{q.id}</p>
-                                                    {q.revision_no > 0 && (
-                                                        <span className="text-[10px] font-mono bg-surface-200 text-surface-700 px-1.5 py-0.2 rounded font-semibold">
-                                                            Rev {q.revision_no}
-                                                        </span>
-                                                    )}
-                                                </div>
-                                                <div className="flex items-center gap-2 mt-0.5">
-                                                    <span className="text-xs font-semibold text-brand-600">
-                                                        {formatRp(q.grand_total)}
-                                                    </span>
-                                                    <span className="text-[10px] text-surface-400 capitalize">
-                                                        · {q.status}
-                                                    </span>
-                                                </div>
-                                            </div>
-                                            <ChevronRight className="w-4 h-4 text-surface-400 group-hover:text-brand-600 transition-colors shrink-0" />
-                                        </Link>
-                                    ))}
-                                </div>
-                            ) : (
-                                <div className="text-center py-4 text-surface-400">
-                                    <p className="text-xs">Belum ada quotation untuk lead ini</p>
-                                    <Link
-                                        href={route('quotations.create', { lead_id: lead.id, customer_id: lead.customer_id || undefined })}
-                                        className="inline-flex items-center gap-1 mt-2 text-xs font-semibold text-brand-600 hover:underline"
-                                    >
-                                        <Plus className="w-3 h-3" /> Buat quotation pertama
-                                    </Link>
-                                </div>
-                            )}
-                        </div>
-
                         {/* Notes */}
                         {lead.notes && (
-                            <div className="bg-white rounded-2xl border border-surface-200 p-5">
-                                <h2 className="text-sm font-bold text-surface-700 mb-2">Catatan Lead</h2>
-                                <p className="text-sm text-surface-600 leading-relaxed">{lead.notes}</p>
-                            </div>
-                        )}
-
-                        {/* Visits linked */}
-                        {lead.visits && lead.visits.length > 0 && (
-                            <div className="bg-white rounded-2xl border border-surface-200 p-5">
-                                <h2 className="text-sm font-bold text-surface-700 mb-3 flex items-center gap-2">
-                                    <MapPin className="w-4 h-4 text-teal-600" />
-                                    Kunjungan ({lead.visits.length})
-                                </h2>
-                                <div className="space-y-2">
-                                    {lead.visits.slice(0, 3).map(v => (
-                                        <div key={v.id} className="flex items-center justify-between p-2.5 bg-surface-50 rounded-lg">
-                                            <div>
-                                                <p className="text-xs font-semibold text-surface-700">{v.subject}</p>
-                                                <p className="text-[10px] text-surface-400">
-                                                    {new Date(v.scheduled_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })}
-                                                    {v.checked_in_at && ' · ✅ Check-in'}
-                                                </p>
-                                            </div>
-                                            {v.user && <span className="text-[10px] text-surface-400">{v.user.name}</span>}
-                                        </div>
-                                    ))}
-                                    {lead.visits.length > 3 && (
-                                        <p className="text-xs text-brand-600 text-center pt-1">+{lead.visits.length - 3} kunjungan lainnya</p>
-                                    )}
-                                </div>
+                            <div className="bg-white rounded-2xl border border-surface-200 p-5 shadow-sm">
+                                <h2 className="text-sm font-bold text-surface-800 mb-2">Catatan Lead</h2>
+                                <p className="text-xs text-surface-600 leading-relaxed whitespace-pre-line">{lead.notes}</p>
                             </div>
                         )}
                     </div>
 
-                    {/* Right: Timeline */}
-                    <div className="lg:col-span-2">
-                        <div className="bg-white rounded-2xl border border-surface-200 p-5">
-                            <h2 className="text-sm font-bold text-surface-700 mb-4">Timeline Aktivitas</h2>
-                            <Timeline
-                                activities={activities}
-                                leadId={lead.id}
-                                currentUserId={currentUserId}
-                                isManagerOrAdmin={isManagerOrAdmin}
-                                onActivityAdded={handleActivityAdded}
-                                onActivityUpdated={handleActivityUpdated}
-                                onActivityDeleted={handleActivityDeleted}
-                            />
+                    {/* Right: Lead 360° Cockpit Tabs */}
+                    <div className="lg:col-span-2 space-y-4">
+                        {/* Tab Switcher Bar */}
+                        <div className="bg-white rounded-2xl border border-surface-200 p-1.5 shadow-sm">
+                            <div className="flex items-center gap-1 overflow-x-auto scrollbar-none">
+                                {TABS.map(tab => {
+                                    const Icon = tab.icon;
+                                    const isActive = activeTab === tab.key;
+                                    return (
+                                        <button
+                                            key={tab.key}
+                                            onClick={() => setActiveTab(tab.key)}
+                                            className={`flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
+                                                isActive
+                                                    ? 'bg-brand-600 text-white shadow-sm font-bold'
+                                                    : 'text-surface-600 hover:bg-surface-100 hover:text-surface-900'
+                                            }`}
+                                        >
+                                            <Icon className="w-3.5 h-3.5" />
+                                            <span>{tab.label}</span>
+                                            {tab.count > 0 && (
+                                                <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${
+                                                    isActive ? 'bg-white/20 text-white' : 'bg-surface-200 text-surface-700'
+                                                }`}>
+                                                    {tab.count}
+                                                </span>
+                                            )}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        </div>
+
+                        {/* Tab Content Box */}
+                        <div className="bg-white rounded-2xl border border-surface-200 p-6 shadow-sm">
+                            {activeTab === 'timeline' && (
+                                <Timeline
+                                    activities={activities}
+                                    leadId={lead.id}
+                                    currentUserId={currentUserId}
+                                    isManagerOrAdmin={isManagerOrAdmin}
+                                    onActivityAdded={handleActivityAdded}
+                                    onActivityUpdated={handleActivityUpdated}
+                                    onActivityDeleted={handleActivityDeleted}
+                                />
+                            )}
+
+                            {activeTab === 'quotations' && (
+                                <QuotationsTab
+                                    allQuotations={allQuotations}
+                                    lead={lead}
+                                />
+                            )}
+
+                            {activeTab === 'poso' && (
+                                <PoSoTab
+                                    allPurchaseOrders={allPurchaseOrders}
+                                    allSalesOrders={allSalesOrders}
+                                />
+                            )}
+
+                            {activeTab === 'visits' && (
+                                <VisitsTab
+                                    visits={lead.visits || []}
+                                    leadId={lead.id}
+                                />
+                            )}
+
+                            {activeTab === 'pics' && (
+                                <PicsTab
+                                    lead={lead}
+                                    pics={allLeadPics}
+                                    onOpenAdd={() => setShowAddPicModal(true)}
+                                />
+                            )}
                         </div>
                     </div>
                 </div>
             </div>
+
+            {/* Modal Tambah PIC */}
+            <AddLeadPicModal
+                open={showAddPicModal}
+                onClose={() => setShowAddPicModal(false)}
+                lead={lead}
+                customerPics={customerPics}
+            />
         </AuthenticatedLayout>
     );
 }
