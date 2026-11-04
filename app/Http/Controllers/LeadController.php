@@ -178,9 +178,19 @@ class LeadController extends Controller
 
         $leads = $query->get();
 
+        $pipelineSettings = $this->getPipelineSettings();
+        $configuredStages = $pipelineSettings['stages'] ?? [];
+        $configuredKeys = array_column($configuredStages, 'key');
+
+        $allStageKeys = array_unique(array_merge(
+            !empty($configuredKeys) ? $configuredKeys : Lead::STAGES,
+            Lead::STAGES,
+            $leads->pluck('stage')->filter()->all()
+        ));
+
         // Group by stage for Kanban
         $grouped = [];
-        foreach (Lead::STAGES as $stage) {
+        foreach ($allStageKeys as $stage) {
             $grouped[$stage] = $leads->where('stage', $stage)->values();
         }
 
@@ -289,6 +299,7 @@ class LeadController extends Controller
             'customerPics'             => $customerPics,
             'stages'                   => Lead::STAGES,
             'sources'                  => Lead::SOURCES,
+            'pipelineSettings'         => $this->getPipelineSettings(),
             'googleCalendarConfigured' => (new GoogleCalendarService())->isConfigured(),
             'zoomConfigured'           => (new ZoomService())->isConfigured(),
             'userHasZoomLicense'       => (bool) (Auth::user()->has_zoom_license ?? false),

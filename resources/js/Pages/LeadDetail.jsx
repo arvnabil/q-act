@@ -104,11 +104,15 @@ const getDateGroup = (dateStr) => {
 
 // ─── StageBadge ───────────────────────────────────────────────────────────────────
 
-function StageBadge({ stage }) {
-    const meta = STAGE_META[stage] || { label: stage, color: 'bg-surface-100 text-surface-600', dot: 'bg-surface-400' };
+function StageBadge({ stage, meta: customMeta }) {
+    const meta = customMeta || STAGE_META[stage] || { label: stage, color: 'bg-surface-100 text-surface-600', dot: 'bg-surface-400' };
+    const colorHex = meta.colorHex;
     return (
-        <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold ${meta.color}`}>
-            <span className={`w-2 h-2 rounded-full ${meta.dot}`} />
+        <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold ${meta.color || 'bg-surface-100 text-surface-600'}`}>
+            <span
+                className={`w-2 h-2 rounded-full shrink-0 ${!colorHex ? (meta.dot || 'bg-surface-400') : ''}`}
+                style={colorHex ? { backgroundColor: colorHex } : undefined}
+            />
             {meta.label}
         </span>
     );
@@ -1269,6 +1273,7 @@ export default function LeadDetail({
     customerPics = [], 
     stages = [], 
     sources = [],
+    pipelineSettings = null,
     googleCalendarConfigured = false,
     zoomConfigured = false,
     userHasZoomLicense = false
@@ -1285,6 +1290,24 @@ export default function LeadDetail({
     const [currentStage, setCurrentStage] = useState(lead.stage);
     const [activities, setActivities] = useState(lead.activities || []);
 
+    // Build stage meta with updated custom labels and colors
+    const stageMetaMap = { ...STAGE_META };
+    (pipelineSettings?.stages || []).forEach(st => {
+        stageMetaMap[st.key] = {
+            ...(stageMetaMap[st.key] || {
+                color: 'bg-surface-100 text-surface-600',
+                dot: 'bg-surface-400',
+            }),
+            label: st.name || stageMetaMap[st.key]?.label || st.key,
+            type: st.type || 'normal',
+            colorHex: st.color,
+        };
+    });
+
+    const activeStagesList = (pipelineSettings?.stages && pipelineSettings.stages.length > 0)
+        ? pipelineSettings.stages
+        : stages.map(s => ({ key: s, name: STAGE_META[s]?.label || s, color: STAGE_META[s]?.colorHex }));
+
     useEffect(() => { setCurrentStage(lead.stage); }, [lead.stage]);
     useEffect(() => { setActivities(lead.activities || []); }, [lead.activities]);
 
@@ -1297,14 +1320,14 @@ export default function LeadDetail({
             id: 'temp-' + Date.now(),
             lead_id: lead.id,
             type: 'stage_change',
-            title: `Stage diubah: ${STAGE_META[oldStage]?.label || oldStage} → ${STAGE_META[newStage]?.label || newStage}`,
+            title: `Stage diubah: ${stageMetaMap[oldStage]?.label || oldStage} → ${stageMetaMap[newStage]?.label || newStage}`,
             created_at: new Date().toISOString(),
             user: { name: 'Anda' },
         };
         setActivities(prev => [optimistic, ...prev]);
         try {
             await axios.patch(route('leads.stage.update', lead.id), { stage: newStage });
-            toast.success(`Stage diubah ke "${STAGE_META[newStage]?.label || newStage}"`);
+            toast.success(`Stage diubah ke "${stageMetaMap[newStage]?.label || newStage}"`);
         } catch {
             toast.error('Gagal mengubah stage lead.');
             setCurrentStage(oldStage);
@@ -1369,7 +1392,7 @@ export default function LeadDetail({
                                 {lead.lead_code && (
                                     <span className="text-xs font-mono text-surface-500 bg-surface-100 px-2 py-0.5 rounded font-bold">{lead.lead_code}</span>
                                 )}
-                                <StageBadge stage={currentStage} />
+                                <StageBadge stage={currentStage} meta={stageMetaMap[currentStage]} />
                             </div>
                             <h1 className="text-xl font-bold text-surface-900">{lead.title}</h1>
                             {lead.estimated_value > 0 && (
@@ -1402,11 +1425,15 @@ export default function LeadDetail({
                     <div className="bg-amber-50 border-b border-amber-200 px-6 py-3">
                         <p className="text-xs font-semibold text-amber-700 mb-2">Pindahkan ke Stage:</p>
                         <div className="flex flex-wrap gap-2">
-                            {stages.map(s => (
-                                <button key={s}
-                                    onClick={() => handleStageChange(s)}
-                                    className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors cursor-pointer ${s === currentStage ? 'ring-2 ring-brand-500 bg-brand-50 text-brand-700 font-bold' : 'bg-white border border-surface-200 text-surface-700 hover:bg-surface-50'}`}>
-                                    {STAGE_META[s]?.label || s}
+                            {activeStagesList.map(st => (
+                                <button key={st.key}
+                                    onClick={() => handleStageChange(st.key)}
+                                    className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors cursor-pointer flex items-center gap-1.5 ${st.key === currentStage ? 'ring-2 ring-brand-500 bg-brand-50 text-brand-700 font-bold' : 'bg-white border border-surface-200 text-surface-700 hover:bg-surface-50'}`}>
+                                    <span
+                                        className="w-2 h-2 rounded-full shrink-0"
+                                        style={{ backgroundColor: st.color || stageMetaMap[st.key]?.colorHex || '#94A3B8' }}
+                                    />
+                                    {st.name || stageMetaMap[st.key]?.label || st.key}
                                 </button>
                             ))}
                             <button onClick={() => setChangingStage(false)}

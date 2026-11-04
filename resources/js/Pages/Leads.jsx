@@ -59,11 +59,15 @@ const initials = (name) => {
 
 // ─── Stage Badge ─────────────────────────────────────────────────────────────────
 
-function StageBadge({ stage }) {
-    const meta = STAGE_META[stage] || { label: stage, color: 'bg-surface-100 text-surface-600' };
+function StageBadge({ stage, stageMetaMap }) {
+    const meta = stageMetaMap?.[stage] || STAGE_META[stage] || { label: stage, color: 'bg-surface-100 text-surface-600', dot: 'bg-surface-400' };
+    const colorHex = meta.colorHex;
     return (
-        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold ${meta.color}`}>
-            <span className={`w-1.5 h-1.5 rounded-full ${meta.dot}`} />
+        <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-semibold ${meta.color || 'bg-surface-100 text-surface-600'}`}>
+            <span
+                className={`w-1.5 h-1.5 rounded-full shrink-0 ${!colorHex ? (meta.dot || 'bg-surface-400') : ''}`}
+                style={colorHex ? { backgroundColor: colorHex } : undefined}
+            />
             {meta.label}
         </span>
     );
@@ -73,11 +77,14 @@ function StageBadge({ stage }) {
 
 const ACTIVE_STAGE_KEYS = ['lead_masuk', 'follow_up', 'lead_qualification', 'negotiation', 'win', 'lost', 'selesai_terbayar'];
 
-function LeadCard({ lead, onStageChange, onViewDetail }) {
+function LeadCard({ lead, activeStagesList, stageMetaMap, onStageChange, onViewDetail }) {
     const [showMenu, setShowMenu] = useState(false);
     const [isDragging, setIsDragging] = useState(false);
     const days = daysSince(lead.created_at);
     const isStale = days > 3 && !['selesai_terbayar', 'win', 'lost', 'proyek_selesai', 'no_deal'].includes(lead.stage);
+
+    const meta = stageMetaMap?.[lead.stage] || STAGE_META[lead.stage] || {};
+    const colorHex = meta.colorHex;
 
     const handleDragStart = (e) => {
         setIsDragging(true);
@@ -89,16 +96,21 @@ function LeadCard({ lead, onStageChange, onViewDetail }) {
         setIsDragging(false);
     };
 
+    const stagesForMenu = activeStagesList && activeStagesList.length > 0
+        ? activeStagesList
+        : ACTIVE_STAGE_KEYS.map(k => ({ key: k, name: STAGE_META[k]?.label || k }));
+
     return (
         <div
             draggable
             onDragStart={handleDragStart}
             onDragEnd={handleDragEnd}
             className={`bg-white rounded-xl border ${
-                STAGE_META[lead.stage]?.border || 'border-surface-200'
+                meta.border || 'border-surface-200'
             } shadow-sm p-3.5 space-y-2.5 hover:shadow-md transition-all cursor-grab active:cursor-grabbing select-none group relative ${
                 isDragging ? 'opacity-30 scale-95 border-dashed border-brand-500 shadow-none' : ''
             }`}
+            style={colorHex ? { borderLeftWidth: '3px', borderLeftColor: colorHex } : undefined}
             onClick={() => onViewDetail(lead)}
         >
             {/* Header */}
@@ -115,12 +127,15 @@ function LeadCard({ lead, onStageChange, onViewDetail }) {
                     </button>
                     {showMenu && (
                         <div className="absolute right-0 top-7 bg-white border border-surface-200 rounded-xl shadow-xl z-20 w-44 py-1 text-sm">
-                            {ACTIVE_STAGE_KEYS.map(key => key !== lead.stage && STAGE_META[key] && (
-                                <button key={key}
-                                    className="w-full text-left px-3 py-2 hover:bg-surface-50 flex items-center gap-2"
-                                    onClick={(e) => { e.stopPropagation(); setShowMenu(false); onStageChange(lead, key); }}>
-                                    <span className={`w-2 h-2 rounded-full ${STAGE_META[key].dot}`} />
-                                    {STAGE_META[key].label}
+                            {stagesForMenu.map(st => st.key !== lead.stage && (
+                                <button key={st.key}
+                                    className="w-full text-left px-3 py-2 hover:bg-surface-50 flex items-center gap-2 truncate"
+                                    onClick={(e) => { e.stopPropagation(); setShowMenu(false); onStageChange(lead, st.key); }}>
+                                    <span
+                                        className={`w-2 h-2 rounded-full shrink-0 ${!st.color && !stageMetaMap?.[st.key]?.colorHex ? (stageMetaMap?.[st.key]?.dot || STAGE_META[st.key]?.dot || 'bg-surface-400') : ''}`}
+                                        style={(st.color || stageMetaMap?.[st.key]?.colorHex) ? { backgroundColor: st.color || stageMetaMap?.[st.key]?.colorHex } : undefined}
+                                    />
+                                    <span className="truncate">{st.name || stageMetaMap?.[st.key]?.label || st.key}</span>
                                 </button>
                             ))}
                         </div>
@@ -175,8 +190,10 @@ function LeadCard({ lead, onStageChange, onViewDetail }) {
 
 // ─── Kanban Column ────────────────────────────────────────────────────────────────
 
-function KanbanColumn({ stage, leads, onStageChange, onViewDetail, onAddLead, onDropCard }) {
-    const meta = STAGE_META[stage];
+function KanbanColumn({ stage, stageInfo, meta: customMeta, leads, onStageChange, onViewDetail, onAddLead, onDropCard, activeStagesList, stageMetaMap }) {
+    const meta = customMeta || STAGE_META[stage] || { label: stage, dot: 'bg-surface-400', border: 'border-surface-200' };
+    const label = stageInfo?.name || meta.label || stage;
+    const colorHex = stageInfo?.color || meta.colorHex;
     const totalValue = leads.reduce((s, l) => s + (l.estimated_value || 0), 0);
     const [isOver, setIsOver] = useState(false);
 
@@ -217,15 +234,24 @@ function KanbanColumn({ stage, leads, onStageChange, onViewDetail, onAddLead, on
             }`}
         >
             {/* Column header */}
-            <div className={`rounded-t-xl px-3 py-2.5 border-b-2 ${meta.border} bg-white border border-b-0 border-surface-200 shrink-0`}>
+            <div
+                className={`rounded-t-xl px-3 py-2.5 bg-white border border-surface-200 shrink-0`}
+                style={{
+                    borderBottomWidth: '3px',
+                    borderBottomColor: colorHex || (meta.border ? undefined : '#CBD5E1'),
+                }}
+            >
                 <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                        <span className={`w-2.5 h-2.5 rounded-full ${meta.dot}`} />
-                        <span className="text-sm font-bold text-surface-700">{meta.label}</span>
-                        <span className="text-xs font-bold text-surface-400 bg-surface-100 px-1.5 py-0.5 rounded-full">{leads.length}</span>
+                    <div className="flex items-center gap-2 min-w-0">
+                        <span
+                            className={`w-2.5 h-2.5 rounded-full shrink-0 ${!colorHex ? meta.dot : ''}`}
+                            style={colorHex ? { backgroundColor: colorHex } : undefined}
+                        />
+                        <span className="text-sm font-bold text-surface-700 truncate" title={label}>{label}</span>
+                        <span className="text-xs font-bold text-surface-400 bg-surface-100 px-1.5 py-0.5 rounded-full shrink-0">{leads.length}</span>
                     </div>
                     <button
-                        className="p-1 rounded-lg hover:bg-surface-100 text-surface-400 hover:text-brand-600 transition-colors"
+                        className="p-1 rounded-lg hover:bg-surface-100 text-surface-400 hover:text-brand-600 transition-colors shrink-0"
                         onClick={() => onAddLead(stage)}
                         title="Tambah lead di stage ini">
                         <Plus className="w-4 h-4" />
@@ -247,9 +273,14 @@ function KanbanColumn({ stage, leads, onStageChange, onViewDetail, onAddLead, on
                     </div>
                 ) : (
                     leads.map(lead => (
-                        <LeadCard key={lead.id} lead={lead}
+                        <LeadCard
+                            key={lead.id}
+                            lead={lead}
+                            activeStagesList={activeStagesList}
+                            stageMetaMap={stageMetaMap}
                             onStageChange={onStageChange}
-                            onViewDetail={onViewDetail} />
+                            onViewDetail={onViewDetail}
+                        />
                     ))
                 )}
             </div>
@@ -259,10 +290,10 @@ function KanbanColumn({ stage, leads, onStageChange, onViewDetail, onAddLead, on
 
 // ─── Lead Form Modal ──────────────────────────────────────────────────────────────
 
-function LeadFormModal({ open, onClose, defaultStage, customers, salesUsers, sources, stages, isManagerOrAdmin, currentUser }) {
+function LeadFormModal({ open, onClose, defaultStage, customers, salesUsers, sources, stages, activeStagesList, isManagerOrAdmin, currentUser }) {
     const [form, setForm] = useState({
         title: '', customer_id: '', customer_name: '', customer_phone: '',
-        customer_email: '', sales_id: currentUser?.id || '', stage: defaultStage || 'data_masuk',
+        customer_email: '', sales_id: currentUser?.id || '', stage: defaultStage || 'lead_masuk',
         source: '', estimated_value: '', notes: '',
     });
     const [submitting, setSubmitting] = useState(false);
@@ -274,7 +305,7 @@ function LeadFormModal({ open, onClose, defaultStage, customers, salesUsers, sou
         setSubmitting(true);
         router.post(route('leads.store'), form, {
             onFinish: () => { setSubmitting(false); onClose(); },
-            onSuccess: () => setForm({ title: '', customer_id: '', customer_name: '', customer_phone: '', customer_email: '', sales_id: currentUser?.id || '', stage: defaultStage || 'data_masuk', source: '', estimated_value: '', notes: '' }),
+            onSuccess: () => setForm({ title: '', customer_id: '', customer_name: '', customer_phone: '', customer_email: '', sales_id: currentUser?.id || '', stage: defaultStage || 'lead_masuk', source: '', estimated_value: '', notes: '' }),
         });
     };
 
@@ -342,7 +373,9 @@ function LeadFormModal({ open, onClose, defaultStage, customers, salesUsers, sou
                             <label className="block text-xs font-semibold text-surface-600 mb-1">Stage</label>
                             <select className="w-full border border-surface-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
                                 value={form.stage} onChange={e => set('stage', e.target.value)}>
-                                {stages.map(s => <option key={s} value={s}>{STAGE_META[s]?.label || s}</option>)}
+                                {(activeStagesList || stages.map(s => ({ key: s, name: STAGE_META[s]?.label || s }))).map(s => (
+                                    <option key={s.key} value={s.key}>{s.name}</option>
+                                ))}
                             </select>
                         </div>
                         <div>
@@ -401,7 +434,7 @@ function LeadFormModal({ open, onClose, defaultStage, customers, salesUsers, sou
 
 // ─── List View ────────────────────────────────────────────────────────────────────
 
-function ListView({ grouped, onStageChange, onViewDetail }) {
+function ListView({ grouped, stageMetaMap, onStageChange, onViewDetail }) {
     const allLeads = Object.values(grouped).flat();
 
     return (
@@ -443,7 +476,7 @@ function ListView({ grouped, onStageChange, onViewDetail }) {
                                         <span className="text-sm text-surface-600 truncate max-w-[80px]">{lead.sales?.name || '—'}</span>
                                     </div>
                                 </td>
-                                <td className="px-4 py-3"><StageBadge stage={lead.stage} /></td>
+                                <td className="px-4 py-3"><StageBadge stage={lead.stage} stageMetaMap={stageMetaMap} /></td>
                                 <td className="px-4 py-3 text-right font-semibold text-surface-700">{formatRp(lead.estimated_value)}</td>
                                 <td className="px-4 py-3">
                                     <div className={`flex items-center gap-1 text-xs ${isStale ? 'text-amber-600 font-semibold' : 'text-surface-400'}`}>
@@ -453,7 +486,7 @@ function ListView({ grouped, onStageChange, onViewDetail }) {
                                 </td>
                                 <td className="px-4 py-3">
                                     {lead.quotation ? (
-                                        <span className="text-xs text-blue-600 font-semibold bg-blue-50 px-2 py-0.5 rounded-full">Ada SPH</span>
+                                        <span className="text-xs text-blue-600 font-semibold bg-blue-50 px-2 py-0.5 rounded-full">Ada Quotation</span>
                                     ) : (
                                         <span className="text-xs text-surface-300">—</span>
                                     )}
@@ -707,16 +740,19 @@ export default function Leads({ grouped, stats, salesUsers, filters, isManagerOr
         }
     }, [pipelineSettings]);
 
-    // Build stage meta with updated custom labels and types
+    // Build stage meta with updated custom labels, types, and colors
     const stageMetaMap = { ...STAGE_META };
     (localSettings?.stages || []).forEach(st => {
-        if (stageMetaMap[st.key]) {
-            stageMetaMap[st.key] = {
-                ...stageMetaMap[st.key],
-                label: st.name || stageMetaMap[st.key].label,
-                type: st.type || 'normal',
-            };
-        }
+        stageMetaMap[st.key] = {
+            ...(stageMetaMap[st.key] || {
+                color: 'bg-surface-100 text-surface-600',
+                dot: 'bg-surface-400',
+                border: 'border-surface-200',
+            }),
+            label: st.name || stageMetaMap[st.key]?.label || st.key,
+            type: st.type || 'normal',
+            colorHex: st.color,
+        };
     });
 
     const curFeatured1 = localSettings?.featured_stage_1 || 'negotiation';
@@ -724,7 +760,7 @@ export default function Leads({ grouped, stats, salesUsers, filters, isManagerOr
 
     const activeStagesList = (localSettings?.stages && localSettings.stages.length > 0)
         ? localSettings.stages
-        : stages.map(s => ({ key: s, name: STAGE_META[s]?.label || s }));
+        : stages.map(s => ({ key: s, name: STAGE_META[s]?.label || s, color: STAGE_META[s]?.colorHex }));
 
     // Dynamically calculate counts directly from localGrouped so filters & drag-and-drop always match!
     const totalLeadsCount = Object.values(localGrouped).reduce((sum, list) => sum + (list?.length || 0), 0);
@@ -754,15 +790,16 @@ export default function Leads({ grouped, stats, salesUsers, filters, isManagerOr
         if (!kanbanRef.current) return;
         const { scrollLeft, scrollWidth, clientWidth } = kanbanRef.current;
         const maxScroll = scrollWidth - clientWidth;
+        const totalStages = activeStagesList.length || stages.length || 7;
         if (maxScroll > 0) {
             setScrollProgress((scrollLeft / maxScroll) * 100);
             const colWidth = 304;
-            const first = Math.min(stages.length, Math.floor(scrollLeft / colWidth) + 1);
+            const first = Math.min(totalStages, Math.floor(scrollLeft / colWidth) + 1);
             const count = Math.max(1, Math.round(clientWidth / colWidth));
-            const last = Math.min(stages.length, first + count - 1);
-            setVisibleRange(`Tahap ${first}–${last} dari ${stages.length}`);
+            const last = Math.min(totalStages, first + count - 1);
+            setVisibleRange(`Tahap ${first}–${last} dari ${totalStages}`);
         } else {
-            setVisibleRange(`Tahap 1–${stages.length} dari ${stages.length}`);
+            setVisibleRange(`Tahap 1–${totalStages} dari ${totalStages}`);
         }
     };
 
@@ -776,7 +813,7 @@ export default function Leads({ grouped, stats, salesUsers, filters, isManagerOr
         if (view === 'kanban') {
             handleKanbanScroll();
         }
-    }, [view, stages]);
+    }, [view, activeStagesList]);
 
     const applyFilters = useCallback(() => {
         router.get(route('leads.index'), {
@@ -972,7 +1009,7 @@ export default function Leads({ grouped, stats, salesUsers, filters, isManagerOr
                         value={filterStage}
                         onChange={e => { setFilterStage(e.target.value); }}>
                         <option value="">Semua Stage</option>
-                        {stages.map(s => <option key={s} value={s}>{STAGE_META[s]?.label || s}</option>)}
+                        {activeStagesList.map(s => <option key={s.key} value={s.key}>{s.name || stageMetaMap[s.key]?.label || s.key}</option>)}
                     </select>
 
                     {/* Sales filter (manager only) */}
@@ -1059,15 +1096,19 @@ export default function Leads({ grouped, stats, salesUsers, filters, isManagerOr
                                 onScroll={handleKanbanScroll}
                                 className="flex gap-4 overflow-x-auto pb-4 flex-1 items-stretch"
                             >
-                                {stages.map(stage => (
+                                {activeStagesList.map(st => (
                                     <KanbanColumn
-                                        key={stage}
-                                        stage={stage}
-                                        leads={localGrouped[stage] || []}
+                                        key={st.key}
+                                        stage={st.key}
+                                        stageInfo={st}
+                                        meta={stageMetaMap[st.key]}
+                                        leads={localGrouped[st.key] || []}
                                         onStageChange={handleStageChange}
                                         onViewDetail={handleViewDetail}
                                         onAddLead={handleAddLead}
                                         onDropCard={handleDropCard}
+                                        activeStagesList={activeStagesList}
+                                        stageMetaMap={stageMetaMap}
                                     />
                                 ))}
                             </div>
@@ -1075,6 +1116,7 @@ export default function Leads({ grouped, stats, salesUsers, filters, isManagerOr
                     ) : (
                         <ListView
                             grouped={localGrouped}
+                            stageMetaMap={stageMetaMap}
                             onStageChange={handleStageChange}
                             onViewDetail={handleViewDetail}
                         />
@@ -1091,6 +1133,7 @@ export default function Leads({ grouped, stats, salesUsers, filters, isManagerOr
                 salesUsers={salesUsers}
                 sources={sources}
                 stages={stages}
+                activeStagesList={activeStagesList}
                 isManagerOrAdmin={isManagerOrAdmin}
                 currentUser={currentUser}
             />
@@ -1102,7 +1145,10 @@ export default function Leads({ grouped, stats, salesUsers, filters, isManagerOr
                     onClose={() => setShowSettingsModal(false)}
                     settings={localSettings}
                     stages={stages}
-                    onSave={(newSettings) => setLocalSettings(newSettings)}
+                    onSave={(newSettings) => {
+                        setLocalSettings(newSettings);
+                        router.reload({ only: ['grouped', 'stats', 'pipelineSettings'] });
+                    }}
                 />
             )}
         </AuthenticatedLayout>
