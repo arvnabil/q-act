@@ -22,6 +22,13 @@ return new class extends Migration
         // Some MySQL hosting configurations limit indexes to 1000 bytes.
         // A prefix keeps the composite index valid for utf8mb4 while preserving
         // the full template name in the column.
+        if (! in_array(DB::connection()->getDriverName(), ['mysql', 'mariadb'], true)) {
+            Schema::table('user_terms_templates', function (Blueprint $table) {
+                $table->index(['user_id', 'name']);
+            });
+            return;
+        }
+
         $indexExists = DB::selectOne(
             "SHOW INDEX FROM `user_terms_templates` WHERE Key_name = ?",
             ['user_terms_templates_user_id_name_index']

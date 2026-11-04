@@ -709,7 +709,7 @@ class QuotationController extends Controller
             'bank_account_id' => 'nullable|string',
             'terms' => 'nullable|array',
             'expired' => 'nullable|date',
-            'items' => 'required|array|min:1',
+            'items' => 'sometimes|array|min:1',
             'items.*.id' => 'nullable',
             'items.*.product_id' => 'nullable',
             'items.*.name' => 'nullable|string',

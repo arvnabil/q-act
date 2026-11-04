@@ -441,7 +441,13 @@ class QuotationDuplicateTest extends TestCase
         $this->assertSame(['Jabra', 'Poly', 'Logitech'], $dup->fresh()->items()->pluck('name')->all());
 
         // Convert to Sales Order; the SO follows the duplicate item order.
-        $this->actingAs($user)->put(route('quotations.update', $dup->id), ['status' => 'approved']);
+        $dup->update(['po_document_path' => 'po-documents/dummy.pdf']);
+        $this->actingAs($user)->put(route('quotations.update', $dup->id), [
+            'status' => 'approved',
+            'po_status' => 'PO Customer',
+            'po_number' => 'PO-TEST-001',
+            'po_date' => '2026-11-01',
+        ]);
 
         $so = SalesOrder::where('quotation_id', $dup->id)->firstOrFail();
         $this->assertSame('SO.'.$dup->id, $so->id);

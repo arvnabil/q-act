@@ -118,8 +118,14 @@ class QuotationReorderTest extends TestCase
         $this->actingAs($user)
             ->postJson(route('quotations.reorder-items', $quotation->id), ['items' => [$ids[2], $ids[0], $ids[1]]]);
 
+        $quotation->update(['po_document_path' => 'po-documents/dummy.pdf']);
         $this->actingAs($user)
-            ->put(route('quotations.update', $quotation->id), ['status' => 'approved']);
+            ->put(route('quotations.update', $quotation->id), [
+                'status' => 'approved',
+                'po_status' => 'PO Customer',
+                'po_number' => 'PO-REORDER-001',
+                'po_date' => '2026-11-01',
+            ]);
 
         $so = SalesOrder::where('quotation_id', $quotation->id)->firstOrFail();
         $soItems = $so->items()->orderBy('sort_order')->get();
