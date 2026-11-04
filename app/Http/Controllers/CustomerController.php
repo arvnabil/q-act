@@ -18,19 +18,11 @@ class CustomerController extends Controller
         $user = $request->user();
         $isManagerOrAdmin = in_array($user->role, ['Administrator', 'Sales Manager', 'Manager']);
 
-        $query = Customer::with(['pics', 'quotations'])
-            ->withCount('quotations')
-            ->withSum(['quotations as total_spend' => fn($q) => $q->where('status', 'approved')], 'grand_total');
+        $query = Customer::with('pics')
+            ->withCount(['quotations' => fn ($q) => \App\Services\DocumentVisibility::apply($q, $user, 'quotations')])
+            ->withSum(['quotations as total_spend' => fn ($q) => \App\Services\DocumentVisibility::apply($q, $user, 'quotations')->where('status', 'approved')], 'grand_total');
 
-        if (!$isManagerOrAdmin) {
-            $query->where(function ($q) use ($user) {
-                $q->where('created_by', $user->id)
-                  ->orWhereHas('pics', fn($p) => $p->where('sales_id', $user->id))
-                  ->orWhereHas('quotations', fn($qt) =>
-                      $qt->where('sales_id', $user->id)->orWhere('created_by', $user->id)
-                  );
-            });
-        }
+        \App\Services\DocumentVisibility::apply($query, $user, 'customers');
 
         $customers = $query->orderBy('name')->get()->map(fn($c) => [
             'id' => $c->id,
@@ -54,20 +46,15 @@ class CustomerController extends Controller
 
     public function show(Request $request, Customer $customer): Response
     {
+        \App\Services\DocumentVisibility::authorize($request->user(), 'customers', $customer);
         $user = $request->user();
-        $isManagerOrAdmin = in_array($user->role, ['Administrator', 'Sales Manager', 'Manager']);
-        $isFinance = $user->role === 'Finance';
 
         $customer->load(['pics', 'businessUnit']);
 
         // Load quotations
         $quotationsQuery = $customer->quotations()->with(['sales', 'creator'])
             ->orderByDesc('created_at');
-        if (!$isManagerOrAdmin && !$isFinance) {
-            $quotationsQuery->where(function ($q) use ($user) {
-                $q->where('sales_id', $user->id)->orWhere('created_by', $user->id);
-            });
-        }
+        \App\Services\DocumentVisibility::apply($quotationsQuery, $user, 'quotations');
         $quotations = $quotationsQuery->get()->map(fn($q) => [
             'id'          => $q->id,
             'date'        => $q->date?->toDateString(),
@@ -82,9 +69,7 @@ class CustomerController extends Controller
         // Load sales orders
         $salesOrdersQuery = $customer->salesOrders()->with(['sales', 'quotation.purchaseOrders'])
             ->orderByDesc('created_at');
-        if (!$isManagerOrAdmin && !$isFinance) {
-            $salesOrdersQuery->where('sales_id', $user->id);
-        }
+        \App\Services\DocumentVisibility::apply($salesOrdersQuery, $user, 'sales_orders');
         $salesOrders = $salesOrdersQuery->get()->map(function ($so) {
             $latestPo = $so->quotation?->purchaseOrders?->sortByDesc('created_at')->first();
             $poNumber = $so->po_number ?: $latestPo?->po_number ?: $so->quotation?->po_number;

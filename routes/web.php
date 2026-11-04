@@ -29,6 +29,8 @@ Route::get('/', function () {
 // Protected routes
 Route::middleware(['auth', 'verified'])->group(function () {
 
+    Route::get('/header-search', \App\Http\Controllers\HeaderSearchController::class)->middleware('throttle:60,1')->name('header-search');
+
     // Dashboard
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
     Route::post('/dashboard/sales-targets', [DashboardController::class, 'updateSalesTargets'])->name('dashboard.sales-targets.update');

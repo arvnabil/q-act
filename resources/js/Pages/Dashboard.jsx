@@ -3,6 +3,7 @@ import { Link, router } from '@inertiajs/react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import Pagination from '@/Components/Pagination';
 import { Head } from '@inertiajs/react';
+import { formatRupiah, formatCompactRupiah } from '@/utils/money';
 import {
     FileText, DollarSign, TrendingUp, CheckCircle2, ChevronRight,
     Users, Target, Filter, Calendar, ChevronDown, Pencil, X, AlertTriangle,
@@ -31,15 +32,9 @@ const statusBadge = (status) => {
     }
 };
 
-const formatShort = (val) => {
-    if (!val || val === 0) return 'Rp 0';
-    if (val >= 1_000_000_000) return `Rp ${(val / 1_000_000_000).toFixed(1)}M`;
-    if (val >= 1_000_000) return `Rp ${(val / 1_000_000).toFixed(0)}jt`;
-    return `Rp ${(val / 1_000).toFixed(0)}rb`;
-};
+const formatShort = (val) => formatCompactRupiah(val);
 
-const formatFull = (val) =>
-    new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(val || 0);
+const formatFull = (val) => formatRupiah(val);
 
 const STATUS_CONFIGS = [
     { key: 'approved', label: 'PO',       color: '#059669', bg: 'bg-emerald-500', light: 'bg-emerald-50 text-emerald-700 border-emerald-200' },

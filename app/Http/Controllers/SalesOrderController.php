@@ -23,9 +23,7 @@ class SalesOrderController extends Controller
 
         $query = SalesOrder::with(['customer', 'quotation.purchaseOrders', 'sales', 'creator']);
 
-        if (! $isManagerOrAdmin && ! $isFinance) {
-            $query->where('sales_id', $user->id);
-        }
+        \App\Services\DocumentVisibility::apply($query, $user, 'sales_orders');
 
         $salesOrders = $query->orderByDesc('created_at')->get()->map(function ($so) {
             $latestPo = $so->quotation?->purchaseOrders?->sortByDesc('created_at')->first();
@@ -92,9 +90,15 @@ class SalesOrderController extends Controller
 
     public function show(SalesOrder $salesOrder, Request $request): Response
     {
+        \App\Services\DocumentVisibility::authorize($request->user(), 'sales_orders', $salesOrder);
         $salesOrder->load(['customer', 'sales', 'creator', 'items.product', 'costs', 'quotation.items.product', 'quotation.parentQuotation', 'quotation.revisions', 'quotation.changeRequests.requester', 'quotation.changeRequests.approver']);
 
         $user = $request->user();
+        $salesOrder->load(['quotation' => fn ($q) => \App\Services\DocumentVisibility::apply($q, $user, 'quotations')]);
+        $salesOrder->quotation?->load([
+            'parentQuotation' => fn ($q) => \App\Services\DocumentVisibility::apply($q, $user, 'quotations'),
+            'revisions' => fn ($q) => \App\Services\DocumentVisibility::apply($q, $user, 'quotations'),
+        ]);
         // Finance action must only be available to the Finance role.
         $isFinance = $user->role === 'Finance';
 

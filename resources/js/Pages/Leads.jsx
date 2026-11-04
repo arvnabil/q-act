@@ -3,10 +3,11 @@ import { Head, router, usePage } from '@inertiajs/react';
 import axios from 'axios';
 import { toast } from 'react-hot-toast';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
+import { formatRupiah, formatCompactRupiah } from '@/utils/money';
 import {
     TrendingUp, Plus, Search, Filter, LayoutGrid, List, X,
     ChevronDown, ChevronLeft, ChevronRight, Building2, User, ArrowRight, MoreHorizontal,
-    FileText, DollarSign, Clock, Tag, AlertTriangle, Settings, SlidersHorizontal, Palette
+    FileText, Banknote, Clock, Tag, AlertTriangle, Settings, SlidersHorizontal, Palette
 } from 'lucide-react';
 
 // ─── Constants ──────────────────────────────────────────────────────────────────
@@ -38,13 +39,7 @@ const SOURCE_LABEL = {
     other:      'Lainnya',
 };
 
-const formatRp = (n) => {
-    if (!n) return 'Rp 0';
-    if (n >= 1_000_000_000) return `Rp ${(n / 1_000_000_000).toFixed(1)}M`;
-    if (n >= 1_000_000)     return `Rp ${(n / 1_000_000).toFixed(1)}jt`;
-    if (n >= 1_000)         return `Rp ${(n / 1_000).toFixed(0)}rb`;
-    return `Rp ${n.toLocaleString('id-ID')}`;
-};
+const formatRp = (n) => formatCompactRupiah(n);
 
 const daysSince = (dateStr) => {
     if (!dateStr) return 0;
@@ -153,9 +148,9 @@ function LeadCard({ lead, activeStagesList, stageMetaMap, onStageChange, onViewD
 
             {/* Value */}
             {lead.estimated_value > 0 && (
-                <div className="flex items-center gap-1.5 text-xs font-semibold text-brand-700">
-                    <DollarSign className="w-3.5 h-3.5 shrink-0" />
-                    <span>{formatRp(lead.estimated_value)}</span>
+                <div className="flex items-center gap-1.5 text-xs font-semibold text-brand-700" title={formatRupiah(lead.estimated_value)}>
+                    <Banknote className="w-3.5 h-3.5 shrink-0" />
+                    <span>{formatCompactRupiah(lead.estimated_value)}</span>
                 </div>
             )}
 
@@ -163,7 +158,7 @@ function LeadCard({ lead, activeStagesList, stageMetaMap, onStageChange, onViewD
             {lead.quotation && (
                 <div className="flex items-center gap-1.5 text-xs text-blue-600">
                     <FileText className="w-3.5 h-3.5 shrink-0" />
-                    <span>SPH terlampir</span>
+                    <span>Quotation terlampir</span>
                 </div>
             )}
 
@@ -258,7 +253,9 @@ function KanbanColumn({ stage, stageInfo, meta: customMeta, leads, onStageChange
                     </button>
                 </div>
                 {totalValue > 0 && (
-                    <p className="text-xs text-surface-400 mt-0.5 pl-4">{formatRp(totalValue)}</p>
+                    <p className="text-xs text-surface-400 mt-0.5 pl-4" title={formatRupiah(totalValue)}>
+                        {formatCompactRupiah(totalValue)}
+                    </p>
                 )}
             </div>
 
@@ -405,6 +402,11 @@ function LeadFormModal({ open, onClose, defaultStage, customers, salesUsers, sou
                             <input type="number" className="w-full border border-surface-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
                                 placeholder="0"
                                 value={form.estimated_value} onChange={e => set('estimated_value', e.target.value)} />
+                            {Number(form.estimated_value) > 0 && (
+                                <span className="text-[11px] text-brand-600 font-semibold mt-1 block">
+                                    {formatRupiah(form.estimated_value)} ({formatCompactRupiah(form.estimated_value)})
+                                </span>
+                            )}
                         </div>
                     </div>
 
@@ -479,7 +481,9 @@ function ListView({ grouped, stageMetaMap, onStageChange, onViewDetail }) {
                                     </div>
                                 </td>
                                 <td className="px-4 py-3"><StageBadge stage={lead.stage} stageMetaMap={stageMetaMap} /></td>
-                                <td className="px-4 py-3 text-right font-semibold text-surface-700">{formatRp(lead.estimated_value)}</td>
+                                <td className="px-4 py-3 text-right font-semibold text-surface-700" title={formatCompactRupiah(lead.estimated_value)}>
+                                    {formatRupiah(lead.estimated_value)}
+                                </td>
                                 <td className="px-4 py-3">
                                     <div className={`flex items-center gap-1 text-xs ${isStale ? 'text-amber-600 font-semibold' : 'text-surface-400'}`}>
                                         {isStale && <AlertTriangle className="w-3.5 h-3.5" />}
@@ -974,7 +978,9 @@ export default function Leads({ grouped, stats, salesUsers, filters, isManagerOr
 
                         {/* Card 4: Est. Total Nilai */}
                         <div className="bg-surface-50 rounded-xl px-4 py-3 border border-surface-200">
-                            <p className="text-lg font-bold text-emerald-600">{formatRp(totalEstValue)}</p>
+                            <p className="text-lg font-bold text-emerald-600" title={formatRupiah(totalEstValue)}>
+                                {formatCompactRupiah(totalEstValue)}
+                            </p>
                             <p className="text-xs font-semibold text-surface-600">Est. Total Nilai</p>
                             <p className="text-[10px] text-surface-400">Pipeline value</p>
                         </div>

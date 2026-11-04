@@ -67,13 +67,28 @@ class QuotationController extends Controller
     // ─── Helper: serialize full Quotation for edit/detail/show ───────────────
     private function serializeFull(Quotation $q, bool $forPrint = false): array
     {
+        if (request()->routeIs('quotations.show')) {
+            $user = request()->user();
+            $q->load([
+                'parentQuotation' => fn ($r) => \App\Services\DocumentVisibility::apply($r, $user, 'quotations'),
+                'revisions' => fn ($r) => \App\Services\DocumentVisibility::apply($r, $user, 'quotations'),
+                'salesOrders' => fn ($r) => \App\Services\DocumentVisibility::apply($r, $user, 'sales_orders'),
+            ]);
+        }
         $rootQuotationId = ($q->relation_type ?? 'main') === 'split' && $q->parent_quotation_id
             ? $q->parent_quotation_id
             : $q->id;
-        $rootQuotation = Quotation::query()
+        $rootQuery = Quotation::query();
+        if (request()->routeIs('quotations.show')) {
+            \App\Services\DocumentVisibility::apply($rootQuery, request()->user(), 'quotations');
+        }
+        $rootQuotation = $rootQuery
             ->select(['id', 'status', 'relation_type', 'parent_quotation_id', 'revision_no', 'grand_total'])
             ->with(['revisions:id,parent_quotation_id,status,relation_type,revision_no,grand_total,po_status,po_number,po_date,po_document_path', 'revisions.items:id,quotation_id,source_quotation_item_id,qty,price'])
             ->find($rootQuotationId);
+        if ($rootQuotation && request()->routeIs('quotations.show')) {
+            $rootQuotation->load(['revisions' => fn ($r) => \App\Services\DocumentVisibility::apply($r, request()->user(), 'quotations')]);
+        }
 
         $quotationStructure = [
             'root' => $rootQuotation ? [
@@ -309,15 +324,7 @@ class QuotationController extends Controller
             $q->whereNull('relation_type')->orWhere('relation_type', '!=', 'split');
         });
 
-        if (! $isManagerOrAdmin && ! $isFinance) {
-            $userBuId = $user->businessUnit?->id;
-            $query->where(function ($q) use ($user, $userBuId) {
-                $q->where('created_by', $user->id)->orWhere('sales_id', $user->id);
-                if ($userBuId) {
-                    $q->orWhere('bu_id', $userBuId);
-                }
-            });
-        }
+        \App\Services\DocumentVisibility::apply($query, $user, 'quotations');
 
         $quotations = $query->orderByDesc('created_at')->get()->map(fn ($q) => $this->serializeForList($q));
 
@@ -511,6 +518,7 @@ class QuotationController extends Controller
     // ─── SHOW ─────────────────────────────────────────────────────────────────
     public function show(Quotation $quotation, Request $request): Response
     {
+        \App\Services\DocumentVisibility::authorize($request->user(), 'quotations', $quotation);
         if ($quotation->is_deleted || $quotation->deleted_at) {
             if (($quotation->relation_type ?? 'main') === 'split' && $quotation->parent_quotation_id) {
                 return redirect()->route('quotations.show', $quotation->parent_quotation_id)
@@ -526,7 +534,7 @@ class QuotationController extends Controller
         $rootQuotationId = ($quotation->relation_type ?? 'main') === 'split' && $quotation->parent_quotation_id
             ? $quotation->parent_quotation_id
             : $quotation->id;
-        $printQuotations = Quotation::query()
+        $printQuotations = \App\Services\DocumentVisibility::apply(Quotation::query(), $request->user(), 'quotations')
             ->where(function ($query) use ($rootQuotationId) {
                 $query->where('id', $rootQuotationId)
                     ->orWhere('parent_quotation_id', $rootQuotationId);

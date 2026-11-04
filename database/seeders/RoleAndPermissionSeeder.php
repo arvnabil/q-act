@@ -22,6 +22,9 @@ class RoleAndPermissionSeeder extends Seeder
             'products_create', 'products_edit', 'products_delete', 'view_reports',
             'manager_view', 'user_management', 'manage_business_units', 'manage_settings',
             'manage_roles',
+            'quotations_view_bu', 'quotations_view_all',
+            'sales_orders_view_bu', 'sales_orders_view_all',
+            'customers_view_bu', 'customers_view_all',
         ];
 
         foreach ($permissions as $permission) {
@@ -29,6 +32,8 @@ class RoleAndPermissionSeeder extends Seeder
                 'name' => $permission, 'guard_name' => 'web',
             ]);
         }
+
+        $existingRoleNames = \Spatie\Permission\Models\Role::where('guard_name', 'web')->pluck('name')->all();
 
         // 1. Create Roles
         $roles = [
@@ -54,7 +59,12 @@ class RoleAndPermissionSeeder extends Seeder
         ];
 
         foreach ($defaults as $roleName => $rolePermissions) {
-            \Spatie\Permission\Models\Role::findByName($roleName, 'web')->syncPermissions($rolePermissions);
+            $role = \Spatie\Permission\Models\Role::findByName($roleName, 'web');
+            $existingScopes = $role->permissions->pluck('name')->filter(fn ($name) => str_ends_with($name, '_view_bu') || str_ends_with($name, '_view_all'))->all();
+            if (in_array($roleName, $existingRoleNames, true)) {
+                $rolePermissions = array_filter($rolePermissions, fn ($name) => !str_ends_with($name, '_view_bu') && !str_ends_with($name, '_view_all'));
+            }
+            $role->syncPermissions(array_unique(array_merge($rolePermissions, $existingScopes)));
         }
 
         // 2. Migrate existing users from the string `role` column to Spatie roles

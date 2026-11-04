@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Menu, Search, Bell, Plus, CheckCheck, Trash2, Info, AlertCircle, CheckCircle2, X } from 'lucide-react';
 import { Link, usePage, router } from '@inertiajs/react';
 import axios from 'axios';
+import HeaderSearch from './HeaderSearch';
 
 const PAGE_CONFIG = {
     '/dashboard': { title: 'Dashboard', subtitle: 'Overview kinerja quotation bulan ini' },
@@ -125,14 +126,7 @@ export default function Topbar({ setMobileOpen }) {
                 </div>
             </div>
             <div className="flex items-center gap-3">
-                <div className="hidden sm:flex items-center gap-2 bg-surface-50 border border-surface-200 rounded-full px-4 py-2 focus-within:border-brand-400 focus-within:ring-2 focus-within:ring-brand-50 transition-all min-w-[220px]">
-                    <Search className="w-4 h-4 text-surface-400 shrink-0" />
-                    <input 
-                        type="text" 
-                        placeholder="Cari quotation, customer..." 
-                        className="bg-transparent border-none outline-none text-sm text-surface-700 placeholder-surface-400 w-full" 
-                    />
-                </div>
+                <HeaderSearch />
 
                 {/* Notification Bell */}
                 <div className="relative" ref={notifRef}>

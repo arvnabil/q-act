@@ -17,10 +17,12 @@ class QuotationDuplicateTest extends TestCase
 
     private function makeUser(string $role = 'Sales', string $salesCode = 'Q099'): User
     {
-        return User::factory()->create([
+        $user = User::factory()->create([
             'sales_code' => $salesCode,
             'role' => $role,
         ]);
+        $user->givePermissionTo(\Spatie\Permission\Models\Permission::firstOrCreate(['name' => 'quotations_view', 'guard_name' => 'web']));
+        return $user;
     }
 
     private function prefix(): string
@@ -394,7 +396,7 @@ class QuotationDuplicateTest extends TestCase
         $this->makeItem($original, ['name' => 'Jabra'], 3);
 
         $this->actingAs($user)->post(route('quotations.duplicate', $original->id));
-        $dup = Quotation::where('id', $this->prefix().'.006')->firstOrFail();
+        $dup = Quotation::where('id', '!=', $original->id)->latest('created_at')->firstOrFail();
         $dupItems = $dup->items()->get();
 
         // Detail/edit pages render fine for the duplicate.

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Head, router, Link, usePage } from '@inertiajs/react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
+import { formatRupiah, formatCompactRupiah } from '@/utils/money';
 import axios from 'axios';
 import { toast } from 'react-hot-toast';
 import {
@@ -74,12 +75,7 @@ const QUOT_STATUS_COLORS = {
 
 // ─── Helpers ────────────────────────────────────────────────────────────────────
 
-const formatRp = (n) => {
-    if (!n) return 'Rp 0';
-    if (n >= 1_000_000_000) return `Rp ${(n / 1_000_000_000).toFixed(1)}M`;
-    if (n >= 1_000_000)     return `Rp ${(n / 1_000_000).toFixed(1)}jt`;
-    return `Rp ${Number(n).toLocaleString('id-ID')}`;
-};
+const formatRp = (n) => formatCompactRupiah(n);
 
 const formatDateTime = (d) => {
     if (!d) return '—';
@@ -435,7 +431,7 @@ function QuotationsTab({ allQuotations, lead }) {
                 </div>
                 <div className="bg-surface-50 rounded-xl p-3 border border-surface-200">
                     <p className="text-[10px] font-bold text-surface-400 uppercase tracking-wider">Total Nilai Penawaran</p>
-                    <p className="text-base font-bold text-brand-600 mt-0.5">{formatRp(totalValue)}</p>
+                    <p className="text-base font-bold text-brand-600 mt-0.5" title={formatRupiah(totalValue)}>{formatCompactRupiah(totalValue)}</p>
                 </div>
                 <div className="bg-surface-50 rounded-xl p-3 border border-surface-200">
                     <p className="text-[10px] font-bold text-surface-400 uppercase tracking-wider">Deal / PO Masuk</p>
@@ -495,8 +491,8 @@ function QuotationsTab({ allQuotations, lead }) {
                                             <span className="text-surface-400 text-[11px]">—</span>
                                         )}
                                     </td>
-                                    <td className="px-4 py-3 text-right font-bold text-brand-600">
-                                        {formatRp(q.grand_total)}
+                                    <td className="px-4 py-3 text-right font-bold text-brand-600" title={formatCompactRupiah(q.grand_total)}>
+                                        {formatRupiah(q.grand_total)}
                                     </td>
                                     <td className="px-4 py-3 text-surface-500 whitespace-nowrap">
                                         {q.created_at ? new Date(q.created_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }) : '—'}
@@ -565,8 +561,8 @@ function PoSoTab({ allPurchaseOrders, allSalesOrders }) {
                                                 {q.po_date && ` · Tanggal PO: ${q.po_date}`}
                                             </p>
                                         </div>
-                                        <div className="text-right font-bold text-brand-600 text-sm">
-                                            {formatRp(q.grand_total)}
+                                        <div className="text-right font-bold text-brand-600 text-sm" title={formatCompactRupiah(q.grand_total)}>
+                                            {formatRupiah(q.grand_total)}
                                         </div>
                                     </div>
                                 ))}
@@ -1396,7 +1392,9 @@ export default function LeadDetail({
                             </div>
                             <h1 className="text-xl font-bold text-surface-900">{lead.title}</h1>
                             {lead.estimated_value > 0 && (
-                                <p className="text-brand-600 font-bold mt-0.5 text-sm">Estimasi Nilai: {formatRp(lead.estimated_value)}</p>
+                                <p className="text-brand-600 font-bold mt-0.5 text-sm">
+                                    Estimasi Nilai: {formatRupiah(lead.estimated_value)} <span className="text-xs text-brand-500 font-normal">({formatCompactRupiah(lead.estimated_value)})</span>
+                                </p>
                             )}
                         </div>
                         <div className="flex items-center gap-2 flex-wrap">

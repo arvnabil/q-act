@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Head, router } from '@inertiajs/react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
+import { formatRupiah, formatCompactRupiah } from '@/utils/money';
 import {
     Trophy, ChevronLeft, ChevronRight, Eye, EyeOff, Search,
     Calendar, Building2, User, DollarSign, TrendingUp, TrendingDown,
@@ -12,13 +13,7 @@ const MONTH_NAMES = [
     'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
 ];
 
-const formatRp = (n) => {
-    if (!n) return 'Rp 0';
-    if (n >= 1_000_000_000) return `Rp ${(n / 1_000_000_000).toFixed(1)}M`;
-    if (n >= 1_000_000)     return `Rp ${(n / 1_000_000).toFixed(1)}jt`;
-    if (n >= 1_000)         return `Rp ${(n / 1_000).toFixed(0)}rb`;
-    return `Rp ${n.toLocaleString('id-ID')}`;
-};
+const formatRp = (n) => formatCompactRupiah(n);
 
 export default function Achievements({
     deals,
@@ -211,8 +206,8 @@ export default function Achievements({
                                             {hideRevenue ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
                                         </button>
                                     </div>
-                                    <div className="text-3xl font-extrabold tracking-tight">
-                                        {hideRevenue ? '••••••••' : formatRp(currentRevenue)}
+                                    <div className="text-3xl font-extrabold tracking-tight" title={formatRupiah(currentRevenue)}>
+                                        {hideRevenue ? '••••••••' : formatCompactRupiah(currentRevenue)}
                                     </div>
                                     <div className="text-xs text-slate-400 mt-1">
                                         {dealCount} deal menang
@@ -315,8 +310,8 @@ export default function Achievements({
                                             <td className="py-3 text-surface-600">
                                                 {deal.sales?.name || '—'}
                                             </td>
-                                            <td className="py-3 text-right font-extrabold text-brand-700 text-sm">
-                                                {formatRp(deal.estimated_value)}
+                                            <td className="py-3 text-right font-extrabold text-brand-700 text-sm" title={formatCompactRupiah(deal.estimated_value)}>
+                                                {formatRupiah(deal.estimated_value)}
                                             </td>
                                             <td className="py-3 text-center text-surface-400">
                                                 {new Date(deal.updated_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}

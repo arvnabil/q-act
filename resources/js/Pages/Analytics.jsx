@@ -2,6 +2,7 @@ import React from 'react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head, usePage } from '@inertiajs/react';
 import { Filter } from 'lucide-react';
+import { formatRupiah, formatCompactRupiah } from '@/utils/money';
 
 export default function Analytics({ metrics }) {
     const { flash } = usePage().props;
@@ -20,15 +21,8 @@ export default function Analytics({ metrics }) {
         topProducts = [],
     } = metrics || {};
 
-    const formatCurrencyShort = (val) => {
-        if (!val || val === 0) return 'Rp 0';
-        if (val >= 1000000000) return `Rp ${(val / 1000000000).toFixed(1)}M`;
-        if (val >= 1000000) return `Rp ${(val / 1000000).toFixed(0)}jt`;
-        return `Rp ${(val / 1000).toFixed(0)}rb`;
-    };
-
-    const formatCurrencyFull = (val) =>
-        new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(val || 0);
+    const formatCurrencyShort = (val) => formatCompactRupiah(val);
+    const formatCurrencyFull = (val) => formatRupiah(val);
 
     const maxRev = Math.max(1, ...monthlyTrend.map(m => m.revenue || 0));
 

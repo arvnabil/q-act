@@ -10,15 +10,21 @@ const FEATURE_LABELS = {
     'leads_view': 'Lead Pipeline - Lihat Board',
     'leads_manage': 'Lead Pipeline - Tambah / Edit / Pindah Stage',
     'leads_visits': 'Lead Pipeline - Visit & Follow-up',
+    'quotations_view_bu': 'Quotations - Lihat data sendiri + BU',
+    'quotations_view_all': 'Quotations - Lihat semua data',
     'quotations_view': 'Quotations - Lihat',
     'quotations_create': 'Quotations - Buat',
     'quotations_edit': 'Quotations - Edit',
     'quotations_delete': 'Quotations - Hapus',
     'quotations_import_legacy': 'Quotations - Import Legacy',
+    'sales_orders_view_bu': 'Sales Orders - Lihat data sendiri + BU',
+    'sales_orders_view_all': 'Sales Orders - Lihat semua data',
     'sales_orders_view': 'Sales Orders - Lihat',
     'sales_orders_edit': 'Sales Orders - Edit / Kelola Biaya',
     'sales_orders_delete': 'Sales Orders - Hapus',
     'sales_orders_delete_bulk': 'Sales Orders - Hapus Massal',
+    'customers_view_bu': 'Customers - Lihat data sendiri + BU',
+    'customers_view_all': 'Customers - Lihat semua data',
     'customers_view': 'Customers - Lihat',
     'customers_create': 'Customers - Tambah',
     'customers_edit': 'Customers - Edit',
@@ -83,7 +89,7 @@ export default function RolesPage({ rolePermissions, rolesList, features }) {
                             <ShieldCheck className="w-6 h-6 text-brand-500" />
                             Roles & Hak Akses
                         </h1>
-                        <p className="text-sm text-surface-500 mt-1">Atur hak akses menu dan fitur untuk setiap peran (Role).</p>
+                        <p className="text-sm text-surface-500 mt-1">Lihat saja = data sendiri. Centang BU untuk berbagi satu BU, atau Semua untuk seluruh data. Cakupan ini berlaku pada daftar, pencarian header, dan halaman detail Quotation, Sales Order, serta Customer.</p>
                     </div>
                     <button
                         onClick={handleSaveAll}
