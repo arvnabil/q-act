@@ -41,28 +41,37 @@ class LeadController extends Controller
     private function getPipelineSettings(): array
     {
         $defaultStages = [
-            ['key' => 'data_masuk',      'name' => 'Data Masuk',      'type' => 'normal', 'color' => '#94A3B8'],
-            ['key' => 'sph_terlayang',   'name' => 'SPH Terlayang',   'type' => 'normal', 'color' => '#3B82F6'],
-            ['key' => 'hot_progress',    'name' => 'Hot Progress',    'type' => 'normal', 'color' => '#F59E0B'],
-            ['key' => 'proyek_deal',     'name' => 'Proyek Deal',     'type' => 'deal',   'color' => '#009680'],
-            ['key' => 'proyek_berjalan', 'name' => 'Proyek Berjalan', 'type' => 'normal', 'color' => '#8B5CF6'],
-            ['key' => 'proyek_selesai',  'name' => 'Proyek Selesai',  'type' => 'normal', 'color' => '#10B981'],
-            ['key' => 'no_deal',         'name' => 'No Deal',         'type' => 'lost',   'color' => '#EF4444'],
+            ['key' => 'lead_masuk',         'name' => 'Lead Masuk',         'type' => 'normal', 'color' => '#94A3B8'],
+            ['key' => 'follow_up',          'name' => 'Follow Up',          'type' => 'normal', 'color' => '#3B82F6'],
+            ['key' => 'lead_qualification', 'name' => 'Lead Qualification', 'type' => 'normal', 'color' => '#F59E0B'],
+            ['key' => 'negotiation',        'name' => 'Negotiation',        'type' => 'normal', 'color' => '#009680'],
+            ['key' => 'win',                'name' => 'Win',                'type' => 'deal',   'color' => '#8B5CF6'],
+            ['key' => 'lost',               'name' => 'Lost',               'type' => 'lost',   'color' => '#10B981'],
+            ['key' => 'selesai_terbayar',   'name' => 'Selesai (Terbayar)', 'type' => 'deal',   'color' => '#EF4444'],
         ];
 
         $setting = SystemSetting::find('lead_pipeline_settings');
         if (!$setting || empty($setting->value)) {
             return [
-                'featured_stage_1' => 'hot_progress',
-                'featured_stage_2' => 'proyek_deal',
+                'featured_stage_1' => 'negotiation',
+                'featured_stage_2' => 'win',
                 'stages'           => $defaultStages,
             ];
         }
 
         $val = $setting->value;
+        $hasLegacySph = is_array($val) && isset($val['stages']) && collect($val['stages'])->contains('key', 'sph_terlayang');
+        if ($hasLegacySph) {
+            return [
+                'featured_stage_1' => 'negotiation',
+                'featured_stage_2' => 'win',
+                'stages'           => $defaultStages,
+            ];
+        }
+
         return [
-            'featured_stage_1' => $val['featured_stage_1'] ?? 'hot_progress',
-            'featured_stage_2' => $val['featured_stage_2'] ?? 'proyek_deal',
+            'featured_stage_1' => $val['featured_stage_1'] ?? 'negotiation',
+            'featured_stage_2' => $val['featured_stage_2'] ?? 'win',
             'stages'           => $val['stages'] ?? $defaultStages,
         ];
     }
@@ -180,9 +189,9 @@ class LeadController extends Controller
             'total'           => $leads->count(),
             'byStage'         => $leads->groupBy('stage')->map->count(),
             'totalEstimated'  => $leads->sum('estimated_value'),
-            'dealsWon'        => $leads->where('stage', 'proyek_selesai')->count(),
-            'hotProgress'     => $leads->where('stage', 'hot_progress')->count(),
-            'proyekDeal'      => $leads->where('stage', 'proyek_deal')->count(),
+            'dealsWon'        => $leads->whereIn('stage', ['win', 'selesai_terbayar', 'proyek_deal', 'proyek_selesai'])->count(),
+            'hotProgress'     => $leads->whereIn('stage', ['lead_qualification', 'negotiation', 'hot_progress'])->count(),
+            'proyekDeal'      => $leads->whereIn('stage', ['win', 'proyek_deal'])->count(),
         ];
 
         // Sales users for filter (manager only)
@@ -222,7 +231,7 @@ class LeadController extends Controller
             'pic_phone'       => 'nullable|string|max:50',
             'sales_id'        => 'nullable|uuid|exists:users,id',
             'bu_id'           => 'nullable|uuid|exists:business_units,id',
-            'stage'           => 'nullable|string|in:' . implode(',', Lead::STAGES),
+            'stage'           => 'nullable|string|in:' . implode(',', array_unique(array_merge(Lead::STAGES, ['data_masuk', 'sph_terlayang', 'hot_progress', 'proyek_deal', 'proyek_berjalan', 'proyek_selesai', 'no_deal']))),
             'source'          => 'nullable|string|max:100',
             'estimated_value' => 'nullable|numeric|min:0',
             'notes'           => 'nullable|string',
@@ -232,7 +241,7 @@ class LeadController extends Controller
         $data['created_by'] = Auth::id();
         $data['updated_by'] = Auth::id();
         $data['sales_id']   = $data['sales_id'] ?? Auth::id();
-        $data['stage']      = $data['stage'] ?? 'data_masuk';
+        $data['stage']      = $data['stage'] ?? 'lead_masuk';
         $data['lead_code']  = $this->generateLeadCode();
 
         // If customer_id given, populate denormalised fields from Customer
@@ -354,7 +363,7 @@ class LeadController extends Controller
     public function updateStage(Request $request, Lead $lead)
     {
         $data = $request->validate([
-            'stage'       => 'required|string|in:' . implode(',', Lead::STAGES),
+            'stage'       => 'required|string|in:' . implode(',', array_unique(array_merge(Lead::STAGES, ['data_masuk', 'sph_terlayang', 'hot_progress', 'proyek_deal', 'proyek_berjalan', 'proyek_selesai', 'no_deal']))),
             'lost_reason' => 'nullable|string|max:500',
             'sort_order'  => 'nullable|integer',
         ]);
@@ -371,7 +380,7 @@ class LeadController extends Controller
             $updateData['sort_order'] = $data['sort_order'];
         }
 
-        if ($newStage === 'no_deal' && isset($data['lost_reason'])) {
+        if (in_array($newStage, ['lost', 'no_deal']) && isset($data['lost_reason'])) {
             $updateData['lost_reason'] = $data['lost_reason'];
         }
 
@@ -387,7 +396,7 @@ class LeadController extends Controller
         );
 
         // Auto-convert to customer on deal
-        if ($newStage === 'proyek_deal' && !$lead->customer_id) {
+        if (in_array($newStage, ['win', 'selesai_terbayar', 'proyek_deal']) && !$lead->customer_id) {
             $this->convertToCustomer($lead);
         }
 

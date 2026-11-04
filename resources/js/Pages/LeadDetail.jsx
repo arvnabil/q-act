@@ -15,13 +15,21 @@ import {
 // ─── Constants ───────────────────────────────────────────────────────────────────
 
 const STAGE_META = {
-    data_masuk:     { label: 'Data Masuk',      color: 'bg-surface-100 text-surface-600', dot: 'bg-surface-400' },
-    sph_terlayang:  { label: 'SPH Terlayang',   color: 'bg-blue-100 text-blue-700',       dot: 'bg-blue-500' },
-    hot_progress:   { label: 'Hot Progress',    color: 'bg-amber-100 text-amber-700',     dot: 'bg-amber-500' },
-    proyek_deal:    { label: 'Proyek Deal',     color: 'bg-brand-100 text-brand-700',     dot: 'bg-brand-500' },
-    proyek_berjalan:{ label: 'Proyek Berjalan', color: 'bg-violet-100 text-violet-700',   dot: 'bg-violet-500' },
-    proyek_selesai: { label: 'Proyek Selesai',  color: 'bg-emerald-100 text-emerald-700', dot: 'bg-emerald-500' },
-    no_deal:        { label: 'No Deal',         color: 'bg-red-100 text-red-600',         dot: 'bg-red-500' },
+    lead_masuk:          { label: 'Lead Masuk',          color: 'bg-surface-100 text-surface-600', dot: 'bg-surface-400' },
+    follow_up:           { label: 'Follow Up',           color: 'bg-blue-100 text-blue-700',       dot: 'bg-blue-500' },
+    lead_qualification:  { label: 'Lead Qualification',  color: 'bg-amber-100 text-amber-700',     dot: 'bg-amber-500' },
+    negotiation:         { label: 'Negotiation',         color: 'bg-teal-100 text-teal-700',       dot: 'bg-teal-600' },
+    win:                 { label: 'Win',                 color: 'bg-violet-100 text-violet-700',   dot: 'bg-violet-500' },
+    lost:                { label: 'Lost',                color: 'bg-emerald-100 text-emerald-700', dot: 'bg-emerald-500' },
+    selesai_terbayar:    { label: 'Selesai (Terbayar)',  color: 'bg-red-100 text-red-600',         dot: 'bg-red-500' },
+    // Backwards compatibility with previous keys
+    data_masuk:          { label: 'Lead Masuk',          color: 'bg-surface-100 text-surface-600', dot: 'bg-surface-400' },
+    sph_terlayang:       { label: 'Follow Up',           color: 'bg-blue-100 text-blue-700',       dot: 'bg-blue-500' },
+    hot_progress:        { label: 'Lead Qualification',  color: 'bg-amber-100 text-amber-700',     dot: 'bg-amber-500' },
+    proyek_deal:         { label: 'Negotiation',         color: 'bg-teal-100 text-teal-700',       dot: 'bg-teal-600' },
+    proyek_berjalan:     { label: 'Win',                 color: 'bg-violet-100 text-violet-700',   dot: 'bg-violet-500' },
+    proyek_selesai:      { label: 'Selesai (Terbayar)',  color: 'bg-red-100 text-red-600',         dot: 'bg-red-500' },
+    no_deal:             { label: 'Lost',                color: 'bg-emerald-100 text-emerald-700', dot: 'bg-emerald-500' },
 };
 
 const ACTIVITY_CONFIG = {

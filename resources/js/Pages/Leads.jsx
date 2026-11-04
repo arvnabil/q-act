@@ -6,19 +6,27 @@ import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import {
     TrendingUp, Plus, Search, Filter, LayoutGrid, List, X,
     ChevronDown, ChevronLeft, ChevronRight, Building2, User, ArrowRight, MoreHorizontal,
-    FileText, DollarSign, Clock, Tag, AlertTriangle, Settings, SlidersHorizontal
+    FileText, DollarSign, Clock, Tag, AlertTriangle, Settings, SlidersHorizontal, Palette
 } from 'lucide-react';
 
 // ─── Constants ──────────────────────────────────────────────────────────────────
 
 const STAGE_META = {
-    data_masuk:     { label: 'Data Masuk',      color: 'bg-surface-100 text-surface-600',  dot: 'bg-surface-400',  border: 'border-surface-200' },
-    sph_terlayang:  { label: 'SPH Terlayang',   color: 'bg-blue-100 text-blue-700',        dot: 'bg-blue-500',     border: 'border-blue-200' },
-    hot_progress:   { label: 'Hot Progress',    color: 'bg-amber-100 text-amber-700',      dot: 'bg-amber-500',    border: 'border-amber-200' },
-    proyek_deal:    { label: 'Proyek Deal',     color: 'bg-brand-100 text-brand-700',      dot: 'bg-brand-500',    border: 'border-brand-200' },
-    proyek_berjalan:{ label: 'Proyek Berjalan', color: 'bg-violet-100 text-violet-700',    dot: 'bg-violet-500',   border: 'border-violet-200' },
-    proyek_selesai: { label: 'Proyek Selesai',  color: 'bg-emerald-100 text-emerald-700',  dot: 'bg-emerald-500',  border: 'border-emerald-200' },
-    no_deal:        { label: 'No Deal',         color: 'bg-red-100 text-red-600',          dot: 'bg-red-500',      border: 'border-red-200' },
+    lead_masuk:          { label: 'Lead Masuk',          color: 'bg-surface-100 text-surface-600',  dot: 'bg-surface-400',  border: 'border-surface-200' },
+    follow_up:           { label: 'Follow Up',           color: 'bg-blue-100 text-blue-700',        dot: 'bg-blue-500',     border: 'border-blue-200' },
+    lead_qualification:  { label: 'Lead Qualification',  color: 'bg-amber-100 text-amber-700',      dot: 'bg-amber-500',    border: 'border-amber-200' },
+    negotiation:         { label: 'Negotiation',         color: 'bg-teal-100 text-teal-700',        dot: 'bg-teal-600',     border: 'border-teal-200' },
+    win:                 { label: 'Win',                 color: 'bg-violet-100 text-violet-700',    dot: 'bg-violet-500',   border: 'border-violet-200' },
+    lost:                { label: 'Lost',                color: 'bg-emerald-100 text-emerald-700',  dot: 'bg-emerald-500',  border: 'border-emerald-200' },
+    selesai_terbayar:    { label: 'Selesai (Terbayar)',  color: 'bg-red-100 text-red-600',          dot: 'bg-red-500',      border: 'border-red-200' },
+    // Backwards compatibility with previous keys
+    data_masuk:          { label: 'Lead Masuk',          color: 'bg-surface-100 text-surface-600',  dot: 'bg-surface-400',  border: 'border-surface-200' },
+    sph_terlayang:       { label: 'Follow Up',           color: 'bg-blue-100 text-blue-700',        dot: 'bg-blue-500',     border: 'border-blue-200' },
+    hot_progress:        { label: 'Lead Qualification',  color: 'bg-amber-100 text-amber-700',      dot: 'bg-amber-500',    border: 'border-amber-200' },
+    proyek_deal:         { label: 'Negotiation',         color: 'bg-teal-100 text-teal-700',        dot: 'bg-teal-600',     border: 'border-teal-200' },
+    proyek_berjalan:     { label: 'Win',                 color: 'bg-violet-100 text-violet-700',    dot: 'bg-violet-500',   border: 'border-violet-200' },
+    proyek_selesai:      { label: 'Selesai (Terbayar)',  color: 'bg-red-100 text-red-600',          dot: 'bg-red-500',      border: 'border-red-200' },
+    no_deal:             { label: 'Lost',                color: 'bg-emerald-100 text-emerald-700',  dot: 'bg-emerald-500',  border: 'border-emerald-200' },
 };
 
 const SOURCE_LABEL = {
@@ -63,11 +71,13 @@ function StageBadge({ stage }) {
 
 // ─── Lead Card ───────────────────────────────────────────────────────────────────
 
+const ACTIVE_STAGE_KEYS = ['lead_masuk', 'follow_up', 'lead_qualification', 'negotiation', 'win', 'lost', 'selesai_terbayar'];
+
 function LeadCard({ lead, onStageChange, onViewDetail }) {
     const [showMenu, setShowMenu] = useState(false);
     const [isDragging, setIsDragging] = useState(false);
     const days = daysSince(lead.created_at);
-    const isStale = days > 3 && !['proyek_selesai', 'no_deal'].includes(lead.stage);
+    const isStale = days > 3 && !['selesai_terbayar', 'win', 'lost', 'proyek_selesai', 'no_deal'].includes(lead.stage);
 
     const handleDragStart = (e) => {
         setIsDragging(true);
@@ -104,13 +114,13 @@ function LeadCard({ lead, onStageChange, onViewDetail }) {
                         <MoreHorizontal className="w-4 h-4" />
                     </button>
                     {showMenu && (
-                        <div className="absolute right-0 top-7 bg-white border border-surface-200 rounded-xl shadow-xl z-20 w-40 py-1 text-sm">
-                            {Object.entries(STAGE_META).map(([key, meta]) => key !== lead.stage && (
+                        <div className="absolute right-0 top-7 bg-white border border-surface-200 rounded-xl shadow-xl z-20 w-44 py-1 text-sm">
+                            {ACTIVE_STAGE_KEYS.map(key => key !== lead.stage && STAGE_META[key] && (
                                 <button key={key}
                                     className="w-full text-left px-3 py-2 hover:bg-surface-50 flex items-center gap-2"
                                     onClick={(e) => { e.stopPropagation(); setShowMenu(false); onStageChange(lead, key); }}>
-                                    <span className={`w-2 h-2 rounded-full ${meta.dot}`} />
-                                    {meta.label}
+                                    <span className={`w-2 h-2 rounded-full ${STAGE_META[key].dot}`} />
+                                    {STAGE_META[key].label}
                                 </button>
                             ))}
                         </div>
@@ -405,13 +415,13 @@ function ListView({ grouped, onStageChange, onViewDetail }) {
                         <th className="px-4 py-3 text-left text-xs font-bold text-surface-500 uppercase tracking-wider">Stage</th>
                         <th className="px-4 py-3 text-right text-xs font-bold text-surface-500 uppercase tracking-wider">Est. Nilai</th>
                         <th className="px-4 py-3 text-left text-xs font-bold text-surface-500 uppercase tracking-wider">Tanggal</th>
-                        <th className="px-4 py-3 text-left text-xs font-bold text-surface-500 uppercase tracking-wider">SPH</th>
+                        <th className="px-4 py-3 text-left text-xs font-bold text-surface-500 uppercase tracking-wider">Quotation</th>
                     </tr>
                 </thead>
                 <tbody className="divide-y divide-surface-100">
                     {allLeads.map(lead => {
                         const days = daysSince(lead.created_at);
-                        const isStale = days > 3 && !['proyek_selesai', 'no_deal'].includes(lead.stage);
+                        const isStale = days > 3 && !['selesai_terbayar', 'win', 'lost', 'proyek_selesai', 'no_deal'].includes(lead.stage);
                         return (
                             <tr key={lead.id}
                                 className="hover:bg-surface-50 cursor-pointer transition-colors"
@@ -470,8 +480,8 @@ function ListView({ grouped, onStageChange, onViewDetail }) {
 
 function PipelineSettingsModal({ open, onClose, settings, stages, onSave }) {
     const [stagesList, setStagesList] = useState(settings?.stages || []);
-    const [fStage1, setFStage1] = useState(settings?.featured_stage_1 || 'hot_progress');
-    const [fStage2, setFStage2] = useState(settings?.featured_stage_2 || 'proyek_deal');
+    const [fStage1, setFStage1] = useState(settings?.featured_stage_1 || 'negotiation');
+    const [fStage2, setFStage2] = useState(settings?.featured_stage_2 || 'win');
     const [saving, setSaving] = useState(false);
 
     useEffect(() => {
@@ -486,6 +496,10 @@ function PipelineSettingsModal({ open, onClose, settings, stages, onSave }) {
 
     const handleStageNameChange = (key, name) => {
         setStagesList(prev => prev.map(s => s.key === key ? { ...s, name } : s));
+    };
+
+    const handleStageColorChange = (key, color) => {
+        setStagesList(prev => prev.map(s => s.key === key ? { ...s, color } : s));
     };
 
     const handleStageTypeChange = (key, type) => {
@@ -584,10 +598,21 @@ function PipelineSettingsModal({ open, onClose, settings, stages, onSave }) {
                         <div className="space-y-2.5">
                             {stagesList.map(s => (
                                 <div key={s.key} className="flex items-center gap-3 p-2.5 bg-white rounded-xl border border-surface-200 hover:border-surface-300 transition-colors">
-                                    <div
-                                        className="w-8 h-8 rounded-lg shrink-0 flex items-center justify-center shadow-2xs"
-                                        style={{ backgroundColor: s.color || '#94A3B8' }}
-                                    />
+                                    <div className="relative group shrink-0">
+                                        <label
+                                            className="relative w-8 h-8 rounded-lg flex items-center justify-center shadow-xs cursor-pointer border border-black/10 overflow-hidden hover:ring-2 hover:ring-brand-500 hover:ring-offset-1 transition-all"
+                                            style={{ backgroundColor: s.color || '#94A3B8' }}
+                                            title="Klik untuk ubah warna tahap"
+                                        >
+                                            <input
+                                                type="color"
+                                                value={s.color || '#94A3B8'}
+                                                onChange={e => handleStageColorChange(s.key, e.target.value)}
+                                                className="absolute inset-0 opacity-0 w-full h-full cursor-pointer"
+                                            />
+                                            <Palette className="w-3.5 h-3.5 text-white opacity-0 group-hover:opacity-90 drop-shadow pointer-events-none transition-opacity" />
+                                        </label>
+                                    </div>
                                     <div className="flex-1 min-w-0">
                                         <input
                                             type="text"
@@ -647,20 +672,20 @@ export default function Leads({ grouped, stats, salesUsers, filters, isManagerOr
     const [filterStage, setFilterStage] = useState(filters?.stage || '');
     const [filterSales, setFilterSales] = useState(filters?.sales_id || '');
     const [showForm, setShowForm] = useState(false);
-    const [defaultFormStage, setDefaultFormStage] = useState('data_masuk');
+    const [defaultFormStage, setDefaultFormStage] = useState('lead_masuk');
     const [showSettingsModal, setShowSettingsModal] = useState(false);
 
     const [localGrouped, setLocalGrouped] = useState(grouped);
     const [localStats, setLocalStats] = useState(stats);
 
     const defaultPipelineSettings = {
-        featured_stage_1: 'hot_progress',
-        featured_stage_2: 'proyek_deal',
+        featured_stage_1: 'negotiation',
+        featured_stage_2: 'win',
         stages: stages.map(s => ({
             key: s,
             name: STAGE_META[s]?.label || s,
-            type: (s === 'proyek_deal' || s === 'proyek_selesai') ? 'deal' : s === 'no_deal' ? 'lost' : 'normal',
-            color: s === 'sph_terlayang' ? '#3B82F6' : s === 'hot_progress' ? '#F59E0B' : s === 'proyek_deal' ? '#009680' : s === 'proyek_berjalan' ? '#8B5CF6' : s === 'proyek_selesai' ? '#10B981' : s === 'no_deal' ? '#EF4444' : '#94A3B8',
+            type: (s === 'win' || s === 'selesai_terbayar' || s === 'proyek_deal' || s === 'proyek_selesai') ? 'deal' : (s === 'lost' || s === 'no_deal') ? 'lost' : 'normal',
+            color: s === 'lead_masuk' ? '#94A3B8' : s === 'follow_up' ? '#3B82F6' : s === 'lead_qualification' ? '#F59E0B' : s === 'negotiation' ? '#009680' : s === 'win' ? '#8B5CF6' : s === 'lost' ? '#10B981' : s === 'selesai_terbayar' ? '#EF4444' : '#94A3B8',
         })),
     };
 
@@ -673,7 +698,12 @@ export default function Leads({ grouped, stats, salesUsers, filters, isManagerOr
 
     useEffect(() => {
         if (pipelineSettings) {
-            setLocalSettings(pipelineSettings);
+            const hasLegacySph = pipelineSettings.stages?.some(s => s.key === 'sph_terlayang');
+            if (hasLegacySph) {
+                setLocalSettings(defaultPipelineSettings);
+            } else {
+                setLocalSettings(pipelineSettings);
+            }
         }
     }, [pipelineSettings]);
 
@@ -689,8 +719,8 @@ export default function Leads({ grouped, stats, salesUsers, filters, isManagerOr
         }
     });
 
-    const curFeatured1 = localSettings?.featured_stage_1 || 'hot_progress';
-    const curFeatured2 = localSettings?.featured_stage_2 || 'proyek_deal';
+    const curFeatured1 = localSettings?.featured_stage_1 || 'negotiation';
+    const curFeatured2 = localSettings?.featured_stage_2 || 'win';
 
     const activeStagesList = (localSettings?.stages && localSettings.stages.length > 0)
         ? localSettings.stages

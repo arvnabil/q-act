@@ -12,13 +12,13 @@ class Lead extends Model
     use HasUuids;
 
     public const STAGES = [
-        'data_masuk',
-        'sph_terlayang',
-        'hot_progress',
-        'proyek_deal',
-        'proyek_berjalan',
-        'proyek_selesai',
-        'no_deal',
+        'lead_masuk',
+        'follow_up',
+        'lead_qualification',
+        'negotiation',
+        'win',
+        'lost',
+        'selesai_terbayar',
     ];
 
     public const SOURCES = [

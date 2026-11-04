@@ -18,7 +18,7 @@ class NotifyStaleLeads extends Command
 
         // Find leads with no activity in last 3 days, not in terminal stages
         $staleLeads = Lead::active()
-            ->whereNotIn('stage', ['proyek_selesai', 'no_deal'])
+            ->whereNotIn('stage', ['proyek_selesai', 'no_deal', 'lost', 'selesai_terbayar'])
             ->whereDoesntHave('activities', function ($q) use ($cutoff) {
                 $q->where('created_at', '>=', $cutoff);
             })

@@ -5,7 +5,7 @@ import { Head, usePage, router } from '@inertiajs/react';
 import axios from 'axios';
 import { 
   Plus, Edit, Trash2, Star, Building2, CreditCard, Loader2, X, FileText, Wrench, ImageIcon, Globe,
-  TrendingUp, SlidersHorizontal, Calendar, Video, CheckCircle2, AlertCircle, Key, Link2, ShieldCheck
+  TrendingUp, SlidersHorizontal, Calendar, Video, CheckCircle2, AlertCircle, Key, Link2, ShieldCheck, Palette
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 
@@ -251,25 +251,34 @@ export default function Settings({
 
   // Pipeline Settings State
   const defaultStages = [
-    { key: 'data_masuk',      name: 'Data Masuk',      type: 'normal', color: '#94A3B8' },
-    { key: 'sph_terlayang',   name: 'SPH Terlayang',   type: 'normal', color: '#3B82F6' },
-    { key: 'hot_progress',    name: 'Hot Progress',    type: 'normal', color: '#F59E0B' },
-    { key: 'proyek_deal',     name: 'Proyek Deal',     type: 'deal',   color: '#009680' },
-    { key: 'proyek_berjalan', name: 'Proyek Berjalan', type: 'normal', color: '#8B5CF6' },
-    { key: 'proyek_selesai',  name: 'Proyek Selesai',  type: 'normal', color: '#10B981' },
-    { key: 'no_deal',         name: 'No Deal',         type: 'lost',   color: '#EF4444' },
+    { key: 'lead_masuk',         name: 'Lead Masuk',         type: 'normal', color: '#94A3B8' },
+    { key: 'follow_up',          name: 'Follow Up',          type: 'normal', color: '#3B82F6' },
+    { key: 'lead_qualification', name: 'Lead Qualification', type: 'normal', color: '#F59E0B' },
+    { key: 'negotiation',        name: 'Negotiation',        type: 'normal', color: '#009680' },
+    { key: 'win',                name: 'Win',                type: 'deal',   color: '#8B5CF6' },
+    { key: 'lost',               name: 'Lost',               type: 'lost',   color: '#10B981' },
+    { key: 'selesai_terbayar',   name: 'Selesai (Terbayar)', type: 'deal',   color: '#EF4444' },
   ];
 
   const [pipeline, setPipeline] = useState(pipelineSettings || {
-    featured_stage_1: 'hot_progress',
-    featured_stage_2: 'proyek_deal',
+    featured_stage_1: 'negotiation',
+    featured_stage_2: 'win',
     stages: defaultStages,
   });
   const [isSavingPipeline, setIsSavingPipeline] = useState(false);
 
   useEffect(() => {
     if (pipelineSettings) {
-      setPipeline(pipelineSettings);
+      const hasLegacySph = pipelineSettings.stages?.some(s => s.key === 'sph_terlayang');
+      if (hasLegacySph) {
+        setPipeline({
+          featured_stage_1: 'negotiation',
+          featured_stage_2: 'win',
+          stages: defaultStages,
+        });
+      } else {
+        setPipeline(pipelineSettings);
+      }
     }
   }, [pipelineSettings]);
 
@@ -277,6 +286,13 @@ export default function Settings({
     setPipeline(prev => ({
       ...prev,
       stages: (prev.stages || defaultStages).map(s => s.key === key ? { ...s, name } : s)
+    }));
+  };
+
+  const handlePipelineColorChange = (key, color) => {
+    setPipeline(prev => ({
+      ...prev,
+      stages: (prev.stages || defaultStages).map(s => s.key === key ? { ...s, color } : s)
     }));
   };
 
@@ -460,9 +476,9 @@ export default function Settings({
                   <div>
                     <label className="text-xs font-semibold text-gray-600 block mb-1">Card Status 1 (Dinamis)</label>
                     <select
-                      value={pipeline.featured_stage_1 || 'hot_progress'}
+                      value={pipeline.featured_stage_1 || 'negotiation'}
                       onChange={e => setPipeline(prev => ({ ...prev, featured_stage_1: e.target.value }))}
-                      className="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-800 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 outline-none"
+                      className="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-800 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 outline-none cursor-pointer"
                     >
                       {(pipeline.stages || defaultStages).map(s => (
                         <option key={s.key} value={s.key}>{s.name} ({s.key})</option>
@@ -472,9 +488,9 @@ export default function Settings({
                   <div>
                     <label className="text-xs font-semibold text-gray-600 block mb-1">Card Status 2 (Dinamis)</label>
                     <select
-                      value={pipeline.featured_stage_2 || 'proyek_deal'}
+                      value={pipeline.featured_stage_2 || 'win'}
                       onChange={e => setPipeline(prev => ({ ...prev, featured_stage_2: e.target.value }))}
-                      className="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-800 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 outline-none"
+                      className="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-800 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 outline-none cursor-pointer"
                     >
                       {(pipeline.stages || defaultStages).map(s => (
                         <option key={s.key} value={s.key}>{s.name} ({s.key})</option>
@@ -488,10 +504,21 @@ export default function Settings({
               <div className="space-y-3">
                 {(pipeline.stages || defaultStages).map(s => (
                   <div key={s.key} className="flex items-center gap-3 p-3 bg-white rounded-xl border border-gray-200 hover:border-gray-300 transition-colors">
-                    <div
-                      className="w-8 h-8 rounded-lg shrink-0 flex items-center justify-center shadow-2xs"
-                      style={{ backgroundColor: s.color || '#94A3B8' }}
-                    />
+                    <div className="relative group shrink-0">
+                      <label
+                        className="relative w-8 h-8 rounded-lg flex items-center justify-center shadow-xs cursor-pointer border border-black/10 overflow-hidden hover:ring-2 hover:ring-brand-500 hover:ring-offset-1 transition-all"
+                        style={{ backgroundColor: s.color || '#94A3B8' }}
+                        title="Klik untuk ubah warna tahap"
+                      >
+                        <input
+                          type="color"
+                          value={s.color || '#94A3B8'}
+                          onChange={e => handlePipelineColorChange(s.key, e.target.value)}
+                          className="absolute inset-0 opacity-0 w-full h-full cursor-pointer"
+                        />
+                        <Palette className="w-3.5 h-3.5 text-white opacity-0 group-hover:opacity-90 drop-shadow pointer-events-none transition-opacity" />
+                      </label>
+                    </div>
                     <div className="flex-1 min-w-0">
                       <input
                         type="text"
@@ -505,7 +532,7 @@ export default function Settings({
                       <select
                         value={s.type || 'normal'}
                         onChange={e => handlePipelineTypeChange(s.key, e.target.value)}
-                        className="w-full border border-gray-200 rounded-lg px-3 py-2 text-xs font-semibold text-gray-700 bg-white focus:border-brand-500 focus:ring-1 focus:ring-brand-500 outline-none"
+                        className="w-full border border-gray-200 rounded-lg px-3 py-2 text-xs font-semibold text-gray-700 bg-white focus:border-brand-500 focus:ring-1 focus:ring-brand-500 outline-none cursor-pointer"
                       >
                         <option value="normal">Normal</option>
                         <option value="deal">Deal (menang)</option>

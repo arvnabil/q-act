@@ -27,9 +27,9 @@ class AchievementController extends Controller
         $isAllMonth = $month === 'all';
 
         // Target stages based on tab
-        $targetStages = $tab === 'proyek_selesai'
-            ? ['proyek_selesai']
-            : ['proyek_deal', 'proyek_berjalan', 'proyek_selesai'];
+        $targetStages = in_array($tab, ['proyek_selesai', 'selesai_terbayar'])
+            ? ['selesai_terbayar', 'proyek_selesai']
+            : ['win', 'selesai_terbayar', 'proyek_deal', 'proyek_berjalan', 'proyek_selesai'];
 
         // Base query for leads
         $leadQuery = Lead::active()->whereIn('stage', $targetStages);
