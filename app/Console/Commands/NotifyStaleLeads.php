@@ -16,9 +16,21 @@ class NotifyStaleLeads extends Command
     {
         $cutoff = Carbon::now()->subDays(3);
 
+        // Dynamically find terminal stages (deal/lost) from pipeline settings
+        $pipelineSetting = \App\Models\SystemSetting::find('lead_pipeline_settings');
+        $terminalStages = ['lost', 'selesai_terbayar', 'win', 'proyek_selesai', 'no_deal'];
+        if ($pipelineSetting && is_array($pipelineSetting->value) && isset($pipelineSetting->value['stages'])) {
+            foreach ($pipelineSetting->value['stages'] as $st) {
+                if (in_array($st['type'] ?? '', ['deal', 'lost'])) {
+                    $terminalStages[] = $st['key'];
+                }
+            }
+        }
+        $terminalStages = array_unique($terminalStages);
+
         // Find leads with no activity in last 3 days, not in terminal stages
         $staleLeads = Lead::active()
-            ->whereNotIn('stage', ['proyek_selesai', 'no_deal', 'lost', 'selesai_terbayar'])
+            ->whereNotIn('stage', $terminalStages)
             ->whereDoesntHave('activities', function ($q) use ($cutoff) {
                 $q->where('created_at', '>=', $cutoff);
             })

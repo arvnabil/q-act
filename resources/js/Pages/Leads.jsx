@@ -81,10 +81,10 @@ function LeadCard({ lead, activeStagesList, stageMetaMap, onStageChange, onViewD
     const [showMenu, setShowMenu] = useState(false);
     const [isDragging, setIsDragging] = useState(false);
     const days = daysSince(lead.created_at);
-    const isStale = days > 3 && !['selesai_terbayar', 'win', 'lost', 'proyek_selesai', 'no_deal'].includes(lead.stage);
-
     const meta = stageMetaMap?.[lead.stage] || STAGE_META[lead.stage] || {};
     const colorHex = meta.colorHex;
+    const isTerminal = meta.type === 'deal' || meta.type === 'lost' || ['selesai_terbayar', 'win', 'lost', 'proyek_selesai', 'no_deal'].includes(lead.stage);
+    const isStale = days > 3 && !isTerminal;
 
     const handleDragStart = (e) => {
         setIsDragging(true);
@@ -454,7 +454,9 @@ function ListView({ grouped, stageMetaMap, onStageChange, onViewDetail }) {
                 <tbody className="divide-y divide-surface-100">
                     {allLeads.map(lead => {
                         const days = daysSince(lead.created_at);
-                        const isStale = days > 3 && !['selesai_terbayar', 'win', 'lost', 'proyek_selesai', 'no_deal'].includes(lead.stage);
+                        const meta = stageMetaMap?.[lead.stage] || STAGE_META[lead.stage] || {};
+                        const isTerminal = meta.type === 'deal' || meta.type === 'lost' || ['selesai_terbayar', 'win', 'lost', 'proyek_selesai', 'no_deal'].includes(lead.stage);
+                        const isStale = days > 3 && !isTerminal;
                         return (
                             <tr key={lead.id}
                                 className="hover:bg-surface-50 cursor-pointer transition-colors"
@@ -846,20 +848,10 @@ export default function Leads({ grouped, stats, salesUsers, filters, isManagerOr
             return copy;
         });
 
-        // Update local stats instantly
-        setLocalStats(prev => {
-            const next = { ...prev };
-            if (fromStage === 'hot_progress') next.hotProgress = Math.max(0, (next.hotProgress || 1) - 1);
-            if (targetStage === 'hot_progress') next.hotProgress = (next.hotProgress || 0) + 1;
-            if (fromStage === 'proyek_deal') next.proyekDeal = Math.max(0, (next.proyekDeal || 1) - 1);
-            if (targetStage === 'proyek_deal') next.proyekDeal = (next.proyekDeal || 0) + 1;
-            return next;
-        });
-
         // Persist to database silently via background AJAX (no Inertia loading bar)
         axios.patch(route('leads.stage.update', leadId), { stage: targetStage })
             .then(() => {
-                toast.success(`Stage dipindahkan ke "${STAGE_META[targetStage]?.label || targetStage}"`);
+                toast.success(`Stage dipindahkan ke "${stageMetaMap[targetStage]?.label || STAGE_META[targetStage]?.label || targetStage}"`);
             })
             .catch(err => {
                 console.error('Failed to update stage in background:', err);
@@ -873,8 +865,8 @@ export default function Leads({ grouped, stats, salesUsers, filters, isManagerOr
         router.visit(route('leads.show', lead.id));
     };
 
-    const handleAddLead = (stage = 'data_masuk') => {
-        setDefaultFormStage(stage);
+    const handleAddLead = (stage = null) => {
+        setDefaultFormStage(stage || activeStagesList[0]?.key || 'lead_masuk');
         setShowForm(true);
     };
 
@@ -907,7 +899,7 @@ export default function Leads({ grouped, stats, salesUsers, filters, isManagerOr
                                 </button>
                             )}
                             <button
-                                onClick={() => handleAddLead('data_masuk')}
+                                onClick={() => handleAddLead()}
                                 className="flex items-center gap-2 px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white text-sm font-semibold rounded-xl transition-colors">
                                 <Plus className="w-4 h-4" />
                                 Tambah Lead

@@ -32,7 +32,7 @@ export default function Achievements({
     filters,
     isManagerOrAdmin,
 }) {
-    const [activeTab, setActiveTab] = useState(tab || 'proyek_deal');
+    const [activeTab, setActiveTab] = useState(tab || 'win');
     const [search, setSearch] = useState(filters?.search || '');
     const [startDate, setStartDate] = useState(filters?.start_date || '');
     const [endDate, setEndDate] = useState(filters?.end_date || '');
@@ -105,21 +105,21 @@ export default function Achievements({
                             <h1 className="text-xl font-extrabold text-surface-900 tracking-tight">Pencapaian</h1>
                         </div>
                         <p className="text-xs text-surface-500 mt-1 max-w-2xl leading-relaxed">
-                            Omzet dihitung dari tahap Proyek Deal. Proyek yang sudah berjalan atau selesai tetap dihitung di bulan proyek deal-nya.
+                            Omzet dihitung dari tahap <strong>Win (Deal Menang)</strong>. Lead yang sudah masuk tahap deal tetap dihitung di bulan deal-nya, meski proyek masih berjalan.
                         </p>
                     </div>
 
-                    {/* Proyek Deal / Proyek Selesai Tabs */}
+                    {/* Deal Menang / Selesai Terbayar Tabs */}
                     <div className="flex items-center bg-surface-200/70 p-1 rounded-full shrink-0">
                         <button
-                            onClick={() => handleTabChange('proyek_deal')}
-                            className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all ${activeTab === 'proyek_deal' ? 'bg-surface-900 text-white shadow-sm' : 'text-surface-600 hover:text-surface-900'}`}>
-                            Proyek Deal
+                            onClick={() => handleTabChange('win')}
+                            className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all ${activeTab === 'win' || activeTab === 'proyek_deal' ? 'bg-surface-900 text-white shadow-sm' : 'text-surface-600 hover:text-surface-900'}`}>
+                            Deal Menang
                         </button>
                         <button
-                            onClick={() => handleTabChange('proyek_selesai')}
-                            className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all ${activeTab === 'proyek_selesai' ? 'bg-surface-900 text-white shadow-sm' : 'text-surface-600 hover:text-surface-900'}`}>
-                            Proyek Selesai
+                            onClick={() => handleTabChange('selesai_terbayar')}
+                            className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all ${activeTab === 'selesai_terbayar' || activeTab === 'proyek_selesai' ? 'bg-surface-900 text-white shadow-sm' : 'text-surface-600 hover:text-surface-900'}`}>
+                            Selesai Terbayar
                         </button>
                     </div>
                 </div>

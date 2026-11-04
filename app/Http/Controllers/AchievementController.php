@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Lead;
 use App\Models\SalesOrder;
 use App\Models\SalesTarget;
+use App\Models\SystemSetting;
 use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -19,17 +20,39 @@ class AchievementController extends Controller
         $effectiveRole = $user->spatie_role ?? $user->role;
         $isManagerOrAdmin = in_array($effectiveRole, ['Administrator', 'Sales Manager', 'Manager']);
 
-        // Tab: 'proyek_deal' (default) or 'proyek_selesai'
-        $tab = $request->input('tab', 'proyek_deal');
+        // Tab: 'win' (default) or 'selesai_terbayar'
+        $tab = $request->input('tab', 'win');
 
         // Month filter: e.g. '2026-11' or 'all'
         $month = $request->input('month', now()->format('Y-m'));
         $isAllMonth = $month === 'all';
 
+        // Dynamically resolve deal/lost stages from pipeline settings
+        $pipelineSetting = SystemSetting::find('lead_pipeline_settings');
+        $pipelineStages  = is_array($pipelineSetting?->value['stages'] ?? null)
+            ? $pipelineSetting->value['stages']
+            : [];
+
+        $dealStages = collect($pipelineStages)->where('type', 'deal')->pluck('key')->values()->all();
+        if (empty($dealStages)) {
+            $dealStages = ['win', 'selesai_terbayar', 'proyek_deal', 'proyek_berjalan', 'proyek_selesai'];
+        }
+
+        // 'selesai_terbayar' tab = only closed/paid deal stages
+        $selesaiStages = collect($pipelineStages)
+            ->where('type', 'deal')
+            ->filter(fn($s) => str_contains($s['key'] ?? '', 'selesai') || str_contains($s['key'] ?? '', 'terbayar'))
+            ->pluck('key')
+            ->values()
+            ->all();
+        if (empty($selesaiStages)) {
+            $selesaiStages = ['selesai_terbayar', 'proyek_selesai'];
+        }
+
         // Target stages based on tab
-        $targetStages = in_array($tab, ['proyek_selesai', 'selesai_terbayar'])
-            ? ['selesai_terbayar', 'proyek_selesai']
-            : ['win', 'selesai_terbayar', 'proyek_deal', 'proyek_berjalan', 'proyek_selesai'];
+        $targetStages = in_array($tab, array_merge(['selesai_terbayar', 'proyek_selesai'], $selesaiStages))
+            ? $selesaiStages
+            : $dealStages;
 
         // Base query for leads
         $leadQuery = Lead::active()->whereIn('stage', $targetStages);
