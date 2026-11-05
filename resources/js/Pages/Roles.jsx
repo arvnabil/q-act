@@ -10,6 +10,8 @@ const FEATURE_LABELS = {
     'dashboard_view': 'Dashboard - Lihat Performa & Laporan',
     'sales_targets_edit': 'Dashboard - Atur Target Sales',
     'leads_view': 'Lead Pipeline - Lihat Board',
+    'leads_view_bu': 'Lead Pipeline - Lihat data sendiri + BU',
+    'leads_view_all': 'Lead Pipeline - Lihat semua data',
     'leads_manage': 'Lead Pipeline - Tambah / Edit / Pindah Stage',
     'leads_visits': 'Lead Pipeline - Visit & Follow-up',
     'calendar_view_bu': 'Kalender & Agenda - Lihat data sendiri + BU',
@@ -59,7 +61,7 @@ const GROUPS = [
     { id: 'reports', label: 'Laporan', match: f => ['view_reports', 'achievements_view', 'manager_view'].includes(f) },
     { id: 'system', label: 'Pengguna & Sistem', match: f => ['user_management', 'manage_business_units', 'manage_settings', 'manage_roles'].includes(f) },
 ];
-const SCOPED = ['dashboard_view', 'calendar_view', 'quotations_view', 'sales_orders_view', 'customers_view'];
+const SCOPED = ['dashboard_view', 'leads_view', 'calendar_view', 'quotations_view', 'sales_orders_view', 'customers_view'];
 const isScope = f => f.endsWith('_view_bu') || f.endsWith('_view_all');
 const describe = f => SCOPED.includes(f) ? 'Membuka daftar, hasil pencarian, dan detail sesuai cakupan data.'
     : f.includes('import') ? 'Mengimpor quotation lama ke dalam sistem.'
@@ -148,7 +150,7 @@ export default function RolesPage({ rolePermissions = {}, rolesList = [], featur
                                 return <tr key={feature} className="hover:bg-surface-50/40"><td className="p-5 min-w-[220px]"><label htmlFor={`perm-${feature}`} className="font-semibold text-surface-800">{FEATURE_LABELS[feature] || feature}</label><p className="text-xs text-surface-500 mt-1 leading-relaxed">{locked ? 'Dipertahankan agar akses pengelolaan pengguna dan role tetap tersedia.' : describe(feature)}</p></td><td className="p-5 text-center"><input id={`perm-${feature}`} aria-label={FEATURE_LABELS[feature] || feature} type="checkbox" checked={enabled} disabled={locked || saving} onChange={e => setPermission(feature,e.target.checked)} className="w-5 h-5 rounded border-surface-300 text-brand-600 focus:ring-brand-500 disabled:opacity-40" /></td><td className="p-5 min-w-[215px]">{SCOPED.includes(feature) ? <select aria-label={`Cakupan ${FEATURE_LABELS[feature]}`} disabled={!enabled || saving} value={scope(feature)} onChange={e => setScope(feature,e.target.value)} className="w-full text-sm rounded-lg border-surface-200 text-surface-700 focus:ring-brand-500 focus:border-brand-500 disabled:bg-surface-50 disabled:opacity-40"><option value="own">Data sendiri</option><option value="bu">Data sendiri + BU</option><option value="all">Semua data</option></select> : <span className="text-surface-300">—</span>}</td></tr>;
                             })}</tbody></table></div>
                         {!shown.length && <p className="p-10 text-center text-surface-500 text-sm">Tidak ada fitur yang cocok.</p>}
-                        <div className="p-5 bg-surface-50 border-t border-surface-100 text-xs text-surface-500 leading-relaxed"><strong className="text-surface-700">Tentang cakupan:</strong> Data sendiri + BU mencakup anggota BU yang sama. Tanpa BU, hanya data sendiri. Izin melihat tidak otomatis memberikan izin mengedit atau menghapus. Dropdown cakupan saat ini tersedia untuk izin melihat Dashboard, Kalender, Quotation, SO, dan Customer.</div>
+                        <div className="p-5 bg-surface-50 border-t border-surface-100 text-xs text-surface-500 leading-relaxed"><strong className="text-surface-700">Tentang cakupan:</strong> Data sendiri + BU mencakup anggota BU yang sama. Tanpa BU, hanya data sendiri. Izin melihat tidak otomatis memberikan izin mengedit atau menghapus. Dropdown cakupan saat ini tersedia untuk izin melihat Lead Pipeline, Dashboard, Kalender, Quotation, SO, dan Customer.</div>
                     </section>
                 </div> : <section role="tabpanel" id="role-panel-members" className="bg-white border border-surface-200 rounded-2xl shadow-sm overflow-hidden">
                     <div className="p-5 border-b border-surface-100 flex flex-wrap items-center justify-between gap-3"><div className="flex items-center gap-2 border border-surface-200 px-3 py-2 rounded-lg"><Search className="w-4 h-4 text-surface-400" /><input aria-label="Cari anggota role" value={memberSearch} onChange={e => setMemberSearch(e.target.value)} placeholder="Cari nama, email, atau BU..." className="border-0 p-0 focus:ring-0 text-sm w-60" /></div>{canManageUsers && <Link href="/users" className="text-sm text-brand-600 font-semibold hover:underline">Kelola Pengguna →</Link>}</div>

@@ -18,6 +18,8 @@ const SYSTEM_PERMISSIONS = [
     'dashboard_view_all',
     'sales_targets_edit',
     'leads_view',
+    'leads_view_bu',
+    'leads_view_all',
     'leads_manage',
     'leads_visits',
     'calendar_view',
@@ -60,16 +62,19 @@ const STANDARD_ROLES = ['Administrator', 'Manager', 'Sales', 'Presales', 'Financ
 const DEFAULT_ROLE_PERMISSIONS = [
     'Administrator' => SYSTEM_PERMISSIONS,
     'Manager' => [
-        'dashboard', 'sales_targets_edit', 'calendar_view', 'calendar_view_all', 'quotations_view', 'quotations_create', 'quotations_edit', 'quotations_delete',
+        'dashboard', 'sales_targets_edit', 'leads_view', 'leads_view_all', 'leads_manage', 'leads_visits',
+        'calendar_view', 'calendar_view_all', 'quotations_view', 'quotations_create', 'quotations_edit', 'quotations_delete',
         'sales_orders_view', 'sales_orders_edit', 'sales_orders_delete', 'sales_orders_delete_bulk', 'customers_view', 'customers_create', 'customers_edit',
         'products_view', 'view_reports', 'manager_view'
     ],
     'Sales' => [
-        'dashboard', 'calendar_view', 'quotations_view', 'quotations_create', 'quotations_edit', 'quotations_delete',
+        'dashboard', 'leads_view', 'leads_view_bu', 'leads_manage', 'leads_visits',
+        'calendar_view', 'quotations_view', 'quotations_create', 'quotations_edit', 'quotations_delete',
         'sales_orders_view', 'sales_orders_edit', 'customers_view', 'customers_create', 'customers_edit', 'products_view'
     ],
     'Presales' => [
-        'dashboard', 'calendar_view', 'quotations_view', 'quotations_create', 'quotations_edit', 'quotations_delete',
+        'dashboard', 'leads_view', 'leads_view_bu', 'leads_manage', 'leads_visits',
+        'calendar_view', 'quotations_view', 'quotations_create', 'quotations_edit', 'quotations_delete',
         'sales_orders_view', 'customers_view', 'products_view'
     ],
     'Finance' => [
@@ -131,7 +136,7 @@ class RoleController extends Controller
             if (!isset($roles[$roleName]) || array_diff(array_keys($permissions), SYSTEM_PERMISSIONS)) {
                 throw \Illuminate\Validation\ValidationException::withMessages(['rolePermissions' => 'Role atau permission tidak valid.']);
             }
-            foreach (['dashboard', 'calendar', 'quotations', 'sales_orders', 'customers'] as $module) {
+            foreach (['dashboard', 'calendar', 'leads', 'quotations', 'sales_orders', 'customers'] as $module) {
                 if (!empty($permissions[$module.'_view_all']) && !empty($permissions[$module.'_view_bu'])) {
                     $data['rolePermissions'][$roleName][$module.'_view_bu'] = false;
                 }
