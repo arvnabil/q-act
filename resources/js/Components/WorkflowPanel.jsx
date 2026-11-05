@@ -6,7 +6,32 @@ import toast from 'react-hot-toast';
 import Modal from '@/Components/Modal';
 import { Calendar, Link2, Plus, X, Check, ArrowRight } from 'lucide-react';
 
-const dateLabel = value => new Date(value).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' });
+const formatVisitPeriod = (v) => {
+    if (!v?.scheduled_at) return '';
+    const start = new Date(v.scheduled_at);
+    if (v.is_all_day) {
+        const startStr = start.toLocaleDateString('id-ID', { dateStyle: 'medium' });
+        if (v.end_at) {
+            const end = new Date(v.end_at);
+            const endStr = end.toLocaleDateString('id-ID', { dateStyle: 'medium' });
+            return startStr === endStr ? `${startStr} (Seharian)` : `${startStr} – ${endStr} (Seharian)`;
+        }
+        return `${startStr} (Seharian)`;
+    }
+    const startStr = start.toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' });
+    if (v.end_at) {
+        const end = new Date(v.end_at);
+        const isSameDay = start.toDateString() === end.toDateString();
+        if (isSameDay) {
+            const endTimeStr = end.toLocaleTimeString('id-ID', { timeStyle: 'short' });
+            return `${startStr} – ${endTimeStr}`;
+        }
+        const endStr = end.toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' });
+        return `${startStr} – ${endStr}`;
+    }
+    return startStr;
+};
+const dateLabel = value => typeof value === 'object' && value !== null ? formatVisitPeriod(value) : (value ? new Date(value).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' }) : '');
 const localInput = value => { const d = new Date(value); const pad = n => String(n).padStart(2, '0'); return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`; };
 const field = 'w-full rounded-lg border-surface-200 text-sm focus:ring-brand-500';
 const button = 'inline-flex items-center justify-center gap-1.5 rounded-lg border border-surface-200 bg-white px-3 py-2 text-xs font-semibold text-surface-700 hover:border-brand-400 focus-visible:ring-2 focus-visible:ring-brand-500 disabled:opacity-50';
@@ -32,9 +57,23 @@ export default function WorkflowPanel({ quotationId, leadId, embedded = false, r
     };
     const schedule = (visit = null) => {
         const tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate()+1); tomorrow.setHours(9,0,0,0);
-        setError(''); setForm(visit ? { ...visit, scheduled_at: localInput(visit.scheduled_at), sync_calendar: Boolean(visit?.google_calendar_event_id || data?.calendarConfigured), create_zoom: Boolean(visit?.zoom_meeting_id || data?.zoomConfigured) } : {
-            subject: `Follow-up ${quotationId || data?.lead?.title || 'peluang'}`, scheduled_at: localInput(tomorrow),
-            visit_type: 'follow_up', location: '', notes: '', sync_calendar: Boolean(data?.calendarConfigured), create_zoom: Boolean(data?.zoomConfigured),
+        setError(''); setForm(visit ? {
+            ...visit,
+            scheduled_at: visit.is_all_day && visit.scheduled_at ? visit.scheduled_at.slice(0, 10) : localInput(visit.scheduled_at),
+            end_at: visit.end_at ? (visit.is_all_day ? visit.end_at.slice(0, 10) : localInput(visit.end_at)) : '',
+            is_all_day: Boolean(visit.is_all_day),
+            sync_calendar: Boolean(visit?.google_calendar_event_id || data?.calendarConfigured),
+            create_zoom: Boolean(visit?.zoom_meeting_id || data?.zoomConfigured)
+        } : {
+            subject: `Follow-up ${quotationId || data?.lead?.title || 'peluang'}`,
+            scheduled_at: localInput(tomorrow),
+            end_at: '',
+            is_all_day: false,
+            visit_type: 'follow_up',
+            location: '',
+            notes: '',
+            sync_calendar: Boolean(data?.calendarConfigured),
+            create_zoom: Boolean(data?.zoomConfigured),
         });
         setMode(visit ? 'reschedule' : 'schedule');
     };
@@ -76,7 +115,7 @@ export default function WorkflowPanel({ quotationId, leadId, embedded = false, r
         {quotationId && data && !data.lead && data.canSchedule && <button type="button" onClick={() => schedule()} className={button + ' mt-4'}><Calendar className="h-4 w-4" />Jadwalkan tindak lanjut tanpa lead</button>}
         {pending.length > 0 && <p className="mt-4 text-xs font-semibold text-brand-700">{pending.length} agenda aktif. Gunakan Jadwal ulang untuk memperbarui agenda yang sudah ada.</p>}
         <div className="mt-3 divide-y divide-surface-100">{(all ? list : list.slice(0, 4)).map(v => <div key={v.id} className="flex flex-wrap items-center justify-between gap-3 py-3">
-            <div className="min-w-0"><p className="text-sm font-semibold text-surface-800">{v.subject}</p><p className="mt-1 text-xs text-surface-500">{dateLabel(v.scheduled_at)} · {v.cancelled_at ? 'Dibatalkan' : v.checked_in_at ? 'Selesai' : new Date(v.scheduled_at) < new Date() ? 'Terlambat' : 'Terjadwal'}</p>
+            <div className="min-w-0"><p className="text-sm font-semibold text-surface-800">{v.subject}</p><p className="mt-1 text-xs text-surface-500">{formatVisitPeriod(v)} · {v.cancelled_at ? 'Dibatalkan' : v.checked_in_at ? 'Selesai' : new Date(v.scheduled_at) < new Date() ? 'Terlambat' : 'Terjadwal'}</p>
                 {v.quotation_id && <Link href={`/quotations/${v.quotation_id}`} className="text-xs text-brand-600">{v.quotation_id}</Link>}
                 {v.zoom_join_url && !v.cancelled_at && <a href={v.zoom_join_url} target="_blank" rel="noopener noreferrer" className="ml-2 text-xs font-semibold text-brand-600">Buka Zoom ↗</a>}
             </div>
@@ -92,7 +131,13 @@ export default function WorkflowPanel({ quotationId, leadId, embedded = false, r
             if (mode === 'create' || mode === 'link') perform(() => axios.post(`${endpoint}/lead`, mode === 'create' ? {title, quotation_ids: otherIds} : {lead_id: selected, quotation_ids: otherIds}));
             else if (mode === 'cancel') perform(() => axios.post(`/workflow/visits/${form.id}/cancel`));
             else {
-                const payload = { ...form, scheduled_at: new Date(form.scheduled_at).toISOString(), quotation_id: quotationId || null, lead_id: data?.lead?.id || leadId || null };
+                const payload = {
+    ...form,
+    scheduled_at: form.is_all_day ? (form.scheduled_at?.includes('T') ? form.scheduled_at : `${form.scheduled_at}T00:00:00`) : new Date(form.scheduled_at).toISOString(),
+    end_at: form.end_at ? (form.is_all_day ? (form.end_at?.includes('T') ? form.end_at : `${form.end_at}T23:59:59`) : new Date(form.end_at).toISOString()) : null,
+    quotation_id: quotationId || null,
+    lead_id: data?.lead?.id || leadId || null
+};
                 perform(() => mode === 'reschedule' ? axios.put(`/leads/visits/${form.id}`, payload) : axios.post('/leads/visits', payload));
             }
         }} className="flex max-h-[85vh] flex-col">

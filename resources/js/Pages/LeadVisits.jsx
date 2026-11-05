@@ -141,8 +141,20 @@ function VisitTable({ visits, onCheckIn, zoomConfigured, onDeleteVisit, onCreate
                                     {visit.notes && <p className="text-xs text-surface-400 mt-0.5 line-clamp-1">{visit.notes}</p>}
                                 </td>
                                 <td className="px-4 py-3">
-                                    <p className="text-sm text-surface-700">{formatDate(visit.scheduled_at)}</p>
-                                    <p className="text-xs text-surface-400 font-semibold">{formatTime(visit.scheduled_at)}</p>
+                                    <p className="text-sm text-surface-700">
+                                        {visit.is_all_day && visit.end_at && formatDate(visit.scheduled_at) !== formatDate(visit.end_at)
+                                            ? `${formatDate(visit.scheduled_at)} – ${formatDate(visit.end_at)}`
+                                            : formatDate(visit.scheduled_at)}
+                                    </p>
+                                    <p className="text-xs font-semibold text-surface-400">
+                                        {visit.is_all_day ? (
+                                            <span className="text-brand-600">Seharian Penuh</span>
+                                        ) : visit.end_at ? (
+                                            `${formatTime(visit.scheduled_at)} – ${formatTime(visit.end_at)}`
+                                        ) : (
+                                            formatTime(visit.scheduled_at)
+                                        )}
+                                    </p>
                                 </td>
                                 <td className="px-4 py-3">
                                     {visit.location ? (
@@ -256,7 +268,7 @@ function CalendarPlaceholder() {
 function AddVisitModal({ open, onClose, leads, customers, googleCalendarConfigured, zoomConfigured, userHasZoomLicense }) {
     const [form, setForm] = useState({
         lead_id: '', customer_id: '', visit_type: 'visit',
-        subject: '', location: '', scheduled_at: '', notes: '',
+        subject: '', location: '', scheduled_at: '', end_at: '', is_all_day: false, notes: '',
         sync_calendar: googleCalendarConfigured,
         create_zoom: false,
     });
@@ -296,7 +308,13 @@ function AddVisitModal({ open, onClose, leads, customers, googleCalendarConfigur
         e.preventDefault();
         setErrors({});
         setSubmitting(true);
-        router.post(route('leads.visits.store'), { ...form, create_zoom: canCreateZoom && form.create_zoom, scheduled_at: new Date(form.scheduled_at).toISOString() }, {
+        router.post(route('leads.visits.store'), {
+            ...form,
+            create_zoom: canCreateZoom && form.create_zoom,
+            scheduled_at: form.is_all_day ? (form.scheduled_at?.includes('T') ? form.scheduled_at : `${form.scheduled_at}T00:00:00`) : new Date(form.scheduled_at).toISOString(),
+            end_at: form.end_at ? (form.is_all_day ? (form.end_at?.includes('T') ? form.end_at : `${form.end_at}T23:59:59`) : new Date(form.end_at).toISOString()) : null,
+            is_all_day: Boolean(form.is_all_day),
+        }, {
             preserveScroll: true,
             onSuccess: () => {
                 onClose();
@@ -401,28 +419,69 @@ function AddVisitModal({ open, onClose, leads, customers, googleCalendarConfigur
                     )}
 
                     {/* Type & Subject */}
-                    <div className="grid grid-cols-2 gap-3">
-                        <div>
-                            <label className="block text-xs font-semibold text-surface-600 mb-1">Jenis <span className="text-red-500">*</span></label>
-                            <select className="w-full border border-surface-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 bg-white"
-                                value={form.visit_type}
+                    <div>
+                        <label className="block text-xs font-semibold text-surface-600 mb-1">Jenis <span className="text-red-500">*</span></label>
+                        <select className="w-full border border-surface-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 bg-white"
+                            value={form.visit_type}
+                            onChange={e => {
+                                const val = e.target.value;
+                                setForm(f => ({
+                                    ...f,
+                                    visit_type: val,
+                                    create_zoom: f.create_zoom
+                                }));
+                            }}
+                            required>
+                            {Object.entries(VISIT_TYPES).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+                        </select>
+                    </div>
+
+                    <div className="space-y-2 rounded-xl bg-surface-50 p-3 border border-surface-200">
+                        <label className="flex items-center gap-2 cursor-pointer select-none">
+                            <input
+                                type="checkbox"
+                                checked={Boolean(form.is_all_day)}
                                 onChange={e => {
-                                    const val = e.target.value;
+                                    const checked = e.target.checked;
                                     setForm(f => ({
                                         ...f,
-                                        visit_type: val,
-                                        create_zoom: f.create_zoom
+                                        is_all_day: checked,
+                                        scheduled_at: checked ? (f.scheduled_at ? f.scheduled_at.slice(0, 10) : '') : (f.scheduled_at ? `${f.scheduled_at.slice(0, 10)}T09:00` : ''),
+                                        end_at: ''
                                     }));
                                 }}
-                                required>
-                                {Object.entries(VISIT_TYPES).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
-                            </select>
-                        </div>
-                        <div>
-                            <label className="block text-xs font-semibold text-surface-600 mb-1">Tanggal & Waktu <span className="text-red-500">*</span></label>
-                            <input type="datetime-local" className="w-full border border-surface-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
-                                value={form.scheduled_at} onChange={e => set('scheduled_at', e.target.value)} required />
-                        </div>
+                                className="w-4 h-4 rounded text-brand-600 focus:ring-brand-500 cursor-pointer"
+                            />
+                            <span className="text-xs font-semibold text-surface-800">Kegiatan Seharian (All-day) / Multi-hari</span>
+                        </label>
+
+                        {form.is_all_day ? (
+                            <div className="grid grid-cols-2 gap-3 pt-1">
+                                <div>
+                                    <label className="block text-xs font-semibold text-surface-600 mb-1">Tanggal Mulai <span className="text-red-500">*</span></label>
+                                    <input type="date" className="w-full border border-surface-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 bg-white"
+                                        value={form.scheduled_at?.slice(0, 10) || ''} onChange={e => set('scheduled_at', e.target.value)} required />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-semibold text-surface-600 mb-1">Tanggal Selesai (opsional)</label>
+                                    <input type="date" min={form.scheduled_at?.slice(0, 10) || ''} className="w-full border border-surface-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 bg-white"
+                                        value={form.end_at?.slice(0, 10) || ''} onChange={e => set('end_at', e.target.value)} />
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="grid grid-cols-2 gap-3 pt-1">
+                                <div>
+                                    <label className="block text-xs font-semibold text-surface-600 mb-1">Waktu Mulai <span className="text-red-500">*</span></label>
+                                    <input type="datetime-local" className="w-full border border-surface-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 bg-white"
+                                        value={form.scheduled_at} onChange={e => set('scheduled_at', e.target.value)} required />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-semibold text-surface-600 mb-1">Waktu Selesai (opsional)</label>
+                                    <input type="datetime-local" min={form.scheduled_at} className="w-full border border-surface-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 bg-white"
+                                        value={form.end_at} onChange={e => set('end_at', e.target.value)} />
+                                </div>
+                            </div>
+                        )}
                     </div>
 
                     <div>

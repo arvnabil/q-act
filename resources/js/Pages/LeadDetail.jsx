@@ -85,6 +85,32 @@ const formatDateTime = (d) => {
     return new Date(d).toLocaleString('id-ID', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 };
 
+const formatVisitSchedule = (v) => {
+    if (!v?.scheduled_at) return '—';
+    const start = new Date(v.scheduled_at);
+    if (v.is_all_day) {
+        const startStr = start.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
+        if (v.end_at) {
+            const end = new Date(v.end_at);
+            const endStr = end.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
+            return startStr === endStr ? `${startStr} (Seharian)` : `${startStr} – ${endStr} (Seharian)`;
+        }
+        return `${startStr} (Seharian)`;
+    }
+    const startStr = start.toLocaleString('id-ID', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+    if (v.end_at) {
+        const end = new Date(v.end_at);
+        const isSameDay = start.toDateString() === end.toDateString();
+        if (isSameDay) {
+            const endTimeStr = end.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
+            return `${startStr} – ${endTimeStr}`;
+        }
+        const endStr = end.toLocaleString('id-ID', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+        return `${startStr} – ${endStr}`;
+    }
+    return startStr;
+};
+
 const formatTimeOnly = (d) => {
     if (!d) return '';
     return new Date(d).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
@@ -278,7 +304,7 @@ function ActivityItem({ activity, currentUserId, isManagerOrAdmin, onDelete, onU
                         <p className={`text-sm font-semibold ${system ? 'text-surface-500' : 'text-surface-800'}`}>
                             {activity.title}
                         </p>
-                        {activity.visit && <p className="mt-1 rounded-lg bg-brand-50 px-2 py-1.5 text-xs text-brand-700">Agenda: {formatDateTime(activity.visit.scheduled_at)} · {activity.visit.cancelled_at ? 'Dibatalkan' : activity.visit.checked_in_at ? 'Selesai' : 'Terjadwal'} <Link href="/leads/visits" className="ml-1 underline">Lihat agenda</Link></p>}
+                        {activity.visit && <p className="mt-1 rounded-lg bg-brand-50 px-2 py-1.5 text-xs text-brand-700">Agenda: {formatVisitSchedule(activity.visit)} · {activity.visit.cancelled_at ? 'Dibatalkan' : activity.visit.checked_in_at ? 'Selesai' : 'Terjadwal'} <Link href="/leads/visits" className="ml-1 underline">Lihat agenda</Link></p>}
                         {activity.description && (
                             <p className="text-xs text-surface-500 mt-0.5 leading-relaxed">{activity.description}</p>
                         )}
@@ -855,6 +881,8 @@ function ScheduleVisitModal({ open, onClose, lead, googleCalendarConfigured, zoo
         subject: '',
         location: lead.customer?.address || '',
         scheduled_at: '',
+        end_at: '',
+        is_all_day: false,
         notes: '',
         sync_calendar: Boolean(googleCalendarConfigured),
         create_zoom: Boolean(zoomConfigured),
@@ -873,6 +901,8 @@ function ScheduleVisitModal({ open, onClose, lead, googleCalendarConfigured, zoo
                 subject: `Kunjungan Prospek: ${lead.title}`,
                 location: lead.customer?.address || '',
                 scheduled_at: isoLocal,
+                end_at: '',
+                is_all_day: false,
                 notes: '',
                 sync_calendar: Boolean(googleCalendarConfigured),
                 create_zoom: Boolean(zoomConfigured),
@@ -891,7 +921,9 @@ function ScheduleVisitModal({ open, onClose, lead, googleCalendarConfigured, zoo
             visit_type: form.visit_type,
             subject: form.subject,
             location: form.location,
-            scheduled_at: new Date(form.scheduled_at).toISOString(),
+            scheduled_at: form.is_all_day ? (form.scheduled_at?.includes('T') ? form.scheduled_at : `${form.scheduled_at}T00:00:00`) : new Date(form.scheduled_at).toISOString(),
+            end_at: form.end_at ? (form.is_all_day ? (form.end_at?.includes('T') ? form.end_at : `${form.end_at}T23:59:59`) : new Date(form.end_at).toISOString()) : null,
+            is_all_day: Boolean(form.is_all_day),
             notes: form.notes,
             sync_calendar: form.sync_calendar,
             create_zoom: form.create_zoom,
@@ -935,39 +967,94 @@ function ScheduleVisitModal({ open, onClose, lead, googleCalendarConfigured, zoo
                         />
                     </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        <div>
-                            <label className="block text-xs font-semibold text-surface-700 mb-1">Jenis Kunjungan <span className="text-red-500">*</span></label>
-                            <select
-                                value={form.visit_type}
+                    <div>
+                        <label className="block text-xs font-semibold text-surface-700 mb-1">Jenis Kunjungan <span className="text-red-500">*</span></label>
+                        <select
+                            value={form.visit_type}
+                            onChange={e => {
+                                const val = e.target.value;
+                                setForm(f => ({
+                                    ...f,
+                                    visit_type: val,
+                                    create_zoom: f.create_zoom
+                                }));
+                            }}
+                            className="w-full border border-surface-200 rounded-lg px-3 py-2 text-xs text-surface-800 outline-none focus:ring-2 focus:ring-brand-500 bg-white"
+                        >
+                            <option value="visit">Visit Lapangan</option>
+                            <option value="follow_up">Follow Up</option>
+                            <option value="demo">Demo Produk</option>
+                            <option value="presentation">Presentasi / Pitching</option><option value="installation">Instalasi</option><option value="maintenance">Maintenance</option><option value="leave">Cuti</option>
+                            <option value="other">Lainnya</option>
+                        </select>
+                    </div>
+
+                    <div className="space-y-2 rounded-xl bg-surface-50 p-3 border border-surface-200">
+                        <label className="flex items-center gap-2 cursor-pointer select-none">
+                            <input
+                                type="checkbox"
+                                checked={Boolean(form.is_all_day)}
                                 onChange={e => {
-                                    const val = e.target.value;
+                                    const checked = e.target.checked;
                                     setForm(f => ({
                                         ...f,
-                                        visit_type: val,
-                                        create_zoom: f.create_zoom
+                                        is_all_day: checked,
+                                        scheduled_at: checked ? (f.scheduled_at ? f.scheduled_at.slice(0, 10) : '') : (f.scheduled_at ? `${f.scheduled_at.slice(0, 10)}T10:00` : ''),
+                                        end_at: ''
                                     }));
                                 }}
-                                className="w-full border border-surface-200 rounded-lg px-3 py-2 text-xs text-surface-800 outline-none focus:ring-2 focus:ring-brand-500 bg-white"
-                            >
-                                <option value="visit">Visit Lapangan</option>
-                                <option value="follow_up">Follow Up</option>
-                                <option value="demo">Demo Produk</option>
-                                <option value="presentation">Presentasi / Pitching</option><option value="installation">Instalasi</option><option value="maintenance">Maintenance</option><option value="leave">Cuti</option>
-                                <option value="other">Lainnya</option>
-                            </select>
-                        </div>
-
-                        <div>
-                            <label className="block text-xs font-semibold text-surface-700 mb-1">Waktu Pelaksanaan <span className="text-red-500">*</span></label>
-                            <input
-                                type="datetime-local"
-                                value={form.scheduled_at}
-                                onChange={e => setForm({ ...form, scheduled_at: e.target.value })}
-                                required
-                                className="w-full border border-surface-200 rounded-lg px-3 py-2 text-xs text-surface-800 outline-none focus:ring-2 focus:ring-brand-500"
+                                className="w-4 h-4 rounded text-brand-600 focus:ring-brand-500 cursor-pointer"
                             />
-                        </div>
+                            <span className="text-xs font-semibold text-surface-800">Kegiatan Seharian (All-day) / Multi-hari</span>
+                        </label>
+
+                        {form.is_all_day ? (
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                                <div>
+                                    <label className="block text-xs font-semibold text-surface-700 mb-1">Tanggal Mulai <span className="text-red-500">*</span></label>
+                                    <input
+                                        type="date"
+                                        value={form.scheduled_at?.slice(0, 10) || ''}
+                                        onChange={e => setForm({ ...form, scheduled_at: e.target.value })}
+                                        required
+                                        className="w-full border border-surface-200 rounded-lg px-3 py-2 text-xs text-surface-800 outline-none focus:ring-2 focus:ring-brand-500 bg-white"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-semibold text-surface-700 mb-1">Tanggal Selesai (opsional)</label>
+                                    <input
+                                        type="date"
+                                        min={form.scheduled_at?.slice(0, 10) || ''}
+                                        value={form.end_at?.slice(0, 10) || ''}
+                                        onChange={e => setForm({ ...form, end_at: e.target.value })}
+                                        className="w-full border border-surface-200 rounded-lg px-3 py-2 text-xs text-surface-800 outline-none focus:ring-2 focus:ring-brand-500 bg-white"
+                                    />
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                                <div>
+                                    <label className="block text-xs font-semibold text-surface-700 mb-1">Waktu Mulai <span className="text-red-500">*</span></label>
+                                    <input
+                                        type="datetime-local"
+                                        value={form.scheduled_at}
+                                        onChange={e => setForm({ ...form, scheduled_at: e.target.value })}
+                                        required
+                                        className="w-full border border-surface-200 rounded-lg px-3 py-2 text-xs text-surface-800 outline-none focus:ring-2 focus:ring-brand-500 bg-white"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-semibold text-surface-700 mb-1">Waktu Selesai (opsional)</label>
+                                    <input
+                                        type="datetime-local"
+                                        min={form.scheduled_at}
+                                        value={form.end_at}
+                                        onChange={e => setForm({ ...form, end_at: e.target.value })}
+                                        className="w-full border border-surface-200 rounded-lg px-3 py-2 text-xs text-surface-800 outline-none focus:ring-2 focus:ring-brand-500 bg-white"
+                                    />
+                                </div>
+                            </div>
+                        )}
                     </div>
 
                     <div>

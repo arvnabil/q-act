@@ -121,14 +121,22 @@ export default function TeamCalendar({
         return grid;
     }, [year, month]);
 
-    // Group visits by date string "YYYY-MM-DD"
+    // Group visits by date string "YYYY-MM-DD", supporting multi-day events
     const visitsByDate = useMemo(() => {
         const map = {};
         filteredVisits.forEach(v => {
             if (!v.scheduled_at) return;
-            const dateStr = calendarDateKey(v.scheduled_at);
-            if (!map[dateStr]) map[dateStr] = [];
-            map[dateStr].push(v);
+            const startKey = calendarDateKey(v.scheduled_at);
+            const endKey = v.end_at ? calendarDateKey(v.end_at) : startKey;
+            const cur = new Date(v.scheduled_at);
+            cur.setHours(0, 0, 0, 0);
+            while (true) {
+                const key = calendarDateKey(cur);
+                if (key > endKey) break;
+                if (!map[key]) map[key] = [];
+                map[key].push({ ...v, _isFirst: key === startKey, _isLast: key === endKey, _isSpan: startKey !== endKey });
+                cur.setDate(cur.getDate() + 1);
+            }
         });
         return map;
     }, [filteredVisits]);
@@ -328,18 +336,27 @@ export default function TeamCalendar({
 
                                     {/* Events list */}
                                     <div className="space-y-1 flex-1 overflow-hidden">
-                                        {dayEvents.slice(0, 3).map(ev => {
+                                        {dayEvents.slice(0, 3).map((ev, idx) => {
                                             const typeMeta = VISIT_TYPES[ev.visit_type] || VISIT_TYPES.other;
+                                            const isSpan = ev._isSpan;
+                                            const isFirst = ev._isFirst;
+                                            const isLast = ev._isLast;
                                             return (
                                                 <button
-                                                    key={ev.id}
+                                                    key={`${ev.id}-${idx}`}
                                                     type="button"
                                                     onClick={() => setSelectedEvent(ev)}
-                                                    className={`w-full text-left px-1.5 py-0.5 rounded text-[11px] font-medium border truncate transition-all flex items-center gap-1 cursor-pointer hover:shadow-2xs ${typeMeta.bg}`}
+                                                    className={`w-full text-left px-1.5 py-0.5 text-[11px] font-medium border transition-all flex items-center gap-1 cursor-pointer hover:shadow-2xs ${typeMeta.bg} ${
+                                                        isSpan
+                                                            ? isFirst ? 'rounded-l rounded-r-none border-r-0' : isLast ? 'rounded-r rounded-l-none border-l-0' : 'rounded-none border-x-0'
+                                                            : 'rounded'
+                                                    }`}
                                                 >
-                                                    <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${typeMeta.dot}`} />
-                                                    <span className="truncate flex-1 font-semibold">{ev.subject}</span>
-                                                    {ev.zoom_join_url && <Video className="w-2.5 h-2.5 text-sky-600 shrink-0" />}
+                                                    {(!isSpan || isFirst) && <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${typeMeta.dot}`} />}
+                                                    {(!isSpan || isFirst) && <span className="truncate flex-1 font-semibold">{ev.subject}</span>}
+                                                    {isSpan && !isFirst && <span className="flex-1" />}
+                                                    {ev.is_all_day && (!isSpan || isFirst) && <span className="text-[9px] font-bold opacity-60">ALL-DAY</span>}
+                                                    {ev.zoom_join_url && (!isSpan || isFirst) && <Video className="w-2.5 h-2.5 text-sky-600 shrink-0" />}
                                                 </button>
                                             );
                                         })}
@@ -389,10 +406,20 @@ export default function TeamCalendar({
                                 <div className="flex items-center gap-2">
                                     <Clock className="w-4 h-4 text-surface-400 shrink-0" />
                                     <span>
-                                        {new Date(selectedEvent.scheduled_at).toLocaleDateString('id-ID', {
-                                            weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
-                                            hour: '2-digit', minute: '2-digit'
-                                        })}
+                                        {selectedEvent.is_all_day ? (
+                                            selectedEvent.end_at && calendarDateKey(selectedEvent.end_at) !== calendarDateKey(selectedEvent.scheduled_at)
+                                                ? `${new Date(selectedEvent.scheduled_at).toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })} – ${new Date(selectedEvent.end_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })} (Seharian Penuh)`
+                                                : `${new Date(selectedEvent.scheduled_at).toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })} (Seharian Penuh)`
+                                        ) : selectedEvent.end_at ? (
+                                            new Date(selectedEvent.scheduled_at).toDateString() === new Date(selectedEvent.end_at).toDateString()
+                                                ? `${new Date(selectedEvent.scheduled_at).toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}, ${new Date(selectedEvent.scheduled_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })} – ${new Date(selectedEvent.end_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}`
+                                                : `${new Date(selectedEvent.scheduled_at).toLocaleString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })} – ${new Date(selectedEvent.end_at).toLocaleString('id-ID', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })}`
+                                        ) : (
+                                            new Date(selectedEvent.scheduled_at).toLocaleDateString('id-ID', {
+                                                weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
+                                                hour: '2-digit', minute: '2-digit'
+                                            })
+                                        )}
                                     </span>
                                 </div>
 
@@ -521,6 +548,8 @@ function AddCalendarVisitModal({ open, onClose, leads, customers, initialDate, g
         subject: '',
         location: '',
         scheduled_at: initialDate || '',
+        end_at: '',
+        is_all_day: false,
         notes: '',
         sync_calendar: Boolean(googleCalendarConfigured),
         create_zoom: Boolean(zoomConfigured),
@@ -532,6 +561,8 @@ function AddCalendarVisitModal({ open, onClose, leads, customers, initialDate, g
             setForm(f => ({
                 ...f,
                 scheduled_at: initialDate || f.scheduled_at,
+                end_at: '',
+                is_all_day: false,
                 sync_calendar: Boolean(googleCalendarConfigured),
                 create_zoom: Boolean(zoomConfigured),
             }));
@@ -553,7 +584,12 @@ function AddCalendarVisitModal({ open, onClose, leads, customers, initialDate, g
     const handleSubmit = (e) => {
         e.preventDefault();
         setSubmitting(true);
-        router.post(route('leads.visits.store'), { ...form, scheduled_at: new Date(form.scheduled_at).toISOString() }, {
+        router.post(route('leads.visits.store'), {
+            ...form,
+            scheduled_at: form.is_all_day ? (form.scheduled_at?.includes('T') ? form.scheduled_at : `${form.scheduled_at}T00:00:00`) : new Date(form.scheduled_at).toISOString(),
+            end_at: form.end_at ? (form.is_all_day ? (form.end_at?.includes('T') ? form.end_at : `${form.end_at}T23:59:59`) : new Date(form.end_at).toISOString()) : null,
+            is_all_day: Boolean(form.is_all_day),
+        }, {
             preserveScroll: true,
             onSuccess: () => {
                 onClose();
@@ -621,39 +657,94 @@ function AddCalendarVisitModal({ open, onClose, leads, customers, initialDate, g
                         />
                     </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        <div>
-                            <label className="block text-xs font-semibold text-surface-700 mb-1">Jenis Kunjungan <span className="text-red-500">*</span></label>
-                            <select
-                                value={form.visit_type}
+                    <div>
+                        <label className="block text-xs font-semibold text-surface-700 mb-1">Jenis Kunjungan <span className="text-red-500">*</span></label>
+                        <select
+                            value={form.visit_type}
+                            onChange={e => {
+                                const val = e.target.value;
+                                setForm(f => ({
+                                    ...f,
+                                    visit_type: val,
+                                    create_zoom: f.create_zoom
+                                }));
+                            }}
+                            className="w-full border border-surface-200 rounded-lg px-3 py-2 text-xs text-surface-800 outline-none focus:ring-2 focus:ring-brand-500 bg-white"
+                        >
+                            <option value="visit">Visit Lapangan</option>
+                            <option value="follow_up">Follow Up</option>
+                            <option value="demo">Demo Produk</option>
+                            <option value="presentation">Presentasi / Pitching</option><option value="installation">Instalasi</option><option value="maintenance">Maintenance</option><option value="leave">Cuti</option>
+                            <option value="other">Lainnya</option>
+                        </select>
+                    </div>
+
+                    <div className="space-y-2 rounded-xl bg-surface-50 p-3 border border-surface-200">
+                        <label className="flex items-center gap-2 cursor-pointer select-none">
+                            <input
+                                type="checkbox"
+                                checked={Boolean(form.is_all_day)}
                                 onChange={e => {
-                                    const val = e.target.value;
+                                    const checked = e.target.checked;
                                     setForm(f => ({
                                         ...f,
-                                        visit_type: val,
-                                        create_zoom: f.create_zoom
+                                        is_all_day: checked,
+                                        scheduled_at: checked ? (f.scheduled_at ? f.scheduled_at.slice(0, 10) : '') : (f.scheduled_at ? `${f.scheduled_at.slice(0, 10)}T09:00` : ''),
+                                        end_at: ''
                                     }));
                                 }}
-                                className="w-full border border-surface-200 rounded-lg px-3 py-2 text-xs text-surface-800 outline-none focus:ring-2 focus:ring-brand-500 bg-white"
-                            >
-                                <option value="visit">Visit Lapangan</option>
-                                <option value="follow_up">Follow Up</option>
-                                <option value="demo">Demo Produk</option>
-                                <option value="presentation">Presentasi / Pitching</option><option value="installation">Instalasi</option><option value="maintenance">Maintenance</option><option value="leave">Cuti</option>
-                                <option value="other">Lainnya</option>
-                            </select>
-                        </div>
-
-                        <div>
-                            <label className="block text-xs font-semibold text-surface-700 mb-1">Tanggal & Waktu <span className="text-red-500">*</span></label>
-                            <input
-                                type="datetime-local"
-                                value={form.scheduled_at}
-                                onChange={e => setForm(f => ({ ...f, scheduled_at: e.target.value }))}
-                                required
-                                className="w-full border border-surface-200 rounded-lg px-3 py-2 text-xs text-surface-800 outline-none focus:ring-2 focus:ring-brand-500"
+                                className="w-4 h-4 rounded text-brand-600 focus:ring-brand-500 cursor-pointer"
                             />
-                        </div>
+                            <span className="text-xs font-semibold text-surface-800">Kegiatan Seharian (All-day) / Multi-hari</span>
+                        </label>
+
+                        {form.is_all_day ? (
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                                <div>
+                                    <label className="block text-xs font-semibold text-surface-700 mb-1">Tanggal Mulai <span className="text-red-500">*</span></label>
+                                    <input
+                                        type="date"
+                                        value={form.scheduled_at?.slice(0, 10) || ''}
+                                        onChange={e => setForm(f => ({ ...f, scheduled_at: e.target.value }))}
+                                        required
+                                        className="w-full border border-surface-200 rounded-lg px-3 py-2 text-xs text-surface-800 outline-none focus:ring-2 focus:ring-brand-500 bg-white"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-semibold text-surface-700 mb-1">Tanggal Selesai (opsional)</label>
+                                    <input
+                                        type="date"
+                                        min={form.scheduled_at?.slice(0, 10) || ''}
+                                        value={form.end_at?.slice(0, 10) || ''}
+                                        onChange={e => setForm(f => ({ ...f, end_at: e.target.value }))}
+                                        className="w-full border border-surface-200 rounded-lg px-3 py-2 text-xs text-surface-800 outline-none focus:ring-2 focus:ring-brand-500 bg-white"
+                                    />
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                                <div>
+                                    <label className="block text-xs font-semibold text-surface-700 mb-1">Waktu Mulai <span className="text-red-500">*</span></label>
+                                    <input
+                                        type="datetime-local"
+                                        value={form.scheduled_at}
+                                        onChange={e => setForm(f => ({ ...f, scheduled_at: e.target.value }))}
+                                        required
+                                        className="w-full border border-surface-200 rounded-lg px-3 py-2 text-xs text-surface-800 outline-none focus:ring-2 focus:ring-brand-500 bg-white"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-semibold text-surface-700 mb-1">Waktu Selesai (opsional)</label>
+                                    <input
+                                        type="datetime-local"
+                                        min={form.scheduled_at}
+                                        value={form.end_at}
+                                        onChange={e => setForm(f => ({ ...f, end_at: e.target.value }))}
+                                        className="w-full border border-surface-200 rounded-lg px-3 py-2 text-xs text-surface-800 outline-none focus:ring-2 focus:ring-brand-500 bg-white"
+                                    />
+                                </div>
+                            </div>
+                        )}
                     </div>
 
                     <div>
