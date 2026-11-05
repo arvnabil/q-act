@@ -178,7 +178,7 @@ function VisitTable({ visits, onCheckIn, zoomConfigured, onDeleteVisit, onCreate
                                                 <Video className="w-3 h-3" />
                                                 Join Zoom
                                             </a>
-                                        ) : zoomConfigured && (
+                                        ) : zoomConfigured && !visit.checked_in_at && !visit.cancelled_at && (
                                             <button
                                                 type="button"
                                                 onClick={() => onCreateZoom(visit.id)}

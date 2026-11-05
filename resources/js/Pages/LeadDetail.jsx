@@ -719,7 +719,7 @@ function VisitsTab({ visits = [], leadId, onOpenSchedule, googleCalendarConfigur
                                                     Join Zoom
                                                 </a>
                                             ) : (
-                                                zoomConfigured && (
+                                                zoomConfigured && !v.checked_in_at && !v.cancelled_at && (
                                                     <button
                                                         type="button"
                                                         onClick={() => handleCreateZoom(v.id)}

@@ -503,7 +503,7 @@ export default function TeamCalendar({
                                         <Video className="w-4 h-4" />
                                         Masuk Zoom Meeting (Host / Peserta)
                                     </a>
-                                ) : zoomConfigured && (
+                                ) : zoomConfigured && !selectedEvent.checked_in_at && !selectedEvent.cancelled_at && (
                                     <button
                                         type="button"
                                         onClick={() => handleCreateZoom(selectedEvent.id)}
