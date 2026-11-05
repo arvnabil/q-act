@@ -66,13 +66,18 @@ const GROUPS = [
     { id: 'system', label: 'Pengguna & Sistem', match: f => ['user_management', 'manage_business_units', 'manage_settings', 'manage_roles'].includes(f) },
 ];
 const SCOPED = ['dashboard_view', 'leads_view', 'leads_manage', 'leads_visits', 'calendar_view', 'quotations_view', 'sales_orders_view', 'customers_view'];
-const isScope = f => f.endsWith('_view_bu') || f.endsWith('_view_all');
-const describe = f => SCOPED.includes(f) ? 'Membuka daftar, hasil pencarian, dan detail sesuai cakupan data.'
-    : f.includes('import') ? 'Mengimpor quotation lama ke dalam sistem.'
-    : f.includes('delete') ? 'Menghapus data sesuai aturan modul.'
-    : f.includes('create') ? 'Membuat data baru pada modul ini.'
-    : f.includes('edit') || f.includes('manage') ? 'Mengelola fitur sesuai izin tindakan yang tersedia.'
-    : 'Mengakses halaman atau fitur ini.';
+const isScope = f => f.endsWith('_bu') || f.endsWith('_all');
+const describe = f => {
+    if (f === 'leads_manage') return 'Mengelola (tambah, edit, pindah stage) lead sesuai cakupan data.';
+    if (f === 'leads_visits') return 'Mengelola agenda kunjungan & follow-up sesuai cakupan data.';
+    if (f === 'leads_view') return 'Melihat board dan detail lead sesuai cakupan data.';
+    if (SCOPED.includes(f)) return 'Membuka daftar, hasil pencarian, dan detail sesuai cakupan data.';
+    if (f.includes('import')) return 'Mengimpor quotation lama ke dalam sistem.';
+    if (f.includes('delete')) return 'Menghapus data sesuai aturan modul.';
+    if (f.includes('create')) return 'Membuat data baru pada modul ini.';
+    if (f.includes('edit') || f.includes('manage')) return 'Mengelola fitur sesuai izin tindakan yang tersedia.';
+    return 'Mengakses halaman atau fitur ini.';
+};
 
 export default function RolesPage({ rolePermissions = {}, rolesList = [], features = [], roleMembers = {} }) {
     const { props } = usePage();
