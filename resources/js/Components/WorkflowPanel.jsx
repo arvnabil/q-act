@@ -32,9 +32,9 @@ export default function WorkflowPanel({ quotationId, leadId, embedded = false, r
     };
     const schedule = (visit = null) => {
         const tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate()+1); tomorrow.setHours(9,0,0,0);
-        setError(''); setForm(visit ? { ...visit, scheduled_at: localInput(visit.scheduled_at), sync_calendar: Boolean(visit.google_calendar_event_id || data?.calendarConfigured), create_zoom: Boolean(visit.zoom_meeting_id || data?.zoomConfigured) } : {
+        setError(''); setForm(visit ? { ...visit, scheduled_at: localInput(visit.scheduled_at), sync_calendar: Boolean(visit?.google_calendar_event_id || data?.calendarConfigured), create_zoom: Boolean(visit?.zoom_meeting_id || data?.zoomConfigured) } : {
             subject: `Follow-up ${quotationId || data?.lead?.title || 'peluang'}`, scheduled_at: localInput(tomorrow),
-            visit_type: 'follow_up', location: '', notes: '', sync_calendar: Boolean(visit.google_calendar_event_id || data?.calendarConfigured), create_zoom: Boolean(visit.zoom_meeting_id || data?.zoomConfigured),
+            visit_type: 'follow_up', location: '', notes: '', sync_calendar: Boolean(data?.calendarConfigured), create_zoom: Boolean(data?.zoomConfigured),
         });
         setMode(visit ? 'reschedule' : 'schedule');
     };
