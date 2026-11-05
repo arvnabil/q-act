@@ -522,10 +522,21 @@ function AddCalendarVisitModal({ open, onClose, leads, customers, initialDate, g
         location: '',
         scheduled_at: initialDate || '',
         notes: '',
-        sync_calendar: googleCalendarConfigured,
-        create_zoom: false,
+        sync_calendar: Boolean(googleCalendarConfigured),
+        create_zoom: Boolean(zoomConfigured),
     });
     const [submitting, setSubmitting] = useState(false);
+
+    useEffect(() => {
+        if (open) {
+            setForm(f => ({
+                ...f,
+                scheduled_at: initialDate || f.scheduled_at,
+                sync_calendar: Boolean(googleCalendarConfigured),
+                create_zoom: Boolean(zoomConfigured),
+            }));
+        }
+    }, [open, initialDate, googleCalendarConfigured, zoomConfigured]);
 
     const handleLeadChange = (leadId) => {
         setForm(f => ({ ...f, lead_id: leadId }));

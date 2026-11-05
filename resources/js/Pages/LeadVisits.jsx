@@ -1,7 +1,7 @@
+import useAgendaCancellation from '@/Components/useAgendaCancellation';
 import React, { useState } from 'react';
 import { Head, router, Link, usePage } from '@inertiajs/react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
-import { toast } from 'react-hot-toast';
 import {
     MapPin, Plus, X, Calendar, Clock, CheckCircle2, Navigation,
     Building2, User, ChevronDown, AlertCircle, FileText,
@@ -26,6 +26,9 @@ const formatDateTime = (d) => {
 };
 
 const VISIT_TYPES = {
+    installation: { label: 'Instalasi', color: 'bg-indigo-100 text-indigo-700' },
+    maintenance: { label: 'Maintenance', color: 'bg-orange-100 text-orange-700' },
+    leave: { label: 'Cuti', color: 'bg-rose-100 text-rose-700' },
     visit:        { label: 'Kunjungan',   color: 'bg-blue-100 text-blue-700' },
     follow_up:    { label: 'Follow-up',   color: 'bg-amber-100 text-amber-700' },
     demo:         { label: 'Demo',        color: 'bg-violet-100 text-violet-700' },
@@ -67,7 +70,7 @@ function TodayVisitCard({ visit, onCheckIn }) {
                         </div>
                     )}
                     <p className="text-brand-200 text-xs mt-1">
-                        Check-in {isCheckedIn ? 'pukul ' + formatTime(visit.checked_in_at) : 'belum dilakukan'}
+                        {isCheckedIn ? 'Selesai pukul ' + formatTime(visit.checked_in_at) : 'Belum selesai'}
                     </p>
                 </div>
                 {!isCheckedIn ? (
@@ -80,7 +83,7 @@ function TodayVisitCard({ visit, onCheckIn }) {
                 ) : (
                     <div className="flex items-center gap-2 px-4 py-2.5 bg-brand-500 text-white text-sm font-semibold rounded-xl shrink-0">
                         <CheckCircle2 className="w-4 h-4" />
-                        Sudah Check-in
+                        Selesai
                     </div>
                 )}
             </div>
@@ -184,7 +187,7 @@ function VisitTable({ visits, onCheckIn, zoomConfigured, onDeleteVisit, onCreate
                                     {isCheckedIn ? (
                                         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-700">
                                             <CheckCircle2 className="w-3 h-3" />
-                                            Check-in {formatTime(visit.checked_in_at)}
+                                            Selesai {formatTime(visit.checked_in_at)}
                                         </span>
                                     ) : isPast ? (
                                         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-red-100 text-red-600">
@@ -205,14 +208,15 @@ function VisitTable({ visits, onCheckIn, zoomConfigured, onDeleteVisit, onCreate
                                                 onClick={() => onCheckIn(visit)}
                                                 className="px-2.5 py-1 text-xs font-semibold bg-brand-50 text-brand-700 hover:bg-brand-100 rounded-lg transition-colors flex items-center gap-1 cursor-pointer">
                                                 <Navigation className="w-3 h-3" />
-                                                Check-in
+                                                Tandai Selesai
                                             </button>
                                         )}
                                         <button
                                             type="button"
+                                            disabled={!!visit.checked_in_at || !!visit.cancelled_at}
                                             onClick={() => onDeleteVisit(visit.id, visit.subject)}
                                             className="p-1.5 text-surface-400 hover:text-red-600 hover:bg-surface-100 rounded-lg transition-colors cursor-pointer"
-                                            title="Hapus jadwal"
+                                            title="Batalkan agenda"
                                         >
                                             <Trash2 className="w-3.5 h-3.5" />
                                         </button>
@@ -249,7 +253,7 @@ function CalendarPlaceholder() {
 
 // ─── Add Visit Modal ──────────────────────────────────────────────────────────────
 
-function AddVisitModal({ open, onClose, leads, customers, googleCalendarConfigured, zoomConfigured }) {
+function AddVisitModal({ open, onClose, leads, customers, googleCalendarConfigured, zoomConfigured, userHasZoomLicense }) {
     const [form, setForm] = useState({
         lead_id: '', customer_id: '', visit_type: 'visit',
         subject: '', location: '', scheduled_at: '', notes: '',
@@ -258,6 +262,18 @@ function AddVisitModal({ open, onClose, leads, customers, googleCalendarConfigur
     });
     const [submitting, setSubmitting] = useState(false);
     const [showDirectCustomer, setShowDirectCustomer] = useState(false);
+    const [errors, setErrors] = useState({});
+    const canCreateZoom = Boolean(zoomConfigured && userHasZoomLicense);
+
+    useEffect(() => {
+        if (open) {
+            setForm(f => ({
+                ...f,
+                sync_calendar: Boolean(googleCalendarConfigured),
+                create_zoom: Boolean(canCreateZoom),
+            }));
+        }
+    }, [open, googleCalendarConfigured, canCreateZoom]);
 
     const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
@@ -278,13 +294,14 @@ function AddVisitModal({ open, onClose, leads, customers, googleCalendarConfigur
 
     const handleSubmit = (e) => {
         e.preventDefault();
+        setErrors({});
         setSubmitting(true);
-        router.post(route('leads.visits.store'), form, {
+        router.post(route('leads.visits.store'), { ...form, create_zoom: canCreateZoom && form.create_zoom, scheduled_at: new Date(form.scheduled_at).toISOString() }, {
             preserveScroll: true,
             onSuccess: () => {
-                toast.success('Kunjungan berhasil dijadwalkan!');
                 onClose();
             },
+            onError: setErrors,
             onFinish: () => setSubmitting(false),
         });
     };
@@ -305,6 +322,7 @@ function AddVisitModal({ open, onClose, leads, customers, googleCalendarConfigur
                     </button>
                 </div>
                 <form onSubmit={handleSubmit} className="px-6 py-4 space-y-4">
+                    {Object.keys(errors).length > 0 && <div role="alert" className="rounded-lg bg-red-50 border border-red-200 p-3 text-sm text-red-700">{Object.entries(errors).map(([field, message]) => <p key={field}>{message}</p>)}</div>}
                     {/* Lead */}
                     <div>
                         <label className="block text-xs font-semibold text-surface-600 mb-1">Lead</label>
@@ -393,7 +411,7 @@ function AddVisitModal({ open, onClose, leads, customers, googleCalendarConfigur
                                     setForm(f => ({
                                         ...f,
                                         visit_type: val,
-                                        create_zoom: (val === 'demo' || val === 'presentation') ? true : f.create_zoom
+                                        create_zoom: f.create_zoom
                                     }));
                                 }}
                                 required>
@@ -442,7 +460,7 @@ function AddVisitModal({ open, onClose, leads, customers, googleCalendarConfigur
                             </span>
                         </label>
 
-                        {zoomConfigured && (
+                        {canCreateZoom && (
                             <label className="flex items-center gap-2 cursor-pointer select-none pt-1">
                                 <input
                                     type="checkbox"
@@ -491,43 +509,21 @@ export default function LeadVisits({
     const [showForm, setShowForm] = useState(false);
 
     const handleCheckIn = (visit) => {
-        if (navigator.geolocation) {
-            navigator.geolocation.getCurrentPosition(
-                (pos) => {
-                    router.post(route('leads.visits.check-in', visit.id), {
-                        lat: pos.coords.latitude,
-                        lng: pos.coords.longitude,
-                    });
-                },
-                () => {
-                    // No GPS permission — check in without location
-                    router.post(route('leads.visits.check-in', visit.id), { lat: null, lng: null });
-                }
-            );
-        } else {
-            router.post(route('leads.visits.check-in', visit.id), { lat: null, lng: null });
-        }
+        router.post(route('leads.visits.check-in', visit.id), {}, { preserveScroll: true });
     };
 
-    const handleDeleteVisit = (visitId, subject) => {
-        if (!confirm(`Hapus jadwal kunjungan "${subject}"? Event di Google Calendar dan Zoom akan ikut dibatalkan.`)) return;
-        router.delete(route('leads.visits.destroy', visitId), {
-            preserveScroll: true,
-            onSuccess: () => toast.success('Jadwal kunjungan berhasil dihapus')
-        });
-    };
+    const { requestCancellation: handleDeleteVisit, cancellationModal } = useAgendaCancellation();
 
     const handleCreateZoom = (visitId) => {
         router.post(route('leads.visits.zoom', visitId), {}, {
             preserveScroll: true,
-            onSuccess: () => toast.success('Zoom meeting berhasil dibuat!')
         });
     };
 
     const today = new Date().toDateString();
     const filteredVisits = visits.filter(v => {
         const d = new Date(v.scheduled_at);
-        if (tab === 'visit')     return ['visit', 'demo', 'presentation', 'other'].includes(v.visit_type);
+        if (tab === 'visit')     return ['visit', 'demo', 'presentation', 'installation', 'maintenance', 'leave', 'other'].includes(v.visit_type);
         if (tab === 'follow_up') return v.visit_type === 'follow_up';
         if (tab === 'history')   return !!v.checked_in_at;
         return true;
@@ -536,6 +532,7 @@ export default function LeadVisits({
     return (
         <AuthenticatedLayout>
             <Head title="Visit & Follow-up" />
+            {cancellationModal}
 
             <div className="min-h-screen bg-surface-50">
                 {/* Page Header */}
@@ -575,7 +572,7 @@ export default function LeadVisits({
                             { label: 'Akan Datang', value: stats.upcoming || 0, color: 'text-blue-600' },
                             { label: 'Hari Ini',    value: stats.today || 0,    color: 'text-brand-600' },
                             { label: 'Minggu Ini',  value: stats.thisWeek || 0, color: 'text-violet-600' },
-                            { label: 'Check-in',    value: stats.checkedIn || 0, color: 'text-emerald-600' },
+                            { label: 'Selesai',    value: stats.checkedIn || 0, color: 'text-emerald-600' },
                         ].map(s => (
                             <div key={s.label} className="bg-surface-50 rounded-xl px-4 py-3 border border-surface-200">
                                 <p className={`text-2xl font-bold ${s.color}`}>{s.value}</p>
@@ -596,7 +593,7 @@ export default function LeadVisits({
                             {[
                                 { key: 'visit', label: 'Visit', icon: MapPin, count: visits.filter(v => ['visit','demo','presentation','other'].includes(v.visit_type)).length },
                                 { key: 'follow_up', label: 'Follow-up', icon: ClipboardList, count: visits.filter(v => v.visit_type === 'follow_up').length },
-                                { key: 'history', label: 'Riwayat Check-in', icon: History, count: visits.filter(v => v.checked_in_at).length },
+                                { key: 'history', label: 'Riwayat Selesai', icon: History, count: visits.filter(v => v.checked_in_at).length },
                             ].map(t => (
                                 <button key={t.key}
                                     onClick={() => setTab(t.key)}
@@ -648,6 +645,7 @@ export default function LeadVisits({
                 customers={customers}
                 googleCalendarConfigured={googleCalendarConfigured}
                 zoomConfigured={zoomConfigured}
+                userHasZoomLicense={userHasZoomLicense}
             />
         </AuthenticatedLayout>
     );

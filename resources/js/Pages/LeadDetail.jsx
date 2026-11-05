@@ -1,3 +1,6 @@
+import useAgendaCancellation from '@/Components/useAgendaCancellation';
+import LeadInformationEditor from '@/Components/LeadInformationEditor';
+import WorkflowPanel from '@/Components/WorkflowPanel';
 import React, { useState, useEffect, useRef } from 'react';
 import { Head, router, Link, usePage } from '@inertiajs/react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
@@ -35,10 +38,10 @@ const STAGE_META = {
 
 const ACTIVITY_CONFIG = {
     note:             { label: 'Catatan',              Icon: MessageSquare, color: 'bg-surface-100',  iconColor: 'text-surface-500',  system: false },
-    call:             { label: 'Log Telepon',           Icon: Phone,         color: 'bg-blue-50',      iconColor: 'text-blue-500',     system: false },
-    whatsapp:         { label: 'Log WhatsApp',          Icon: MessageCircle, color: 'bg-emerald-50',   iconColor: 'text-emerald-500',  system: false },
-    email:            { label: 'Log Email',             Icon: Mail,          color: 'bg-violet-50',    iconColor: 'text-violet-500',   system: false },
-    meeting:          { label: 'Meeting',               Icon: Video,         color: 'bg-amber-50',     iconColor: 'text-amber-500',    system: false },
+    call:             { label: 'Catatan Telepon',           Icon: Phone,         color: 'bg-blue-50',      iconColor: 'text-blue-500',     system: false },
+    whatsapp:         { label: 'Catatan WhatsApp',          Icon: MessageCircle, color: 'bg-emerald-50',   iconColor: 'text-emerald-500',  system: false },
+    email:            { label: 'Catatan Email',             Icon: Mail,          color: 'bg-violet-50',    iconColor: 'text-violet-500',   system: false },
+    meeting:          { label: 'Catatan Meeting',       Icon: Video,         color: 'bg-amber-50',     iconColor: 'text-amber-500',    system: false },
     follow_up:        { label: 'Follow-up',             Icon: Clock,         color: 'bg-orange-50',    iconColor: 'text-orange-500',   system: false },
     visit:            { label: 'Kunjungan',             Icon: MapPin,        color: 'bg-teal-50',      iconColor: 'text-teal-500',     system: false },
     stage_change:     { label: 'Perubahan Stage',       Icon: ChevronRight,  color: 'bg-surface-100',  iconColor: 'text-surface-400',  system: true  },
@@ -117,107 +120,71 @@ function StageBadge({ stage, meta: customMeta }) {
 // ─── Quick Log Bar ────────────────────────────────────────────────────────────────
 
 function QuickLogBar({ leadId, onActivityAdded }) {
-    const [activeType, setActiveType] = useState(null);
-    const [title, setTitle] = useState('');
-    const [description, setDescription] = useState('');
+    const outcomes = ['Belum ada respons', 'Sudah dihubungi', 'Minta penawaran', 'Sedang dipertimbangkan', 'Tulis catatan sendiri'];
+    const [outcome, setOutcome] = useState('');
+    const [channel, setChannel] = useState('note');
+    const [note, setNote] = useState('');
+    const [reminder, setReminder] = useState('none');
+    const [date, setDate] = useState('');
     const [submitting, setSubmitting] = useState(false);
-    const inputRef = useRef(null);
-
-    useEffect(() => {
-        if (activeType && inputRef.current) {
-            inputRef.current.focus();
-        }
-    }, [activeType]);
-
-    const handleTypeClick = (key) => {
-        if (activeType === key) {
-            setActiveType(null);
-            setTitle('');
-            setDescription('');
-        } else {
-            setActiveType(key);
-            setTitle('');
-            setDescription('');
-        }
-    };
-
-    const handleSubmit = async (e) => {
+    const [error, setError] = useState('');
+    const custom = outcome === 'Tulis catatan sendiri';
+    const reset = () => { setOutcome(''); setNote(''); setReminder('none'); setDate(''); setChannel('note'); setError(''); };
+    const submit = async (e) => {
         e.preventDefault();
-        if (!title.trim()) return;
+        if (submitting) return;
+        setError('');
+        if (!outcome || (custom && !note.trim())) { setError('Pilih hasil atau tulis catatan terlebih dahulu.'); return; }
+        if (reminder === 'custom' && !date) { setError('Pilih tanggal dan waktu agenda follow-up.'); return; }
+        let scheduled = null;
+        if (reminder === 'custom') scheduled = date;
+        else if (reminder !== 'none') {
+            const d = new Date(); d.setDate(d.getDate() + Number(reminder)); d.setHours(9, 0, 0, 0);
+            const pad = n => String(n).padStart(2, '0');
+            scheduled = `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T09:00`;
+        }
         setSubmitting(true);
         try {
             const res = await axios.post(route('leads.activities.store', leadId), {
-                type: activeType,
-                title: title.trim(),
-                description: description.trim() || null,
+                type: channel, title: custom ? note.trim().slice(0, 255) : outcome,
+                description: note.trim() || null, scheduled_at: scheduled ? new Date(scheduled).toISOString() : null,
             });
-            toast.success('Aktivitas ditambahkan');
-            if (res.data?.activity && onActivityAdded) onActivityAdded(res.data.activity);
-            setActiveType(null);
-            setTitle('');
-            setDescription('');
-        } catch {
-            toast.error('Gagal menyimpan aktivitas');
-        } finally {
-            setSubmitting(false);
-        }
+            if (res.data?.activity) onActivityAdded?.(res.data.activity);
+            toast.success(scheduled ? 'Catatan tersimpan. Agenda dibuat di Visit & Follow-up dan Kalender internal.' : 'Catatan tersimpan di timeline.');
+            window.dispatchEvent(new Event('workflow-updated'));
+            if (scheduled) router.reload({ only: ['lead'] });
+            reset();
+        } catch (err) {
+            setError(Object.values(err.response?.data?.errors || {}).flat()[0] || 'Gagal menyimpan. Silakan coba lagi.');
+        } finally { setSubmitting(false); }
     };
-
-    const activeConfig = activeType ? QUICK_LOG_TYPES.find(t => t.key === activeType) : null;
-
-    return (
-        <div className="mb-4">
-            {/* Type buttons */}
-            <div className="flex gap-1.5 flex-wrap mb-2">
-                {QUICK_LOG_TYPES.map(({ key, label, Icon }) => (
-                    <button
-                        key={key}
-                        onClick={() => handleTypeClick(key)}
-                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-                            activeType === key
-                                ? 'bg-brand-600 text-white shadow-sm'
-                                : 'bg-surface-100 text-surface-600 hover:bg-surface-200'
-                        }`}
-                    >
-                        <Icon className="w-3.5 h-3.5" />
-                        {label}
-                    </button>
-                ))}
+    return <form onSubmit={submit} className="mb-5 rounded-2xl border border-surface-200 bg-surface-50/60 p-4 sm:p-5">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+                <h3 className="text-sm font-bold text-surface-900">Catat hasil komunikasi</h3>
+                <p className="mt-1 text-xs text-surface-500">Setelah menghubungi customer, pilih hasilnya untuk riwayat tim.</p>
             </div>
-
-            {/* Inline form */}
-            {activeType && activeConfig && (
-                <form onSubmit={handleSubmit} className="bg-surface-50 border border-surface-200 rounded-xl p-3 space-y-2 animate-fade-in-up">
-                    <input
-                        ref={inputRef}
-                        className="w-full bg-white border border-surface-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 placeholder-surface-400"
-                        placeholder={activeConfig.placeholder}
-                        value={title}
-                        onChange={e => setTitle(e.target.value)}
-                        required
-                    />
-                    <textarea
-                        className="w-full bg-white border border-surface-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 resize-none placeholder-surface-400"
-                        placeholder="Detail tambahan (opsional)..."
-                        rows={2}
-                        value={description}
-                        onChange={e => setDescription(e.target.value)}
-                    />
-                    <div className="flex items-center justify-end gap-2">
-                        <button type="button" onClick={() => setActiveType(null)}
-                            className="px-3 py-1.5 text-xs font-medium text-surface-600 hover:bg-surface-200 rounded-lg transition-colors cursor-pointer">
-                            Batal
-                        </button>
-                        <button type="submit" disabled={submitting || !title.trim()}
-                            className="flex items-center gap-1.5 px-4 py-1.5 text-xs font-semibold bg-brand-600 text-white hover:bg-brand-700 rounded-lg transition-colors disabled:opacity-60 cursor-pointer">
-                            {submitting ? <Clock className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
-                            Simpan
-                        </button>
-                    </div>
-                </form>
-            )}
+            <button type="button" disabled={submitting} onClick={() => { reset(); window.dispatchEvent(new CustomEvent('workflow-schedule', { detail: { leadId, visit_type: 'other' } })); }}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-surface-200 bg-white px-3 py-2 text-xs font-semibold text-surface-600 hover:border-brand-300 focus-visible:ring-2 focus-visible:ring-brand-500 disabled:opacity-50">
+                <Calendar className="h-3.5 w-3.5" />Buat agenda meeting
+            </button>
         </div>
-    );
+        <p id="communication-log-help" className="mt-2 mb-4 text-xs leading-relaxed text-surface-500">Form ini mencatat aktivitas Anda; tidak mengirim WhatsApp, email, atau melakukan panggilan.</p>
+        <fieldset disabled={submitting} className="space-y-4">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">{outcomes.map(label => <button type="button" key={label} aria-pressed={outcome === label} onClick={() => { setOutcome(label); setError(''); }} className={`rounded-xl border px-3 py-3 text-left text-xs font-semibold transition-colors focus-visible:ring-2 focus-visible:ring-brand-500 ${outcome === label ? 'border-brand-500 bg-brand-50 text-brand-700' : 'border-surface-200 bg-white text-surface-600 hover:border-brand-300'}`}>{outcome === label && <Check className="mr-1 inline h-3.5 w-3.5" />}{label}</button>)}</div>
+            {outcome && <>
+                {outcome === 'Minta penawaran' && <Link href={`/quotations/create?lead_id=${leadId}`} className="inline-flex rounded-lg bg-brand-600 px-3 py-2 text-xs font-semibold text-white">Buat quotation dari lead ini →</Link>}
+                <div><label htmlFor="progress-channel" className="mr-3 text-xs font-medium text-surface-600">Media komunikasi yang digunakan <span className="text-surface-400">(opsional)</span></label><select id="progress-channel" aria-describedby="communication-log-help" value={channel} onChange={e => setChannel(e.target.value)} className="rounded-lg border-surface-200 text-xs"><option value="note">Tidak ditentukan</option><option value="call">Telepon</option><option value="whatsapp">WhatsApp</option><option value="email">Email</option><option value="meeting">Meeting</option></select></div>
+                <div><p className="mb-2 text-xs font-semibold text-surface-700">Agenda follow-up berikutnya <span className="font-normal text-surface-400">(opsional)</span></p><div className="flex flex-wrap gap-2">{[['none','Catatan saja'],['1','Besok'],['3','3 hari lagi'],['7','Minggu depan'],['custom','Pilih tanggal']].map(([key,label]) => <button type="button" key={key} aria-pressed={reminder === key} onClick={() => setReminder(key)} className={`rounded-lg border px-3 py-2 text-xs ${reminder === key ? 'border-brand-500 bg-brand-50 text-brand-700' : 'border-surface-200 bg-white text-surface-600'}`}>{label}</button>)}</div>
+                    {reminder === 'custom' && <input aria-label="Tanggal dan waktu follow-up" type="datetime-local" value={date} onChange={e => setDate(e.target.value)} required className="mt-2 rounded-lg border-surface-200 text-sm" />}
+                    {reminder !== 'none' && <p className="mt-2 text-xs text-surface-500">{reminder === 'custom' ? 'Sesuai waktu pilihan Anda.' : 'Agenda pukul 09.00 pada tanggal pilihan.'} Agenda untuk Anda muncul di Visit & Follow-up dan Kalender internal. Tindak lanjut dilakukan oleh Anda.</p>}
+                </div>
+                <div><label htmlFor="progress-note" className="mb-1 block text-xs text-surface-600">{custom ? 'Catatan *' : 'Catatan tambahan (opsional)'}</label><textarea id="progress-note" rows={2} value={note} onChange={e => setNote(e.target.value)} required={custom} placeholder="Misalnya: customer minta dihubungi setelah rapat." className="w-full rounded-xl border-surface-200 text-sm placeholder:text-surface-400" /></div>
+                <div className="flex flex-wrap items-center justify-between gap-3"><p aria-live="polite" className="text-xs text-surface-500">{reminder === 'none' ? 'Menyimpan catatan ke timeline.' : 'Menyimpan catatan ke timeline dan membuat 1 agenda tindak lanjut.'}</p><div className="flex gap-2"><button type="button" onClick={reset} className="rounded-lg px-3 py-2 text-xs text-surface-500">Batal</button><button type="submit" disabled={submitting} className="rounded-lg bg-brand-600 px-4 py-2 text-xs font-semibold text-white disabled:opacity-50">{submitting ? 'Menyimpan…' : reminder === 'none' ? 'Simpan catatan' : 'Simpan & buat agenda'}</button></div></div>
+            </>}
+        </fieldset>
+        {error && <p role="alert" className="mt-3 text-xs text-red-600">{error}</p>}
+    </form>;
 }
 
 // ─── Activity Item ────────────────────────────────────────────────────────────────
@@ -231,7 +198,7 @@ function ActivityItem({ activity, currentUserId, isManagerOrAdmin, onDelete, onU
     const [saving, setSaving] = useState(false);
     const [showActions, setShowActions] = useState(false);
 
-    const canEdit = !system && (activity.user_id === currentUserId || isManagerOrAdmin);
+    const canEdit = !activity.visit && !system && (activity.user_id === currentUserId || isManagerOrAdmin);
 
     const handleSaveEdit = async () => {
         if (!editTitle.trim()) return;
@@ -311,6 +278,7 @@ function ActivityItem({ activity, currentUserId, isManagerOrAdmin, onDelete, onU
                         <p className={`text-sm font-semibold ${system ? 'text-surface-500' : 'text-surface-800'}`}>
                             {activity.title}
                         </p>
+                        {activity.visit && <p className="mt-1 rounded-lg bg-brand-50 px-2 py-1.5 text-xs text-brand-700">Agenda: {formatDateTime(activity.visit.scheduled_at)} · {activity.visit.cancelled_at ? 'Dibatalkan' : activity.visit.checked_in_at ? 'Selesai' : 'Terjadwal'} <Link href="/leads/visits" className="ml-1 underline">Lihat agenda</Link></p>}
                         {activity.description && (
                             <p className="text-xs text-surface-500 mt-0.5 leading-relaxed">{activity.description}</p>
                         )}
@@ -321,7 +289,7 @@ function ActivityItem({ activity, currentUserId, isManagerOrAdmin, onDelete, onU
                                 {config.label}
                             </span>
                             {activity.user && (
-                                <span className="text-[10px] text-surface-400">{activity.user.name}</span>
+                                <span className="text-[10px] text-surface-400">{system ? activity.user.name : `Dicatat oleh ${activity.user.name}`}</span>
                             )}
                             <span className="text-[10px] text-surface-300">{formatTimeOnly(activity.created_at)}</span>
                         </div>
@@ -365,6 +333,7 @@ function Timeline({ activities, leadId, currentUserId, isManagerOrAdmin, onActiv
 
     return (
         <div>
+            <WorkflowPanel leadId={leadId} />
             <QuickLogBar leadId={leadId} onActivityAdded={onActivityAdded} />
 
             {groups.length === 0 ? (
@@ -625,18 +594,11 @@ function PoSoTab({ allPurchaseOrders, allSalesOrders }) {
 // ─── Visits Tab ───────────────────────────────────────────────────────────────────
 
 function VisitsTab({ visits = [], leadId, onOpenSchedule, googleCalendarConfigured, zoomConfigured }) {
-    const handleDeleteVisit = (visitId, subject) => {
-        if (!confirm(`Hapus jadwal kunjungan "${subject}"? Event di Google Calendar dan Zoom akan ikut dibatalkan.`)) return;
-        router.delete(route('leads.visits.destroy', visitId), {
-            preserveScroll: true,
-            onSuccess: () => toast.success('Jadwal kunjungan berhasil dihapus')
-        });
-    };
+    const { requestCancellation: handleDeleteVisit, cancellationModal } = useAgendaCancellation();
 
     const handleCreateZoom = (visitId) => {
         router.post(route('leads.visits.zoom', visitId), {}, {
             preserveScroll: true,
-            onSuccess: () => toast.success('Zoom meeting berhasil dibuat!')
         });
     };
 
@@ -644,6 +606,7 @@ function VisitsTab({ visits = [], leadId, onOpenSchedule, googleCalendarConfigur
         <div className="space-y-4">
             <div className="flex items-center justify-between flex-wrap gap-3">
                 <div>
+            {cancellationModal}
                     <h3 className="text-sm font-bold text-surface-800">Jadwal & Riwayat Kunjungan</h3>
                     <p className="text-xs text-surface-400">Aktivitas visit, demo, dan survey lapangan untuk lead ini</p>
                 </div>
@@ -689,7 +652,7 @@ function VisitsTab({ visits = [], leadId, onOpenSchedule, googleCalendarConfigur
                                 <th className="px-4 py-3">Waktu Pelaksanaan</th>
                                 <th className="px-4 py-3">Lokasi</th>
                                 <th className="px-4 py-3">Integrasi</th>
-                                <th className="px-4 py-3">Status Check-in</th>
+                                <th className="px-4 py-3">Status Agenda</th>
                                 <th className="px-4 py-3">Petugas</th>
                                 <th className="px-4 py-3 text-right">Aksi</th>
                             </tr>
@@ -749,12 +712,12 @@ function VisitsTab({ visits = [], leadId, onOpenSchedule, googleCalendarConfigur
                                         </div>
                                     </td>
                                     <td className="px-4 py-3">
-                                        {v.checked_in_at ? (
+                                        {v.cancelled_at ? <span className="text-xs text-red-500">Dibatalkan</span> : v.checked_in_at ? (
                                             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-700">
-                                                <CheckCircle2 className="w-3 h-3" /> Check-in: {formatTimeOnly(v.checked_in_at)}
+                                                <CheckCircle2 className="w-3 h-3" /> Selesai: {formatTimeOnly(v.checked_in_at)}
                                             </span>
                                         ) : (
-                                            <span className="text-[10px] text-surface-400">Belum check-in</span>
+                                            <span className="text-[10px] text-surface-400">Belum selesai</span>
                                         )}
                                     </td>
                                     <td className="px-4 py-3 text-surface-700 font-medium">
@@ -763,9 +726,10 @@ function VisitsTab({ visits = [], leadId, onOpenSchedule, googleCalendarConfigur
                                     <td className="px-4 py-3 text-right">
                                         <button
                                             type="button"
+                                            disabled={!!v.checked_in_at || !!v.cancelled_at}
                                             onClick={() => handleDeleteVisit(v.id, v.subject)}
                                             className="text-surface-400 hover:text-red-600 p-1 rounded hover:bg-surface-100 transition-colors cursor-pointer"
-                                            title="Hapus jadwal"
+                                            title="Batalkan agenda"
                                         >
                                             <Trash2 className="w-3.5 h-3.5" />
                                         </button>
@@ -787,7 +751,6 @@ function PicsTab({ lead, pics, onOpenAdd }) {
         if (!confirm('Hapus kontak PIC ini dari lead?')) return;
         router.delete(route('leads.pics.destroy', { lead: lead.id, pic: picId }), {
             preserveScroll: true,
-            onSuccess: () => toast.success('PIC berhasil dihapus'),
         });
     };
 
@@ -893,8 +856,8 @@ function ScheduleVisitModal({ open, onClose, lead, googleCalendarConfigured, zoo
         location: lead.customer?.address || '',
         scheduled_at: '',
         notes: '',
-        sync_calendar: googleCalendarConfigured,
-        create_zoom: false,
+        sync_calendar: Boolean(googleCalendarConfigured),
+        create_zoom: Boolean(zoomConfigured),
     });
     const [submitting, setSubmitting] = useState(false);
 
@@ -911,11 +874,11 @@ function ScheduleVisitModal({ open, onClose, lead, googleCalendarConfigured, zoo
                 location: lead.customer?.address || '',
                 scheduled_at: isoLocal,
                 notes: '',
-                sync_calendar: googleCalendarConfigured,
-                create_zoom: false,
+                sync_calendar: Boolean(googleCalendarConfigured),
+                create_zoom: Boolean(zoomConfigured),
             });
         }
-    }, [open, lead, googleCalendarConfigured]);
+    }, [open, lead, googleCalendarConfigured, zoomConfigured]);
 
     if (!open) return null;
 
@@ -928,14 +891,13 @@ function ScheduleVisitModal({ open, onClose, lead, googleCalendarConfigured, zoo
             visit_type: form.visit_type,
             subject: form.subject,
             location: form.location,
-            scheduled_at: form.scheduled_at,
+            scheduled_at: new Date(form.scheduled_at).toISOString(),
             notes: form.notes,
             sync_calendar: form.sync_calendar,
             create_zoom: form.create_zoom,
         }, {
             preserveScroll: true,
             onSuccess: () => {
-                toast.success('Jadwal kunjungan berhasil dibuat!');
                 onClose();
             },
             onError: () => toast.error('Gagal menjadwalkan kunjungan'),
@@ -983,7 +945,7 @@ function ScheduleVisitModal({ open, onClose, lead, googleCalendarConfigured, zoo
                                     setForm(f => ({
                                         ...f,
                                         visit_type: val,
-                                        create_zoom: (val === 'demo' || val === 'presentation') ? true : f.create_zoom
+                                        create_zoom: f.create_zoom
                                     }));
                                 }}
                                 className="w-full border border-surface-200 rounded-lg px-3 py-2 text-xs text-surface-800 outline-none focus:ring-2 focus:ring-brand-500 bg-white"
@@ -991,7 +953,7 @@ function ScheduleVisitModal({ open, onClose, lead, googleCalendarConfigured, zoo
                                 <option value="visit">Visit Lapangan</option>
                                 <option value="follow_up">Follow Up</option>
                                 <option value="demo">Demo Produk</option>
-                                <option value="presentation">Presentasi / Pitching</option>
+                                <option value="presentation">Presentasi / Pitching</option><option value="installation">Instalasi</option><option value="maintenance">Maintenance</option><option value="leave">Cuti</option>
                                 <option value="other">Lainnya</option>
                             </select>
                         </div>
@@ -1115,7 +1077,6 @@ function AddLeadPicModal({ open, onClose, lead, customerPics = [] }) {
         }, {
             preserveScroll: true,
             onSuccess: () => {
-                toast.success('PIC berhasil ditambahkan ke Lead');
                 onClose();
             },
             onError: (err) => {
@@ -1364,7 +1325,7 @@ export default function LeadDetail({
         { key: 'timeline',   label: 'Timeline & Aktivitas', icon: MessageSquare, count: activities.length },
         { key: 'quotations', label: 'Quotation',            icon: FileText,      count: allQuotations.length },
         { key: 'poso',       label: 'PO & Sales Order',     icon: ShoppingCart,  count: allPurchaseOrders.length + allSalesOrders.length },
-        { key: 'visits',     label: 'Kunjungan',            icon: MapPin,        count: (lead.visits || []).length },
+        { key: 'visits',     label: 'Agenda',            icon: MapPin,        count: (lead.visits || []).length },
         { key: 'pics',       label: 'Kontak PIC',           icon: Users,         count: allLeadPics.length },
     ];
 
@@ -1447,7 +1408,7 @@ export default function LeadDetail({
                     <div className="lg:col-span-1 space-y-4">
                         {/* Lead Info */}
                         <div className="bg-white rounded-2xl border border-surface-200 p-5 space-y-4 shadow-sm">
-                            <h2 className="text-sm font-bold text-surface-800">Informasi Lead</h2>
+                            <div className="flex items-center justify-between gap-3"><h2 className="text-sm font-bold text-surface-800">Informasi Lead</h2><LeadInformationEditor lead={lead} sources={sources} /></div>
 
                             {(lead.customer_name || lead.customer) && (
                                 <div className="flex items-start gap-3">
