@@ -304,7 +304,9 @@ class LeadController extends Controller
             $lead->activities()->with(['user:id,name', 'visit'])->orderByDesc('created_at')->get()
         );
 
-        $customerPics = $lead->customer_id ? CustomerPic::where('customer_id', $lead->customer_id)->get() : [];
+        $leadPics = $lead->pics()->select('id', 'name', 'email', 'position', 'phone')->get();
+        $custPics = $lead->customer_id ? CustomerPic::where('customer_id', $lead->customer_id)->get() : collect();
+        $customerPics = $leadPics->concat($custPics)->unique(fn($p) => mb_strtolower(trim($p->name)))->values();
 
         return Inertia::render('LeadDetail', [
             'lead'                     => $lead,
@@ -638,7 +640,7 @@ class LeadController extends Controller
             'todayVisit'               => $todayVisit,
             'leads'                    => $leadsForVisits,
             'customers'                => DocumentVisibility::apply(Customer::query(), $request->user(), 'customers')->select('id', 'name')->orderBy('name')->get(),
-            'customerPics'             => \App\Models\CustomerPic::whereIn('customer_id', $customerIds)->whereNotNull('email')->select('id', 'customer_id', 'name', 'email', 'position', 'phone')->get(),
+            'customerPics'             => \App\Models\CustomerPic::whereIn('customer_id', $customerIds)->select('id', 'customer_id', 'name', 'email', 'position', 'phone')->get(),
             'isManagerOrAdmin'         => $isManagerOrAdmin,
             'googleCalendarConfigured' => (new GoogleCalendarService())->isConfigured(),
             'zoomConfigured'           => (new ZoomService())->isConfigured(),
@@ -1082,7 +1084,7 @@ class LeadController extends Controller
             'users'                    => $users,
             'leads'                    => $leads,
             'customers'                => $customers,
-            'customerPics'             => \App\Models\CustomerPic::whereIn('customer_id', $calCustomerIds)->whereNotNull('email')->select('id', 'customer_id', 'name', 'email', 'position', 'phone')->get(),
+            'customerPics'             => \App\Models\CustomerPic::whereIn('customer_id', $calCustomerIds)->select('id', 'customer_id', 'name', 'email', 'position', 'phone')->get(),
             'isManagerOrAdmin'         => $isManagerOrAdmin,
             'googleCalendarConfigured' => $googleCalendarConfigured,
             'zoomConfigured'           => $zoomConfigured,

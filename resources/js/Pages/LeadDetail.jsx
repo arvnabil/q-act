@@ -889,6 +889,26 @@ function ScheduleVisitModal({ open, onClose, lead, customerPics = [], googleCale
         attendee_emails: [],
     });
     const [submitting, setSubmitting] = useState(false);
+    const [customEmail, setCustomEmail] = useState('');
+
+    const addAttendeeEmail = (emailToAdd) => {
+        const trimmed = (emailToAdd || customEmail).trim().toLowerCase();
+        if (!trimmed || !trimmed.includes('@')) return;
+        if (!(form.attendee_emails || []).includes(trimmed)) {
+            setForm((f) => ({
+                ...f,
+                attendee_emails: [...(f.attendee_emails || []), trimmed],
+            }));
+        }
+        setCustomEmail('');
+    };
+
+    const removeAttendeeEmail = (emailToRemove) => {
+        setForm((f) => ({
+            ...f,
+            attendee_emails: (f.attendee_emails || []).filter((e) => e !== emailToRemove),
+        }));
+    };
 
     useEffect(() => {
         if (open) {
@@ -1116,36 +1136,95 @@ function ScheduleVisitModal({ open, onClose, lead, customerPics = [], googleCale
                             </label>
                         )}
 
-                        {/* PIC Attendees */}
-                        {form.sync_calendar && (() => {
-                            const availablePics = (customerPics || []).filter(p => p.email);
-                            if (!availablePics.length) return null;
-                            return (
-                                <div className="pt-2 border-t border-surface-200">
-                                    <p className="text-xs font-semibold text-surface-700 mb-1.5">Undang PIC Customer ke Google Calendar (opsional):</p>
-                                    <div className="space-y-1">
-                                        {availablePics.map(p => (
-                                            <label key={p.id} className="flex items-center gap-2 text-xs cursor-pointer">
-                                                <input
-                                                    type="checkbox"
-                                                    className="w-3.5 h-3.5 rounded text-blue-600 cursor-pointer"
-                                                    checked={form.attendee_emails.includes(p.email)}
-                                                    onChange={e => setForm(f => ({
-                                                        ...f,
-                                                        attendee_emails: e.target.checked
-                                                            ? [...f.attendee_emails, p.email]
-                                                            : f.attendee_emails.filter(em => em !== p.email)
-                                                    }))}
-                                                />
-                                                <span className="text-surface-700 font-medium">{p.name}</span>
-                                                <span className="text-surface-400">{p.email}</span>
-                                                {p.position && <span className="text-surface-400">({p.position})</span>}
-                                            </label>
-                                        ))}
-                                    </div>
+                        {/* PIC & Attendee Emails */}
+                        {form.sync_calendar && (
+                            <div className="pt-2.5 border-t border-surface-200 space-y-2">
+                                <div className="flex items-center justify-between">
+                                    <span className="text-xs font-semibold text-surface-800 flex items-center gap-1.5">
+                                        <Users className="w-3.5 h-3.5 text-blue-600" /> Undang Peserta / Tamu (Google Calendar)
+                                    </span>
+                                    <span className="text-[10px] text-surface-400">Opsional</span>
                                 </div>
-                            );
-                        })()}
+
+                                {(customerPics || []).length > 0 && (
+                                    <div className="bg-white p-2.5 rounded-lg border border-surface-200 space-y-1">
+                                        <p className="text-[10px] font-semibold text-surface-500 uppercase tracking-wider">Pilih PIC Customer:</p>
+                                        {customerPics.map((p) => {
+                                            const hasEmail = Boolean(p.email);
+                                            const isChecked = hasEmail && (form.attendee_emails || []).includes(p.email.toLowerCase());
+                                            return (
+                                                <div key={p.id || p.name} className="flex items-center justify-between text-xs py-0.5">
+                                                    <label className={`flex items-center gap-2 ${hasEmail ? "cursor-pointer text-surface-800" : "text-surface-400"}`}>
+                                                        <input
+                                                            type="checkbox"
+                                                            disabled={!hasEmail}
+                                                            checked={isChecked}
+                                                            onChange={(e) => {
+                                                                if (!hasEmail) return;
+                                                                if (e.target.checked) {
+                                                                    addAttendeeEmail(p.email);
+                                                                } else {
+                                                                    removeAttendeeEmail(p.email.toLowerCase());
+                                                                }
+                                                            }}
+                                                            className="w-3.5 h-3.5 rounded text-blue-600 cursor-pointer disabled:opacity-40"
+                                                        />
+                                                        <span className="font-medium">{p.name}</span>
+                                                        {p.position && <span className="text-surface-400">({p.position})</span>}
+                                                    </label>
+                                                    <span className={`text-[11px] ${hasEmail ? "text-surface-500" : "text-amber-600 font-medium"}`}>
+                                                        {hasEmail ? p.email : "Belum ada email"}
+                                                    </span>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                )}
+
+                                <div>
+                                    <div className="flex gap-1.5">
+                                        <input
+                                            type="email"
+                                            placeholder="Ketik email tamu (misal: client@gmail.com)"
+                                            value={customEmail}
+                                            onChange={(e) => setCustomEmail(e.target.value)}
+                                            onKeyDown={(e) => {
+                                                if (e.key === "Enter") {
+                                                    e.preventDefault();
+                                                    addAttendeeEmail();
+                                                }
+                                            }}
+                                            className="flex-1 text-xs border border-surface-200 rounded-lg px-2.5 py-1.5 outline-none focus:ring-1 focus:ring-blue-500 bg-white"
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={() => addAttendeeEmail()}
+                                            className="px-2.5 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 font-semibold text-xs rounded-lg border border-blue-200 cursor-pointer"
+                                        >
+                                            + Tambah
+                                        </button>
+                                    </div>
+                                    <p className="text-[10px] text-surface-400 mt-1">Tekan Enter atau klik + Tambah untuk memasukkan email tamu yang akan diundang.</p>
+
+                                    {(form.attendee_emails || []).length > 0 && (
+                                        <div className="flex flex-wrap gap-1.5 mt-2">
+                                            {form.attendee_emails.map((email) => (
+                                                <span key={email} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] bg-blue-50 text-blue-700 border border-blue-200 font-medium">
+                                                    {email}
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => removeAttendeeEmail(email)}
+                                                        className="hover:text-red-600 cursor-pointer ml-0.5 font-bold"
+                                                    >
+                                                        ×
+                                                    </button>
+                                                </span>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        )}
                     </div>
 
                     <div className="flex justify-end gap-2 pt-2 border-t border-surface-100">

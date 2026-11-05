@@ -43,7 +43,15 @@ class WorkflowController extends Controller
 
     private function payload(Request $request, $lead, $visits, $quotation = null)
     {
-        $customerForPics = $quotation?->customer ?: $lead?->customer;
+        $pics = collect();
+        if ($lead) {
+            $leadPics = $lead->pics()->select('id', 'name', 'email', 'position', 'phone')->get();
+            $custPics = $lead->customer?->pics()->select('id', 'name', 'email', 'position', 'phone')->get() ?? collect();
+            $pics = $leadPics->concat($custPics)->unique(fn($p) => mb_strtolower(trim($p->name)))->values();
+        } elseif ($quotation?->customer) {
+            $pics = $quotation->customer->pics()->select('id', 'name', 'email', 'position', 'phone')->get();
+        }
+
         return [
             'lead' => $lead?->only('id', 'title', 'lead_code'),
             'visits' => $visits->whereIn('user_id', WorkflowAccess::ids($request->user()))->orderBy('scheduled_at')->get(),
@@ -51,7 +59,7 @@ class WorkflowController extends Controller
             'canSchedule' => WorkflowAccess::canSchedule($request->user()),
             'calendarConfigured' => app(GoogleCalendarService::class)->isConfigured(),
             'zoomConfigured' => app(ZoomService::class)->isConfigured() && (bool) $request->user()->has_zoom_license,
-            'pics' => $customerForPics ? $customerForPics->pics()->whereNotNull('email')->select('id', 'customer_id', 'name', 'email', 'position', 'phone')->get() : collect(),
+            'pics' => $pics,
             'suggestedTitle' => $quotation ? 'Lead '.($quotation->customer?->name ?: $quotation->id) : $lead?->title,
         ];
     }
