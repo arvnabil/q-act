@@ -778,6 +778,9 @@ class LeadController extends Controller
                     $desc  = $visit->subject . "\n";
                     if ($visit->location) $desc .= "\nLokasi: " . $visit->location;
                     if ($notes) $desc .= "\n\n" . $notes;
+                    if (!empty($attendeeEmails)) {
+                        $desc .= "\n\nPeserta / Tamu:\n- " . implode("\n- ", $attendeeEmails);
+                    }
                     $desc .= "\n\n---\nSales: " . Auth::user()->name;
                     if ($visit->lead_id) {
                         $ld = Lead::find($visit->lead_id);
@@ -892,6 +895,9 @@ class LeadController extends Controller
                     $desc  = $visit->subject . "\n";
                     if ($visit->location) $desc .= "\nLokasi: " . $visit->location;
                     if ($notes) $desc .= "\n\n" . $notes;
+                    if (!empty($attendeeEmails)) {
+                        $desc .= "\n\nPeserta / Tamu:\n- " . implode("\n- ", $attendeeEmails);
+                    }
                     $desc .= "\n\n---\nSales: " . Auth::user()->name;
                     if ($visit->lead_id) {
                         $ld = Lead::find($visit->lead_id);

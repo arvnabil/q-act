@@ -97,6 +97,18 @@ class GoogleCalendarService
         $response = Http::withToken($token)
             ->post("https://www.googleapis.com/calendar/v3/calendars/{$this->calendarId}/events", $payload);
 
+        // If failed due to Service Account restriction on attendees, retry without attendees
+        if ($response->failed() && !empty($payload['attendees'])) {
+            $err = $response->json();
+            $reason = $err['error']['errors'][0]['reason'] ?? '';
+            if ($reason === 'forbiddenForServiceAccounts' || $response->status() === 403) {
+                Log::info('[GoogleCalendar] Retrying createEvent without attendees due to Service Account restriction');
+                unset($payload['attendees']);
+                $response = Http::withToken($token)
+                    ->post("https://www.googleapis.com/calendar/v3/calendars/{$this->calendarId}/events", $payload);
+            }
+        }
+
         if ($response->failed()) {
             Log::error('[GoogleCalendar] createEvent failed', $response->json());
             return null;
@@ -115,6 +127,18 @@ class GoogleCalendarService
 
         $response = Http::withToken($token)
             ->patch("https://www.googleapis.com/calendar/v3/calendars/{$this->calendarId}/events/{$eventId}", $payload);
+
+        // If failed due to Service Account restriction on attendees, retry without attendees
+        if ($response->failed() && !empty($payload['attendees'])) {
+            $err = $response->json();
+            $reason = $err['error']['errors'][0]['reason'] ?? '';
+            if ($reason === 'forbiddenForServiceAccounts' || $response->status() === 403) {
+                Log::info('[GoogleCalendar] Retrying updateEvent without attendees due to Service Account restriction');
+                unset($payload['attendees']);
+                $response = Http::withToken($token)
+                    ->patch("https://www.googleapis.com/calendar/v3/calendars/{$this->calendarId}/events/{$eventId}", $payload);
+            }
+        }
 
         if ($response->failed()) {
             Log::error('[GoogleCalendar] updateEvent failed', $response->json());
