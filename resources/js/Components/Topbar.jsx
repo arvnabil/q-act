@@ -3,16 +3,25 @@ import { Menu, Search, Bell, Plus, CheckCheck, Trash2, Info, AlertCircle, CheckC
 import { Link, usePage, router } from '@inertiajs/react';
 import axios from 'axios';
 import HeaderSearch from './HeaderSearch';
+import { MANAGEMENT_PAGES } from './ManagementPageHeader';
 
 const PAGE_CONFIG = {
-    '/dashboard': { title: 'Dashboard', subtitle: 'Overview kinerja quotation bulan ini' },
+    '/leads': { title: 'Lead Pipeline', subtitle: 'Pantau peluang penjualan dan perkembangan setiap lead' },
+    '/leads/visits': { title: 'Visit & Follow-up', subtitle: 'Kelola kunjungan, tindak lanjut, dan hasil aktivitas' },
+    '/leads/calendar': { title: 'Kalender', subtitle: 'Jadwal follow-up, kunjungan, dan agenda kerja' },
+    '/team-calendar': { title: 'Kalender', subtitle: 'Jadwal follow-up, kunjungan, dan agenda kerja' },
+    '/manager': { title: 'Manager View', subtitle: 'Pantau kinerja tim dan tindak lanjut penjualan' },
+    '/quotations/create': { title: 'Buat Quotation', subtitle: 'Susun penawaran produk dan harga untuk customer' },
+    '/achievements': { title: 'Pencapaian', subtitle: 'Ringkasan nilai dan perkembangan deal lead' },
+    ...MANAGEMENT_PAGES,
+    '/dashboard': { title: 'Dashboard', subtitle: 'Ringkasan performa, quotation, dan PO sesuai cakupan akses' },
     '/quotations': { title: 'Quotations', subtitle: 'Kelola semua penawaran harga' },
     '/sales-orders': { title: 'Sales Orders', subtitle: 'Manajemen sales orders' },
     '/customers': { title: 'Customers', subtitle: 'Manajemen data pelanggan' },
     '/products': { title: 'Products', subtitle: 'Katalog produk per brand' },
     '/brands': { title: 'Brands', subtitle: 'Manajemen brand produk' },
     '/analytics': { title: 'Analytics', subtitle: 'Laporan dan analisis mendalam' },
-    '/settings': { title: 'Settings', subtitle: 'Pengaturan sistem quotation' },
+    '/settings': { title: 'Settings', subtitle: 'Kelola pengaturan aplikasi dan integrasi' },
     '/profile': { title: 'Profil Pengguna', subtitle: 'Kelola informasi akun dan pengaturan profil' },
 };
 
@@ -43,7 +52,21 @@ function timeAgo(dateString) {
 export default function Topbar({ setMobileOpen }) {
     const { url, props } = usePage();
     const pathname = new URL(url, window.location.origin).pathname;
-    const config = PAGE_CONFIG[pathname] || PAGE_CONFIG['/dashboard'] || { title: 'Portal', subtitle: 'Sales Portal' };
+    const normalizedPath = pathname.replace(/\/+$/, '') || '/';
+    const detailPages = [
+        [/^\/quotations\/[^/]+\/edit$/, { title: 'Edit Quotation', subtitle: 'Kelola item, harga, dan ketentuan penawaran' }],
+        [/^\/quotations\/[^/]+$/, { title: 'Detail Quotation', subtitle: 'Informasi penawaran, dokumen, dan riwayat quotation' }],
+        [/^\/sales-orders\/[^/]+$/, { title: 'Detail Sales Order', subtitle: 'Informasi pesanan, data PO, biaya, dan margin' }],
+        [/^\/customers\/[^/]+$/, { title: 'Detail Customer', subtitle: 'Profil perusahaan, kontak PIC, dan riwayat transaksi' }],
+        [/^\/leads\/[^/]+$/, { title: 'Detail Lead', subtitle: 'Informasi peluang, quotation terkait, dan agenda tindak lanjut' }],
+    ];
+    const parentPath = Object.keys(PAGE_CONFIG)
+        .sort((a, b) => b.length - a.length)
+        .find(path => normalizedPath.startsWith(path + '/'));
+    const config = PAGE_CONFIG[normalizedPath]
+        || detailPages.find(([pattern]) => pattern.test(normalizedPath))?.[1]
+        || PAGE_CONFIG[parentPath]
+        || { title: 'Sales Portal', subtitle: 'Kelola aktivitas dan informasi penjualan' };
 
     const [notifOpen, setNotifOpen] = useState(false);
     const notifRef = useRef(null);

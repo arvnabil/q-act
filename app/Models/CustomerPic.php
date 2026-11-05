@@ -10,5 +10,6 @@ class CustomerPic extends Model
 
     protected $casts = [
         'is_primary' => 'boolean',
+        'crm_profile' => 'array',
     ];
 }

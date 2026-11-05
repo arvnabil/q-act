@@ -39,6 +39,15 @@ class Quotation extends Model
         'terms' => 'array',
     ];
 
+    protected static function booted(): void {
+        static::creating(function ($quotation) {
+            if (!$quotation->lead_id && $quotation->parent_quotation_id) {
+                $parent = self::find($quotation->parent_quotation_id);
+                if ($parent && $parent->customer_id === $quotation->customer_id) $quotation->lead_id = $parent->lead_id;
+            }
+        });
+    }
+
     // Scope: only non-deleted
     public function scopeActive($query)
     {

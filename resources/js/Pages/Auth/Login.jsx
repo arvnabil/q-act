@@ -1,3 +1,4 @@
+import FlashMessages from '@/Components/FlashMessages';
 import React, { useState } from 'react';
 import { useForm, Link } from '@inertiajs/react';
 import { Eye, EyeOff, Loader2 } from 'lucide-react';
@@ -31,6 +32,7 @@ export default function Login({ status }) {
     return (
         <div className="min-h-screen w-full flex flex-col lg:flex-row bg-surface-50 overflow-hidden font-sans">
 
+            <FlashMessages />
             {/* LEFT PANEL */}
             <div className="hidden lg:flex lg:w-1/2 bg-gradient-to-br from-brand-900 via-brand-800 to-brand-950 relative items-center justify-center p-12 overflow-hidden border-r border-brand-700/30">
                 <div className="absolute -top-40 -left-40 w-96 h-96 bg-brand-400/20 rounded-full blur-3xl animate-pulse-slow"></div>

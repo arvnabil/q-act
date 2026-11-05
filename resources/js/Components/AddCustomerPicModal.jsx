@@ -164,3 +164,4 @@ export default function AddCustomerPicModal({ isOpen, onClose, customerId }) {
         document.body
     );
 }
+

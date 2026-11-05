@@ -656,6 +656,8 @@ class LeadController extends Controller
             'subject'      => 'required|string|max:255',
             'location'     => 'nullable|string|max:255',
             'scheduled_at' => 'required|date',
+            'end_at'       => 'nullable|date',
+            'is_all_day'   => 'nullable|boolean',
             'notes'        => 'nullable|string',
             'create_zoom'  => 'nullable|boolean',
             'sync_calendar'=> 'nullable|boolean',
@@ -680,7 +682,30 @@ class LeadController extends Controller
             ]);
         }
         $data['user_id'] = Auth::id();
-        $data['scheduled_at'] = Carbon::parse($data['scheduled_at'])->setTimezone(config('app.timezone'))->format('Y-m-d H:i:s');
+        $isAllDay = !empty($data['is_all_day']);
+        $data['is_all_day'] = $isAllDay;
+
+        if ($isAllDay) {
+            $startCarbon = Carbon::parse($data['scheduled_at'])->setTimezone(config('app.timezone'))->startOfDay();
+            $endCarbon = !empty($data['end_at'])
+                ? Carbon::parse($data['end_at'])->setTimezone(config('app.timezone'))->endOfDay()
+                : (clone $startCarbon)->endOfDay();
+            if ($endCarbon->lt($startCarbon)) {
+                $endCarbon = (clone $startCarbon)->endOfDay();
+            }
+            $data['scheduled_at'] = $startCarbon->format('Y-m-d H:i:s');
+            $data['end_at']       = $endCarbon->format('Y-m-d H:i:s');
+        } else {
+            $startCarbon = Carbon::parse($data['scheduled_at'])->setTimezone(config('app.timezone'));
+            $endCarbon = !empty($data['end_at'])
+                ? Carbon::parse($data['end_at'])->setTimezone(config('app.timezone'))
+                : (clone $startCarbon)->addHour();
+            if ($endCarbon->lt($startCarbon)) {
+                $endCarbon = (clone $startCarbon)->addHour();
+            }
+            $data['scheduled_at'] = $startCarbon->format('Y-m-d H:i:s');
+            $data['end_at']       = $endCarbon->format('Y-m-d H:i:s');
+        }
 
         if (!empty($data['lead_id']) && empty($data['customer_id'])) {
             $ld = Lead::find($data['lead_id']);
@@ -713,8 +738,9 @@ class LeadController extends Controller
                 $zoomService = new ZoomService();
                 if ($zoomService->isConfigured()) {
                     $hostEmail = Auth::user()->email;
-                    $startTime = Carbon::parse($visit->scheduled_at)->toIso8601String();
-                    $meeting = $zoomService->createMeeting($hostEmail, $visit->subject, $startTime, 60, $visit->notes);
+                    $startTime = $startCarbon->toIso8601String();
+                    $durationMinutes = max(15, min(1440, $startCarbon->diffInMinutes($endCarbon)));
+                    $meeting = $zoomService->createMeeting($hostEmail, $visit->subject, $startTime, $durationMinutes, $visit->notes);
                     if ($meeting) {
                         $visit->update([
                             'zoom_meeting_id' => $meeting['id'],
@@ -732,8 +758,13 @@ class LeadController extends Controller
             try {
                 $calendarService = new GoogleCalendarService();
                 if ($calendarService->isConfigured()) {
-                    $startDt = Carbon::parse($visit->scheduled_at);
-                    $endDt   = (clone $startDt)->addHour();
+                    if ($isAllDay) {
+                        $gStart = $startCarbon->format('Y-m-d');
+                        $gEnd   = (clone $endCarbon)->addDay()->format('Y-m-d');
+                    } else {
+                        $gStart = $startCarbon->toIso8601String();
+                        $gEnd   = $endCarbon->toIso8601String();
+                    }
 
                     $desc = ($visit->notes ?? '') . ($visit->quotation_id ? "\nQuotation: ".url('/quotations/'.$visit->quotation_id) : '') . "\n\nSales: " . Auth::user()->name;
                     if ($visit->lead_id) {
@@ -744,10 +775,11 @@ class LeadController extends Controller
                     $body = GoogleCalendarService::buildEventBody(
                         $visit->subject,
                         $desc,
-                        $startDt->toIso8601String(),
-                        $endDt->toIso8601String(),
+                        $gStart,
+                        $gEnd,
                         $visit->location,
-                        $visit->zoom_join_url
+                        $visit->zoom_join_url,
+                        $isAllDay
                     );
 
                     $eventId = $calendarService->createEvent($body);
@@ -788,11 +820,36 @@ class LeadController extends Controller
             'subject'      => 'required|string|max:255',
             'location'     => 'nullable|string|max:255',
             'scheduled_at' => 'required|date',
+            'end_at'       => 'nullable|date',
+            'is_all_day'   => 'nullable|boolean',
             'notes'        => 'nullable|string',
             'outcome'      => 'nullable|string',
         ]);
 
-        $data['scheduled_at'] = Carbon::parse($data['scheduled_at'])->setTimezone(config('app.timezone'))->format('Y-m-d H:i:s');
+        $isAllDay = !empty($data['is_all_day']);
+        $data['is_all_day'] = $isAllDay;
+
+        if ($isAllDay) {
+            $startCarbon = Carbon::parse($data['scheduled_at'])->setTimezone(config('app.timezone'))->startOfDay();
+            $endCarbon = !empty($data['end_at'])
+                ? Carbon::parse($data['end_at'])->setTimezone(config('app.timezone'))->endOfDay()
+                : (clone $startCarbon)->endOfDay();
+            if ($endCarbon->lt($startCarbon)) {
+                $endCarbon = (clone $startCarbon)->endOfDay();
+            }
+            $data['scheduled_at'] = $startCarbon->format('Y-m-d H:i:s');
+            $data['end_at']       = $endCarbon->format('Y-m-d H:i:s');
+        } else {
+            $startCarbon = Carbon::parse($data['scheduled_at'])->setTimezone(config('app.timezone'));
+            $endCarbon = !empty($data['end_at'])
+                ? Carbon::parse($data['end_at'])->setTimezone(config('app.timezone'))
+                : (clone $startCarbon)->addHour();
+            if ($endCarbon->lt($startCarbon)) {
+                $endCarbon = (clone $startCarbon)->addHour();
+            }
+            $data['scheduled_at'] = $startCarbon->format('Y-m-d H:i:s');
+            $data['end_at']       = $endCarbon->format('Y-m-d H:i:s');
+        }
         $visit->update($data);
         if ($visit->lead_activity_id) LeadActivity::whereKey($visit->lead_activity_id)->update(['scheduled_at' => $visit->scheduled_at]);
         $warnings = [];
@@ -809,8 +866,13 @@ class LeadController extends Controller
             try {
                 $calendarService = app(GoogleCalendarService::class);
                 if ($calendarService->isConfigured()) {
-                    $startDt = Carbon::parse($visit->scheduled_at);
-                    $endDt   = (clone $startDt)->addHour();
+                    if ($visit->is_all_day) {
+                        $gStart = Carbon::parse($visit->scheduled_at)->format('Y-m-d');
+                        $gEnd   = Carbon::parse($visit->end_at ?: $visit->scheduled_at)->addDay()->format('Y-m-d');
+                    } else {
+                        $gStart = Carbon::parse($visit->scheduled_at)->toIso8601String();
+                        $gEnd   = Carbon::parse($visit->end_at ?: $visit->scheduled_at)->toIso8601String();
+                    }
 
                     $desc = ($visit->notes ?? '');
                     if ($visit->lead_id) {
@@ -821,10 +883,11 @@ class LeadController extends Controller
                     $body = GoogleCalendarService::buildEventBody(
                         $visit->subject,
                         $desc,
-                        $startDt->toIso8601String(),
-                        $endDt->toIso8601String(),
+                        $gStart,
+                        $gEnd,
                         $visit->location,
-                        $visit->zoom_join_url
+                        $visit->zoom_join_url,
+                        (bool) $visit->is_all_day
                     );
 
                     if (!$calendarService->updateEvent($visit->gc_event_id, $body)) $warnings[] = 'Jadwal Google Calendar belum berhasil diperbarui.';

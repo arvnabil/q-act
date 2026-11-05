@@ -41,6 +41,8 @@ class HandleInertiaRequests extends Middleware
                 'permissions' => $user ? $user->getAllPermissions()->pluck('name')->toArray() : [],
             ],
             'flash' => [
+                'toast_id' => fn () => $request->session()->has('message') || $request->session()->has('error')
+                    ? (string) \Illuminate\Support\Str::uuid() : null,
                 'message' => fn () => $request->session()->get('message'),
                 'error'   => fn () => $request->session()->get('error'),
             ],

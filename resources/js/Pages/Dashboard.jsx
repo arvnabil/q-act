@@ -1,11 +1,13 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Link, router } from '@inertiajs/react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import Pagination from '@/Components/Pagination';
+import Modal from '@/Components/Modal';
+import { DialogTitle } from '@headlessui/react';
 import { Head } from '@inertiajs/react';
 import { formatRupiah, formatCompactRupiah } from '@/utils/money';
 import {
-    FileText, DollarSign, TrendingUp, CheckCircle2, ChevronRight,
+    Info, FileText, DollarSign, TrendingUp, CheckCircle2, ChevronRight,
     Users, Target, Filter, Calendar, ChevronDown, Pencil, X, AlertTriangle,
     Search, ShoppingCart, UserCheck, Eye, EyeOff, Sparkles, Clock, ArrowUpRight
 } from 'lucide-react';
@@ -126,7 +128,7 @@ function PersonalTargetGauge({ pct = 0 }) {
                     {clampedPct}%
                 </text>
             </svg>
-            <span className="text-[10px] text-surface-400 font-semibold mt-1">Win rate</span>
+            <span className="text-[10px] text-surface-400 font-semibold mt-1">Pencapaian target</span>
         </div>
     );
 }
@@ -262,7 +264,7 @@ function PersonalSalesDashboard({
         revenueThisMonth = 0,
         dealsWonThisMonth = 0,
         dealsLostThisMonth = 0,
-        targetAmount = 600000000,
+        targetAmount = 0,
         targetPct = 0,
         forecastPipeline = 0,
         monthlyRevenueLast6 = [],
@@ -323,7 +325,7 @@ function PersonalSalesDashboard({
                             >
                                 {salesUsers.map((s) => (
                                     <option key={s.id} value={s.id}>
-                                        Sales: {s.name}
+                                        {s.role}: {s.name}
                                     </option>
                                 ))}
                             </select>
@@ -362,17 +364,17 @@ function PersonalSalesDashboard({
 
                 {!isCollapsed && (
                     <div className="pt-6 space-y-6">
-                        {/* Top Row: Revenue saya + Target pribadi */}
+                        {/* Top Row: Nilai PO saya + Target pribadi */}
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
-                            {/* Revenue saya */}
+                            {/* Nilai PO saya */}
                             <div className="space-y-1.5">
-                                <span className="text-xs font-bold text-surface-500 uppercase tracking-wider">Revenue saya</span>
+                                <span className="text-xs font-bold text-surface-500 uppercase tracking-wider">Nilai PO saya</span>
                                 <div className="text-3xl sm:text-4xl font-extrabold text-surface-900 tracking-tight">
                                     {formatFull(revenueThisMonth)}
                                 </div>
-                                <p className="text-xs text-surface-500">Revenue bulan ini dari deal Anda</p>
+                                <p className="text-xs text-surface-500">Nilai PO bertanggal bulan ini, termasuk pajak sesuai quotation</p>
                                 <div className="pt-2 text-[11px] text-surface-400">
-                                    {dealsWonThisMonth} deal selesai tgl bulan ini
+                                    {personalStats?.poCountThisMonth ?? 0} dokumen PO valid bulan ini
                                 </div>
                             </div>
 
@@ -384,10 +386,10 @@ function PersonalSalesDashboard({
                                 <div className="flex flex-col items-center">
                                     <PersonalTargetGauge pct={targetPct} />
                                     <div className="mt-2 text-sm font-extrabold text-surface-800 text-center">
-                                        {formatShort(revenueThisMonth)} / {formatShort(targetAmount)}
+                                        {targetAmount > 0 ? `${formatShort(revenueThisMonth)} / ${formatShort(targetAmount)}` : 'Target belum diatur'}
                                     </div>
                                     <div className="text-[11px] text-surface-400 font-medium mt-0.5">
-                                        Forecast pipeline {formatShort(forecastPipeline)}
+                                        Estimasi lead aktif {formatShort(forecastPipeline)}
                                     </div>
                                 </div>
                             </div>
@@ -397,10 +399,10 @@ function PersonalSalesDashboard({
 
                         {/* Bottom Row: 6-month bars + All-time summary */}
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-end">
-                            {/* Revenue saya 6 bulan terakhir */}
+                            {/* Nilai PO saya 6 bulan terakhir */}
                             <div>
                                 <h3 className="text-xs font-bold text-surface-700 uppercase tracking-wider mb-4">
-                                    Revenue saya 6 bulan terakhir
+                                    Nilai PO saya 6 bulan terakhir
                                 </h3>
                                 <div className="flex items-end justify-between gap-2 pt-2 pb-1">
                                     {(monthlyRevenueLast6 || []).map((m, idx) => {
@@ -449,7 +451,7 @@ function PersonalSalesDashboard({
                                     </div>
                                     <div className="p-3 rounded-xl bg-surface-50/80 border border-surface-100">
                                         <div className="text-xl sm:text-2xl font-black text-surface-900">{formatShort(allTime.totalRevenue ?? 0)}</div>
-                                        <div className="text-[11px] text-surface-500 font-medium mt-0.5">Total revenue</div>
+                                        <div className="text-[11px] text-surface-500 font-medium mt-0.5">Total nilai PO</div>
                                     </div>
                                 </div>
                             </div>
@@ -469,29 +471,29 @@ function PersonalSalesDashboard({
                 </div>
 
                 {/* Dark Smart Advisor Banner */}
-                <div className="bg-slate-900 text-white rounded-2xl p-4 sm:p-5 shadow-sm border border-slate-800 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div className="bg-teal-50 text-surface-900 rounded-2xl p-4 sm:p-5 shadow-sm border border-teal-200 flex flex-col md:flex-row md:items-center justify-between gap-4">
                     <div className="flex items-start sm:items-center gap-3.5">
                         <div className="w-10 h-10 rounded-xl bg-indigo-500/20 border border-indigo-400/30 flex items-center justify-center shrink-0 text-indigo-300">
                             <Sparkles className="w-5 h-5 text-indigo-400" />
                         </div>
                         <div>
                             <div className="flex items-center gap-2">
-                                <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-400 bg-indigo-950/60 border border-indigo-800/40 px-2 py-0.5 rounded">
-                                    AI Advisor
+                                <span className="text-[10px] font-bold uppercase tracking-wider text-teal-700 bg-white border border-teal-200 px-2 py-0.5 rounded">
+                                    Saran Follow-up
                                 </span>
-                                <h3 className="text-sm font-bold text-white">{smartTip.title || 'Rekomendasi Hari Ini'}</h3>
+                                <h3 className="text-sm font-bold text-surface-900">{smartTip.title || 'Rekomendasi Hari Ini'}</h3>
                             </div>
-                            <p className="mt-1 text-xs text-slate-300 max-w-2xl leading-relaxed">
+                            <p className="mt-1 text-xs text-surface-600 max-w-2xl leading-relaxed">
                                 {smartTip.message}
                             </p>
                         </div>
                     </div>
 
                     <Link
-                        href="/quotations?status=sent"
+                        href={upcomingTasks[0]?.url || "/leads"}
                         className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-white text-slate-900 hover:bg-slate-100 rounded-xl text-xs font-bold transition-all shadow-sm shrink-0 self-start md:self-auto cursor-pointer"
                     >
-                        <span>Buka Penawaran Prioritas</span>
+                        <span>Buka Lead & Agenda</span>
                         <ChevronRight className="w-3.5 h-3.5" />
                     </Link>
                 </div>
@@ -500,21 +502,21 @@ function PersonalSalesDashboard({
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                     <div className="bg-white rounded-xl border border-surface-200 p-5 shadow-xs flex flex-col gap-1">
                         <div className="text-3xl font-black text-surface-900">{pipelineReview.totalLeads ?? 0}</div>
-                        <div className="text-xs font-bold text-surface-700">Total lead</div>
+                        <div className="text-xs font-bold text-surface-700">Lead aktif</div>
                         <div className="text-[11px] text-surface-400 mt-1">
-                            {pipelineReview.dealsWon ?? 0} menang, {pipelineReview.dealsLost ?? 0} kalah
+                            Belum menang/kalah dan tidak diarsipkan
                         </div>
                     </div>
 
                     <div className="bg-white rounded-xl border border-surface-200 p-5 shadow-xs flex flex-col gap-1">
                         <div className="text-3xl font-black text-surface-900">{pipelineReview.needsFollowUp ?? 0}</div>
                         <div className="text-xs font-bold text-surface-700">Perlu follow-up</div>
-                        <div className="text-[11px] text-surface-400 mt-1">Lead dengan langkah berikutnya</div>
+                        <div className="text-[11px] text-surface-400 mt-1">Lead/penawaran dengan agenda tertunda s.d. akhir minggu</div>
                     </div>
 
                     <div className="bg-white rounded-xl border border-surface-200 p-5 shadow-xs flex flex-col gap-1">
                         <div className="text-3xl font-black text-surface-900">{pipelineReview.todayAgenda ?? 0}</div>
-                        <div className="text-xs font-bold text-surface-700">Kunjungan / Agenda hari ini</div>
+                        <div className="text-xs font-bold text-surface-700">Agenda belum selesai hari ini</div>
                         <div className="text-[11px] text-surface-400 mt-1 truncate">
                             Berikutnya: <span className="font-semibold text-surface-600">{pipelineReview.nextCustomer || '-'}</span>
                         </div>
@@ -524,7 +526,7 @@ function PersonalSalesDashboard({
                         <div className="text-3xl font-black text-surface-900">{pipelineReview.dealsThisMonth ?? 0}</div>
                         <div className="text-xs font-bold text-surface-700">Deal bulan ini</div>
                         <div className="text-[11px] text-surface-400 mt-1">
-                            {dealsLostThisMonth} kalah • win rate {pipelineReview.monthWinRate ?? 0}% sepanjang masa
+                            {dealsLostThisMonth} kalah • win rate {pipelineReview.monthWinRate ?? 0}% bulan ini
                         </div>
                     </div>
                 </div>
@@ -583,7 +585,7 @@ function PersonalSalesDashboard({
                                 return (
                                     <Link
                                         key={task.id}
-                                        href={route('quotations.show', task.id)}
+                                        href={task.url || route('quotations.show', task.id)}
                                         className="block p-3 rounded-xl border border-surface-200 hover:border-brand-300 hover:bg-surface-50/70 transition-all group cursor-pointer"
                                     >
                                         <div className="flex items-start justify-between gap-2">
@@ -615,17 +617,33 @@ function PersonalSalesDashboard({
 
 // ─── Main Component ──────────────────────────────────────────────────────────
 
-export default function Dashboard({ stats, personalStats, salesUsers, filters, auth, tableQuotations = [], tableSalesOrders = [] }) {
+export default function Dashboard({ stats, personalStats, salesUsers: incomingSalesUsers = [], filters, auth, tableQuotations = [], tableSalesOrders = [], dashboardAccess = {}, dataQuality = {} }) {
+    const salesUsers = incomingSalesUsers.filter(s => ['Sales', 'Presales'].includes(s.role));
+    const refreshedLegacySales = useRef(false);
+    useEffect(() => {
+        // Vite HMR replaces JSX but retains the previous Inertia page props.
+        if (!refreshedLegacySales.current && incomingSalesUsers.some(s => !s.role)) {
+            refreshedLegacySales.current = true;
+            router.reload({ only: ['salesUsers', 'filters', 'personalStats', 'dashboardAccess'] });
+        }
+    }, [incomingSalesUsers]);
+    const [showDataInfo, setShowDataInfo] = useState(false);
+    const incompleteDataCount = (dataQuality.missingDate || 0) + (dataQuality.missingRecord || 0) + (dataQuality.invalidAllocation || 0) + (personalStats?.missingCloseDate || 0);
     const { user, permissions = [] } = auth || {};
-    const canEditTarget = permissions.includes('sales_targets_edit') || ['Administrator', 'Sales Manager', 'Manager'].includes(user?.spatie_role || user?.role);
-    const isManagerOrAdmin = ['Administrator', 'Sales Manager', 'Manager'].includes(user?.spatie_role || user?.role);
+    const canEditTarget = permissions.includes('sales_targets_edit');
+    const isManagerOrAdmin = dashboardAccess.canSelectSales === true;
 
     const [period, setPeriod] = useState(filters?.period || '6m');
-    const [basis, setBasis] = useState(filters?.basis || 'personal');
+    // Render the tab matching the received server data, not the pending navigation.
+    const basis = filters?.basis || 'personal';
     const [salesFilter, setSalesFilter] = useState(filters?.salesFilter || 'all');
     const [customStart, setCustomStart] = useState(filters?.customStart || '');
     const [customEnd, setCustomEnd] = useState(filters?.customEnd || '');
     const [personalSalesId, setPersonalSalesId] = useState(filters?.personalSalesId || auth?.user?.id);
+
+    useEffect(() => {
+        setPersonalSalesId(filters?.personalSalesId || auth?.user?.id);
+    }, [filters?.personalSalesId, auth?.user?.id]);
 
     // Table search & pagination state
     const [tableSearch, setTableSearch] = useState('');
@@ -637,6 +655,7 @@ export default function Dashboard({ stats, personalStats, salesUsers, filters, a
         totalAllValue = 0,
         totalPOValue = 0,
         approvedCount = 0,
+        quotationPoCount = 0,
         conversionRate = 0,
         statusCounts = {},
         chartMonths = [],
@@ -717,7 +736,7 @@ export default function Dashboard({ stats, personalStats, salesUsers, filters, a
 
     const handleStartEditSales = (s) => {
         setEditingSales(s);
-        setTargetInputVal(String(s.target || 600000000));
+        setTargetInputVal(String(s.monthly_target ?? 0));
     };
 
     const handleTopAturTargetClick = () => {
@@ -774,7 +793,6 @@ export default function Dashboard({ stats, personalStats, salesUsers, filters, a
     };
 
     const handleBasisChange = (key) => {
-        setBasis(key);
         applyFilters({ basis: key });
     };
 
@@ -804,6 +822,7 @@ export default function Dashboard({ stats, personalStats, salesUsers, filters, a
 
             <div className="animate-fade-in-up space-y-6">
 
+                <div className="flex flex-wrap items-center justify-between gap-3">
                 {/* ── Reporting basis tabs ──────────────────────────────────── */}
                 <div className="bg-white rounded-xl border border-surface-200 p-1.5 shadow-sm inline-flex gap-1 flex-wrap">
                     <button
@@ -836,15 +855,52 @@ export default function Dashboard({ stats, personalStats, salesUsers, filters, a
                     </button>
                 </div>
 
+                <button type="button" onClick={() => setShowDataInfo(true)} aria-haspopup="dialog"
+                    className="inline-flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold text-surface-500 hover:bg-white hover:text-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 transition-colors">
+                    <Info className="h-4 w-4" aria-hidden="true" />
+                    Info data
+                    {incompleteDataCount > 0 && <span className="rounded-full bg-amber-50 px-2 py-0.5 text-amber-700 border border-amber-200" aria-label={`${incompleteDataCount} data perlu dilengkapi`}>{incompleteDataCount} perlu dilengkapi</span>}
+                </button>
+                </div>
+
+                <Modal show={showDataInfo} onClose={() => setShowDataInfo(false)} maxWidth="2xl">
+                    <div className="flex max-h-[80vh] flex-col">
+                        <div className="flex items-start gap-3 border-b border-surface-100 p-5 sm:p-6">
+                            <div className="rounded-xl bg-brand-50 p-2.5 text-brand-600"><Info className="h-5 w-5" /></div>
+                            <div className="flex-1">
+                                <DialogTitle className="text-lg font-bold text-surface-900">Tentang data dashboard</DialogTitle>
+                                <p className="mt-1 text-xs text-surface-500">Sumber angka, cakupan akses, dan cara menghitungnya.</p>
+                            </div>
+                            <button type="button" onClick={() => setShowDataInfo(false)} aria-label="Tutup informasi data" className="rounded-lg p-2 text-surface-400 hover:bg-surface-100 focus-visible:ring-2 focus-visible:ring-brand-500"><X className="h-5 w-5" /></button>
+                        </div>
+                        <div className="overflow-y-auto p-5 sm:p-6">
+                    <div className="space-y-4 text-sm leading-relaxed text-surface-600 [&_strong]:text-surface-900 [&_strong]:block [&_strong]:mb-1">
+                        <p><strong>Performa:</strong> Total lead menghitung ID lead unik, termasuk riwayat yang diarsipkan. Satu lead dengan banyak quotation tetap satu lead. Menang/kalah mengikuti stage pipeline; win rate = menang ÷ (menang + kalah). Deal bulanan memakai tanggal aktivitas perubahan stage, bukan tanggal quotation.</p>
+                        <p><strong>Nilai PO:</strong> Dihitung per dokumen PO berdasarkan tanggal PO manual dan item yang dialokasikan, termasuk pajak sesuai quotation. PO dibatalkan dan quotation superseded tidak dihitung. Ini nilai pesanan, bukan penerimaan pembayaran.</p>
+                        <p><strong>Quotation:</strong> Menggunakan tanggal dokumen quotation. Nilai quotation utama hanya item yang belum dialokasikan ke sub. Revisi lama yang superseded dan dokumen dibatalkan dikeluarkan.</p>
+                        <p><strong>Review mingguan:</strong> Agenda Lead Pipeline yang belum selesai dan kunjungan belum selesai sampai akhir minggu, termasuk agenda terlambat. Estimasi pipeline menjumlahkan estimasi lead aktif, bukan seluruh quotation. Saran follow-up memakai aturan jadwal, bukan prediksi AI.</p>
+                        <p><strong>Cakupan:</strong> Mengikuti Roles → Dashboard → Lihat Performa & Laporan: sendiri, sendiri + BU, atau semua. Pilihan pengguna dibatasi di server. Performa menampilkan bulan berjalan dan tren 6 bulan; filter periode di tab laporan berlaku untuk laporan tersebut.</p>
+                        <p><strong>Target:</strong> Target bulan berjalan jika tersedia, selain itu target profil pengguna. Nol berarti target belum diatur. Target laporan menjumlahkan target bulanan pada periode terpilih (bulan parsial tetap memakai target sebulan penuh). Persentase target bukan win rate.</p>
+                        {(dataQuality.missingDate > 0 || dataQuality.missingRecord > 0 || dataQuality.invalidAllocation > 0) && <p className="text-amber-700">Belum dihitung: {dataQuality.missingDate || 0} PO tanpa tanggal; {dataQuality.missingRecord || 0} quotation approved tanpa dokumen PO; {dataQuality.invalidAllocation || 0} PO dengan alokasi item kosong/tidak valid/tumpang tindih. Lengkapi melalui data PO pada SO.</p>}
+                        {personalStats?.missingCloseDate > 0 && <p className="text-amber-700">{personalStats.missingCloseDate} lead selesai belum punya riwayat tanggal closing; masuk total sepanjang masa, tetapi tidak dipaksakan ke bulan tertentu.</p>}
+                    </div>
+
+                        </div>
+                        <div className="flex justify-end border-t border-surface-100 px-6 py-4">
+                            <button type="button" onClick={() => setShowDataInfo(false)} className="rounded-lg bg-brand-600 px-5 py-2 text-sm font-semibold text-white hover:bg-brand-700 focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2">Mengerti</button>
+                        </div>
+                    </div>
+                </Modal>
+
                 {isPersonalDashboard ? (
-                    <PersonalSalesDashboard
+                    personalStats ? <PersonalSalesDashboard
                         personalStats={personalStats}
                         auth={auth}
                         salesUsers={salesUsers}
                         isManagerOrAdmin={isManagerOrAdmin}
                         selectedSalesId={personalSalesId}
                         onSelectSalesUser={handlePersonalSalesChange}
-                    />
+                    /> : <div role="status" className="rounded-2xl border border-surface-200 bg-white p-8 text-center text-sm text-surface-500">Data performa belum tersedia. Silakan muat ulang halaman.</div>
                 ) : (
                     <>
 
@@ -867,7 +923,7 @@ export default function Dashboard({ stats, personalStats, salesUsers, filters, a
                 )}
 
                 {/* ── Filter Bar ─────────────────────────────────────────────── */}
-                <div className="bg-white rounded-xl border border-surface-200 px-5 py-4 flex flex-wrap items-center gap-3 shadow-sm">
+                <div className="bg-white rounded-2xl border border-surface-200 p-5 flex flex-wrap items-center gap-3 shadow-sm">
                     <div className="flex items-center gap-2 text-sm font-semibold text-surface-700 shrink-0">
                         <Filter className="w-4 h-4 text-brand-500" />
                         Filter
@@ -881,7 +937,7 @@ export default function Dashboard({ stats, personalStats, salesUsers, filters, a
                                 onChange={e => handleSalesFilterChange(e.target.value)}
                                 className="appearance-none pl-3 pr-8 py-1.5 text-sm border border-surface-200 rounded-lg bg-white text-surface-700 font-medium focus:outline-none focus:ring-2 focus:ring-brand-500/30 cursor-pointer"
                             >
-                                <option value="all">Semua Sales</option>
+                                <option value="all">Semua pengguna dalam cakupan</option>
                                 {(salesUsers || []).map(s => (
                                     <option key={s.id} value={s.id}>{s.name}</option>
                                 ))}
@@ -958,7 +1014,7 @@ export default function Dashboard({ stats, personalStats, salesUsers, filters, a
                         <div className="w-10 h-10 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center">
                             <CheckCircle2 className="w-5 h-5" />
                         </div>
-                        <div className="text-2xl font-extrabold text-surface-900 leading-tight">{isPoDashboard ? approvedCount : formatShort(totalPOValue)}</div>
+                        <div className="text-2xl font-extrabold text-surface-900 leading-tight">{isPoDashboard ? quotationPoCount : formatShort(totalPOValue)}</div>
                         <div className="text-sm text-surface-500">{isPoDashboard ? 'Quotation Menjadi PO' : 'Quotation Menjadi PO'}</div>
                         <div className="text-xs font-medium text-emerald-600">{isPoDashboard ? 'Sumber data PO pada periode ini' : `${approvedCount} PO • ${formatFull(totalPOValue)}`}</div>
                     </div>
@@ -983,7 +1039,7 @@ export default function Dashboard({ stats, personalStats, salesUsers, filters, a
                     {/* Revenue Comparison Chart */}
                     <div className="lg:col-span-8 bg-white rounded-xl border border-surface-200 p-5 shadow-sm">
                         <div className="flex items-center justify-between pb-4 border-b border-surface-100">
-                            <h2 className="text-sm font-bold text-surface-800">{isPoDashboard ? 'Revenue PO' : 'Revenue Quotation'}</h2>
+                            <h2 className="text-sm font-bold text-surface-800">{isPoDashboard ? 'Nilai PO' : 'Nilai Quotation'}</h2>
                             <div className="flex items-center gap-4 text-xs text-surface-500">
                                 {!isPoDashboard && <span className="flex items-center gap-1.5">
                                     <span className="w-2.5 h-2.5 rounded-sm bg-blue-200 inline-block" />
@@ -1167,7 +1223,7 @@ export default function Dashboard({ stats, personalStats, salesUsers, filters, a
                         {canEditTarget && editingSales && (
                             <form onSubmit={handleSaveSalesTarget} className="mb-4 p-3.5 rounded-xl bg-emerald-50/70 border border-emerald-300 animate-fade-in space-y-2">
                                 <label className="text-xs font-bold text-emerald-800 block">
-                                    Target: {editingSales.name}
+                                    Target bulanan: {editingSales.name}
                                 </label>
                                 <div className="flex items-center gap-2">
                                     <div className="relative flex-1">
@@ -1209,7 +1265,7 @@ export default function Dashboard({ stats, personalStats, salesUsers, filters, a
                                 {salesPerf.map((s, idx) => {
                                     const pct = s.target > 0 ? Math.min(100, Math.round((s.achieved / s.target) * 100)) : 0;
                                     const barColor = pct >= 100 ? 'bg-brand-600' : pct >= 80 ? 'bg-emerald-500' : pct >= 50 ? 'bg-amber-500' : 'bg-red-400';
-                                    const badge = pct >= 100 ? { label: 'Exceeded 🚀', cls: 'text-brand-700 bg-brand-50 border-brand-200' }
+                                    const badge = s.target <= 0 ? { label: 'Belum ada target', cls: 'text-surface-600 bg-surface-50 border-surface-200' } : pct >= 100 ? { label: 'Exceeded 🚀', cls: 'text-brand-700 bg-brand-50 border-brand-200' }
                                                : pct >= 80  ? { label: 'On Track ✅',   cls: 'text-emerald-700 bg-emerald-50 border-emerald-200' }
                                                : pct >= 50  ? { label: 'Progressing ⚡', cls: 'text-amber-700 bg-amber-50 border-amber-200' }
                                                :              { label: 'Needs Push ⚠️',  cls: 'text-red-700 bg-red-50 border-red-200' };
@@ -1431,12 +1487,12 @@ export default function Dashboard({ stats, personalStats, salesUsers, filters, a
                                         <tbody className="divide-y divide-surface-100">
                                             {paginatedSalesOrders.map(so => (
                                                 <tr
-                                                    key={so.id}
-                                                    onClick={() => router.visit(`/sales-orders/${so.id}`)}
+                                                    key={so.row_key || so.id}
+                                                    onClick={() => router.visit((so.url || `/sales-orders/${so.id}`))}
                                                     className="hover:bg-brand-50/30 transition-colors cursor-pointer group"
                                                 >
                                                     <td className="py-3 px-4">
-                                                        <Link href={`/sales-orders/${so.id}`} className="text-xs font-bold font-mono text-brand-700 hover:underline">
+                                                        <Link href={(so.url || `/sales-orders/${so.id}`)} className="text-xs font-bold font-mono text-brand-700 hover:underline">
                                                             {so.id}
                                                         </Link>
                                                     </td>
@@ -1490,7 +1546,7 @@ export default function Dashboard({ stats, personalStats, salesUsers, filters, a
                                                     </td>
                                                     <td className="py-3 px-4 text-center" onClick={e => e.stopPropagation()}>
                                                         <Link
-                                                            href={`/sales-orders/${so.id}`}
+                                                            href={(so.url || `/sales-orders/${so.id}`)}
                                                             className="inline-flex items-center gap-1 text-[11px] font-bold text-brand-600 hover:text-brand-800 hover:underline"
                                                         >
                                                             Detail

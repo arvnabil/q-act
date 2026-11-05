@@ -11,9 +11,9 @@ class Customer extends Model
     protected $keyType = 'string';
     public $incrementing = false;
 
-    protected $fillable = ['id', 'name', 'address', 'total_spend', 'bu_id', 'created_by'];
+    protected $fillable = ['id', 'name', 'address', 'total_spend', 'bu_id', 'created_by', 'crm_profile'];
 
-    protected $casts = ['total_spend' => 'integer'];
+    protected $casts = ['total_spend' => 'integer', 'crm_profile' => 'array'];
 
     public function businessUnit(): BelongsTo
     {

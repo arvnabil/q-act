@@ -1,11 +1,10 @@
 import React from 'react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
-import { Head, usePage } from '@inertiajs/react';
+import { Head } from '@inertiajs/react';
 import { Filter } from 'lucide-react';
 import { formatRupiah, formatCompactRupiah } from '@/utils/money';
 
 export default function Analytics({ metrics }) {
-    const { flash } = usePage().props;
 
     const {
         totalQ = 0,
@@ -31,12 +30,6 @@ export default function Analytics({ metrics }) {
             <Head title="Analytics" />
 
             <div className="animate-fade-in-up space-y-8 pb-12">
-                {/* Flash Messages */}
-                {flash?.message && (
-                    <div className="px-4 py-3 bg-emerald-50 border border-emerald-200 text-emerald-700 text-sm font-medium rounded-xl">
-                        {flash.message}
-                    </div>
-                )}
 
                 {/* Header Info */}
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-5 rounded-2xl border border-surface-200 shadow-sm">

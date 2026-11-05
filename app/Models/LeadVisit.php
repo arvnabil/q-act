@@ -11,6 +11,7 @@ class LeadVisit extends Model
     use HasUuids;
 
     protected $fillable = [
+        'quotation_id', 'lead_activity_id', 'cancelled_at',
         'lead_id',
         'user_id',
         'customer_id',
@@ -18,6 +19,8 @@ class LeadVisit extends Model
         'subject',
         'location',
         'scheduled_at',
+        'end_at',
+        'is_all_day',
         'checked_in_at',
         'checked_in_lat',
         'checked_in_lng',
@@ -30,11 +33,16 @@ class LeadVisit extends Model
     ];
 
     protected $casts = [
+        'cancelled_at' => 'datetime',
         'scheduled_at'   => 'datetime',
+        'end_at'         => 'datetime',
+        'is_all_day'     => 'boolean',
         'checked_in_at'  => 'datetime',
         'checked_in_lat' => 'float',
         'checked_in_lng' => 'float',
     ];
+
+    public function quotation(): BelongsTo { return $this->belongsTo(Quotation::class); }
 
     public function lead(): BelongsTo
     {

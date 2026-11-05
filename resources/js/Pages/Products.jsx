@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import ReactDOM from 'react-dom';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import Pagination from '@/Components/Pagination';
-import { Head, usePage, router } from '@inertiajs/react';
+import { Head, router } from '@inertiajs/react';
 import {
     Search, Plus, Filter, Image as ImageIcon, Edit, Trash2, Box, X, Loader2,
     UploadCloud, LayoutGrid, List as ListIcon, AlertCircle, Upload, FileSpreadsheet,
@@ -77,7 +77,6 @@ const COLUMN_MAP = {
 };
 
 export default function Products({ products = [], brands = [] }) {
-    const { flash } = usePage().props;
 
     const [search, setSearch] = useState('');
     const [brandFilter, setBrandFilter] = useState('all');
@@ -115,21 +114,8 @@ export default function Products({ products = [], brands = [] }) {
     const [importResult, setImportResult] = useState(null);
     const [isImporting, setIsImporting] = useState(false);
     const importFileInputRef = useRef(null);
-    const shownFlashRef = useRef({ message: null, error: null });
 
     useEffect(() => { setPage(1); setSelectedSkus([]); }, [search, brandFilter, viewMode, pageSize]);
-
-    // Flash Toast Notifications — guard against duplicate toasts on re-render
-    useEffect(() => {
-        if (flash?.message && flash.message !== shownFlashRef.current.message) {
-            shownFlashRef.current.message = flash.message;
-            toast.success(flash.message);
-        }
-        if (flash?.error && flash.error !== shownFlashRef.current.error) {
-            shownFlashRef.current.error = flash.error;
-            toast.error(flash.error);
-        }
-    }, [flash?.message, flash?.error]);
 
     // Auto-calculate modal (HPP) from pricelist & discount
     const handleProductPriceChange = (field, value) => {
@@ -291,7 +277,6 @@ export default function Products({ products = [], brands = [] }) {
             onSuccess: () => {
                 closeModal();
                 setIsSubmitting(false);
-                toast.success(editingProduct ? 'Produk berhasil diperbarui! ✨' : 'Produk berhasil ditambahkan! 🎉');
             },
             onError: (errs) => {
                 setIsSubmitting(false);
@@ -318,7 +303,7 @@ export default function Products({ products = [], brands = [] }) {
                 headers: { 'Accept': 'application/json' }
             });
             if (res.data?.brand) {
-                toast.success('Brand berhasil ditambahkan! 🏷️');
+                toast.success('Brand berhasil ditambahkan!');
                 setNewProduct(prev => ({ ...prev, brand_id: res.data.brand.id }));
                 setShowAddBrandModal(false);
                 setQuickBrand({ name: '', color_hex: '#6366f1' });
@@ -343,13 +328,11 @@ export default function Products({ products = [], brands = [] }) {
 
     const handleExecuteDelete = () => {
         if (deleteModal.isBulk) {
-            const count = selectedSkus.length;
             router.post(route('products.destroy.mass'), { skus: selectedSkus }, {
                 preserveScroll: true,
                 onSuccess: () => {
                     setDeleteModal({ open: false, product: null, isBulk: false });
                     setSelectedSkus([]);
-                    toast.success(`${count} produk berhasil dihapus! 🗑️`);
                 },
                 onError: (err) => {
                     setDeleteModal({ open: false, product: null, isBulk: false });
@@ -367,7 +350,6 @@ export default function Products({ products = [], brands = [] }) {
                 onSuccess: () => {
                     setDeleteModal({ open: false, product: null, isBulk: false });
                     setSelectedSkus(prev => prev.filter(s => s !== p.sku));
-                    toast.success('Produk berhasil dihapus! 🗑️');
                 },
                 onError: (err) => {
                     setDeleteModal({ open: false, product: null, isBulk: false });
@@ -425,7 +407,7 @@ export default function Products({ products = [], brands = [] }) {
             const blob = new Blob([wbout], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
             const timestamp = new Date().toISOString().split('T')[0];
             saveAs(blob, `export_produk_${timestamp}.xlsx`);
-            toast.success('Data produk berhasil diexport ke Excel! 📥');
+            toast.success('Data produk berhasil diexport ke Excel!');
         });
     };
 
@@ -542,7 +524,6 @@ export default function Products({ products = [], brands = [] }) {
                 setIsImporting(false);
                 setImportResult({ count: toUpsert.length });
                 setImportStep('result');
-                toast.success(`${toUpsert.length} produk berhasil diimport! 🎉`);
             },
             onError: (errs) => {
                 setIsImporting(false);

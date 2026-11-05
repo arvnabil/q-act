@@ -7,7 +7,7 @@ import { formatRupiah, formatCompactRupiah } from '@/utils/money';
 import {
     TrendingUp, Plus, Search, Filter, LayoutGrid, List, X,
     ChevronDown, ChevronLeft, ChevronRight, Building2, User, ArrowRight, MoreHorizontal,
-    FileText, Banknote, Clock, Tag, AlertTriangle, Settings, SlidersHorizontal, Palette
+    FileText, Banknote, Clock, Tag, AlertTriangle, Settings, SlidersHorizontal, Palette, Loader2, Trash2, ArrowUp, ArrowDown
 } from 'lucide-react';
 
 // ─── Constants ──────────────────────────────────────────────────────────────────
@@ -18,16 +18,16 @@ const STAGE_META = {
     lead_qualification:  { label: 'Lead Qualification',  color: 'bg-amber-100 text-amber-700',      dot: 'bg-amber-500',    border: 'border-amber-200' },
     negotiation:         { label: 'Negotiation',         color: 'bg-teal-100 text-teal-700',        dot: 'bg-teal-600',     border: 'border-teal-200' },
     win:                 { label: 'Win',                 color: 'bg-violet-100 text-violet-700',    dot: 'bg-violet-500',   border: 'border-violet-200' },
-    lost:                { label: 'Lost',                color: 'bg-emerald-100 text-emerald-700',  dot: 'bg-emerald-500',  border: 'border-emerald-200' },
-    selesai_terbayar:    { label: 'Selesai (Terbayar)',  color: 'bg-red-100 text-red-600',          dot: 'bg-red-500',      border: 'border-red-200' },
+    lost:                { label: 'Lost',                color: 'bg-red-100 text-red-700',  dot: 'bg-red-500',  border: 'border-red-200' },
+    selesai_terbayar:    { label: 'Selesai (Terbayar)',  color: 'bg-emerald-100 text-emerald-600',          dot: 'bg-emerald-500',      border: 'border-emerald-200' },
     // Backwards compatibility with previous keys
     data_masuk:          { label: 'Lead Masuk',          color: 'bg-surface-100 text-surface-600',  dot: 'bg-surface-400',  border: 'border-surface-200' },
     sph_terlayang:       { label: 'Follow Up',           color: 'bg-blue-100 text-blue-700',        dot: 'bg-blue-500',     border: 'border-blue-200' },
     hot_progress:        { label: 'Lead Qualification',  color: 'bg-amber-100 text-amber-700',      dot: 'bg-amber-500',    border: 'border-amber-200' },
     proyek_deal:         { label: 'Negotiation',         color: 'bg-teal-100 text-teal-700',        dot: 'bg-teal-600',     border: 'border-teal-200' },
     proyek_berjalan:     { label: 'Win',                 color: 'bg-violet-100 text-violet-700',    dot: 'bg-violet-500',   border: 'border-violet-200' },
-    proyek_selesai:      { label: 'Selesai (Terbayar)',  color: 'bg-red-100 text-red-600',          dot: 'bg-red-500',      border: 'border-red-200' },
-    no_deal:             { label: 'Lost',                color: 'bg-emerald-100 text-emerald-700',  dot: 'bg-emerald-500',  border: 'border-emerald-200' },
+    proyek_selesai:      { label: 'Selesai (Terbayar)',  color: 'bg-emerald-100 text-emerald-600',          dot: 'bg-emerald-500',      border: 'border-emerald-200' },
+    no_deal:             { label: 'Lost',                color: 'bg-red-100 text-red-700',  dot: 'bg-red-500',  border: 'border-red-200' },
 };
 
 const SOURCE_LABEL = {
@@ -56,9 +56,15 @@ const initials = (name) => {
 
 function StageBadge({ stage, stageMetaMap }) {
     const meta = stageMetaMap?.[stage] || STAGE_META[stage] || { label: stage, color: 'bg-surface-100 text-surface-600', dot: 'bg-surface-400' };
-    const colorHex = meta.colorHex;
+    const colorHex = /^#[0-9a-f]{6}$/i.test(meta.colorHex || '') ? meta.colorHex : null;
+    const rgb = colorHex?.slice(1).match(/.{2}/g).map(value => parseInt(value, 16));
+    const badgeStyle = rgb ? {
+        backgroundColor: `rgb(${rgb.map(value => Math.round(value * 0.12 + 255 * 0.88)).join(', ')})`,
+        borderColor: `rgb(${rgb.map(value => Math.round(value * 0.3 + 255 * 0.7)).join(', ')})`,
+        color: `rgb(${rgb.map(value => Math.round(value * 0.42)).join(', ')})`,
+    } : undefined;
     return (
-        <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-semibold ${meta.color || 'bg-surface-100 text-surface-600'}`}>
+        <span style={badgeStyle} className={`inline-flex items-center gap-1.5 whitespace-nowrap border border-transparent px-2.5 py-1 rounded-full text-xs font-semibold ${!colorHex ? (meta.color || 'bg-surface-100 text-surface-600') : ''}`}>
             <span
                 className={`w-1.5 h-1.5 rounded-full shrink-0 ${!colorHex ? (meta.dot || 'bg-surface-400') : ''}`}
                 style={colorHex ? { backgroundColor: colorHex } : undefined}
@@ -288,8 +294,13 @@ function KanbanColumn({ stage, stageInfo, meta: customMeta, leads, onStageChange
 // ─── Lead Form Modal ──────────────────────────────────────────────────────────────
 
 function LeadFormModal({ open, onClose, defaultStage, customers, salesUsers, sources, stages, activeStagesList, isManagerOrAdmin, currentUser }) {
+    const permissions = usePage().props.auth?.permissions || [];
+    const canCreateCustomer = permissions.includes('customers_create');
+    const canCreatePic = permissions.includes('customers_edit');
+    const [errors, setErrors] = useState({});
+    const inputClass = 'w-full rounded-lg border border-surface-200 bg-white px-3 py-2.5 text-sm font-normal text-surface-700 focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500';
     const [form, setForm] = useState({
-        title: '', customer_id: '', customer_name: '', customer_phone: '',
+        customer_mode: 'existing', pic_mode: 'existing', pic_id: '', pic_name: '', pic_phone: '', customer_address: '', title: '', customer_id: '', customer_name: '', customer_phone: '',
         customer_email: '', sales_id: currentUser?.id || '', stage: defaultStage || 'lead_masuk',
         source: '', estimated_value: '', notes: '',
     });
@@ -299,20 +310,24 @@ function LeadFormModal({ open, onClose, defaultStage, customers, salesUsers, sou
 
     const handleSubmit = (e) => {
         e.preventDefault();
+        setErrors({});
         setSubmitting(true);
         router.post(route('leads.store'), form, {
-            onFinish: () => { setSubmitting(false); onClose(); },
-            onSuccess: () => setForm({ title: '', customer_id: '', customer_name: '', customer_phone: '', customer_email: '', sales_id: currentUser?.id || '', stage: defaultStage || 'lead_masuk', source: '', estimated_value: '', notes: '' }),
+            onFinish: () => setSubmitting(false),
+            onError: setErrors,
+            onSuccess: () => { onClose(); setForm({ customer_mode: 'existing', pic_mode: 'existing', pic_id: '', pic_name: '', pic_phone: '', customer_address: '', title: '', customer_id: '', customer_name: '', customer_phone: '', customer_email: '', sales_id: currentUser?.id || '', stage: defaultStage || 'lead_masuk', source: '', estimated_value: '', notes: '' }); },
         });
     };
+
+    const selectedCustomer = customers.find(c => String(c.id) === String(form.customer_id));
 
     if (!open) return null;
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
             <div className="absolute inset-0 bg-black/40" onClick={onClose} />
-            <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto">
-                <div className="flex items-center justify-between px-6 py-4 border-b border-surface-100">
+            <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-3xl mx-4 max-h-[90vh] overflow-y-auto">
+                <div className="sticky top-0 z-10 flex items-center justify-between bg-white px-6 py-4 border-b border-surface-100">
                     <h2 className="text-base font-bold text-surface-800 flex items-center gap-2">
                         <TrendingUp className="w-5 h-5 text-brand-600" />
                         Tambah Lead Baru
@@ -331,38 +346,57 @@ function LeadFormModal({ open, onClose, defaultStage, customers, salesUsers, sou
                             value={form.title} onChange={e => set('title', e.target.value)} required />
                     </div>
 
-                    {/* Customer */}
-                    <div className="grid grid-cols-2 gap-3">
-                        <div>
-                            <label className="block text-xs font-semibold text-surface-600 mb-1">Pilih Customer (opsional)</label>
-                            <select className="w-full border border-surface-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
-                                value={form.customer_id} onChange={e => set('customer_id', e.target.value)}>
-                                <option value="">-- Manual Input --</option>
-                                {customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                            </select>
+                    {Object.keys(errors).length > 0 && <div role="alert" className="rounded-lg bg-red-50 p-3 text-xs text-red-700">{Object.entries(errors).map(([k,v]) => <p key={k}>{v}</p>)}</div>}
+                    <section className="space-y-4 border-t border-surface-100 pt-5">
+                        <h3 className="flex items-center gap-2 text-sm font-bold text-surface-800"><span className="flex h-6 w-6 items-center justify-center rounded-full bg-brand-600 text-xs text-white">1</span>Data Customer</h3>
+                        <div className="inline-flex flex-wrap gap-1 rounded-xl bg-surface-100 p-1">
+                            {[['existing', 'Pilih yang sudah ada'], ...(canCreateCustomer ? [['new', '+ Customer baru']] : [])].map(([mode, label]) => (
+                                <button type="button" key={mode} onClick={() => { setErrors({}); setForm(f => ({ ...f, title: f.title === `Lead ${f.customer_name}` ? '' : f.title, customer_mode: mode, customer_id: '', customer_name: '', customer_address: '', pic_id: '', pic_mode: mode === 'new' ? 'new' : 'existing', pic_name: '', pic_phone: '', customer_phone: '', customer_email: '' })); }} className={`rounded-lg px-4 py-2 text-sm font-semibold transition-colors ${form.customer_mode === mode ? 'bg-white text-brand-700 shadow-sm' : 'text-surface-500 hover:text-brand-700'}`}>{label}</button>
+                            ))}
                         </div>
-                        <div>
-                            <label className="block text-xs font-semibold text-surface-600 mb-1">Nama Perusahaan</label>
-                            <input className="w-full border border-surface-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
-                                placeholder="Nama perusahaan"
-                                value={form.customer_name} onChange={e => set('customer_name', e.target.value)} />
-                        </div>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-3">
-                        <div>
-                            <label className="block text-xs font-semibold text-surface-600 mb-1">No. Telepon</label>
-                            <input className="w-full border border-surface-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
-                                placeholder="08xx-xxxx-xxxx"
-                                value={form.customer_phone} onChange={e => set('customer_phone', e.target.value)} />
-                        </div>
-                        <div>
-                            <label className="block text-xs font-semibold text-surface-600 mb-1">Email</label>
-                            <input type="email" className="w-full border border-surface-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
-                                placeholder="email@company.com"
-                                value={form.customer_email} onChange={e => set('customer_email', e.target.value)} />
-                        </div>
-                    </div>
+                        <label className="block text-xs font-semibold text-surface-600">Nama Perusahaan <span className="text-red-500">*</span>
+                            {form.customer_mode === 'existing' ? (
+                                <select required className={`${inputClass} mt-1.5`} value={form.customer_id} onChange={e => {
+                                    const customer = customers.find(c => String(c.id) === e.target.value);
+                                    const pic = customer?.pics?.find(p => p.is_primary) || customer?.pics?.[0];
+                                    setForm(f => ({ ...f, customer_id: customer?.id || '', customer_name: customer?.name || '', customer_address: customer?.address || '', title: !f.title || f.title === `Lead ${f.customer_name}` ? (customer ? `Lead ${customer.name}` : '') : f.title, pic_mode: 'existing', pic_id: pic?.id || '', pic_name: pic?.name || '', pic_phone: pic?.phone || '', customer_phone: pic?.phone || '', customer_email: pic?.email || '' }));
+                                }}><option value="">Pilih customer</option>{customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select>
+                            ) : (
+                                <input required className={`${inputClass} mt-1.5`} placeholder="Nama perusahaan customer" value={form.customer_name} onChange={e => { const name = e.target.value; setForm(f => ({ ...f, customer_name: name, title: !f.title || f.title === `Lead ${f.customer_name}` ? (name ? `Lead ${name}` : '') : f.title })); }} />
+                            )}
+                        </label>
+                        <label className="block text-xs font-semibold text-surface-600">Alamat Lengkap Perusahaan
+                            <textarea className={`${inputClass} mt-1.5 read-only:bg-surface-50`} rows={2} readOnly={form.customer_mode === 'existing'} value={form.customer_address} placeholder={form.customer_mode === 'new' ? 'Alamat perusahaan' : 'Alamat terisi dari customer yang dipilih'} onChange={e => set('customer_address', e.target.value)} />
+                        </label>
+                        {(form.customer_mode === 'new' || form.customer_id) && (
+                            <div className="space-y-3 rounded-xl border border-surface-200 bg-surface-50/60 p-4">
+                                <div className="flex flex-wrap items-center justify-between gap-2">
+                                    <h4 className="text-xs font-semibold text-surface-600">{form.pic_mode === 'new' ? 'Tambah PIC baru' : 'Pilih / Ubah PIC untuk Lead ini'}</h4>
+                                    {form.customer_mode === 'existing' && (form.pic_mode === 'new' ? (
+                                        <button type="button" className="text-xs font-semibold text-brand-600" onClick={() => { const p = selectedCustomer?.pics?.find(p => p.is_primary) || selectedCustomer?.pics?.[0]; setForm(f => ({ ...f, pic_mode: 'existing', pic_id: p?.id || '', pic_name: p?.name || '', pic_phone: p?.phone || '', customer_phone: p?.phone || '', customer_email: p?.email || '' })); }}>Kembali ke PIC yang ada</button>
+                                    ) : canCreatePic && (
+                                        <button type="button" className="inline-flex items-center gap-1 text-xs font-semibold text-brand-600 hover:text-brand-700" onClick={() => setForm(f => ({ ...f, pic_mode: 'new', pic_id: '', pic_name: '', pic_phone: '', customer_phone: '', customer_email: '' }))}><Plus className="h-4 w-4" />Tambah PIC</button>
+                                    ))}
+                                </div>
+                                {form.pic_mode === 'existing' && (
+                                    <label className="block text-xs font-semibold text-surface-600">PIC
+                                        <select className={`${inputClass} mt-1.5`} value={form.pic_id} onChange={e => { const p = selectedCustomer?.pics?.find(p => String(p.id) === e.target.value); setForm(f => ({ ...f, pic_id: p?.id || '', pic_name: p?.name || '', pic_phone: p?.phone || '', customer_phone: p?.phone || '', customer_email: p?.email || '' })); }}>
+                                            <option value="">{selectedCustomer?.pics?.length ? 'Tanpa PIC' : 'Belum ada PIC'}</option>
+                                            {selectedCustomer?.pics?.map(p => <option key={p.id} value={p.id}>{p.name}{p.is_primary ? ' (Utama)' : ''}{[p.phone, p.email].filter(Boolean).length > 0 ? ` — ${[p.phone, p.email].filter(Boolean).join(' / ')}` : ''}</option>)}
+                                        </select>
+                                    </label>
+                                )}
+                                {(form.pic_mode === 'new' || form.pic_id) && (
+                                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                                        <label className="text-xs font-semibold text-surface-600">Nama PIC {form.pic_mode === 'new' && <span className="text-red-500">*</span>}<input required={form.pic_mode === 'new'} readOnly={form.pic_mode !== 'new'} className={`${inputClass} mt-1.5`} placeholder="Nama PIC" value={form.pic_name} onChange={e => set('pic_name', e.target.value)} /></label>
+                                        <label className="text-xs font-semibold text-surface-600">Telepon PIC<input type="tel" readOnly={form.pic_mode !== 'new'} className={`${inputClass} mt-1.5`} placeholder="Nomor telepon" value={form.pic_phone} onChange={e => set('pic_phone', e.target.value)} /></label>
+                                        <label className="text-xs font-semibold text-surface-600">Email PIC<input type="email" readOnly={form.pic_mode !== 'new'} className={`${inputClass} mt-1.5`} placeholder="Email PIC" value={form.customer_email} onChange={e => set('customer_email', e.target.value)} /></label>
+                                    </div>
+                                )}
+                                <p className="text-xs text-surface-500">{form.pic_mode === 'new' ? 'PIC baru disimpan bersama lead dan dapat dipilih lagi saat membuat quotation.' : 'Pilih PIC yang menangani lead ini. Kontak terisi otomatis dari data customer.'}</p>
+                            </div>
+                        )}
+                    </section>
 
                     {/* Stage & Source */}
                     <div className="grid grid-cols-2 gap-3">
@@ -492,7 +526,7 @@ function ListView({ grouped, stageMetaMap, onStageChange, onViewDetail }) {
                                 </td>
                                 <td className="px-4 py-3">
                                     {lead.quotation ? (
-                                        <span className="text-xs text-blue-600 font-semibold bg-blue-50 px-2 py-0.5 rounded-full">Ada Quotation</span>
+                                        <span className="inline-flex whitespace-nowrap text-xs text-brand-700 font-semibold bg-brand-50 border border-brand-100 px-2.5 py-1 rounded-full">Ada Quotation</span>
                                     ) : (
                                         <span className="text-xs text-surface-300">—</span>
                                     )}
@@ -517,13 +551,18 @@ function ListView({ grouped, stageMetaMap, onStageChange, onViewDetail }) {
 
 // ─── Pipeline Settings Modal ──────────────────────────────────────────────────────
 
-function PipelineSettingsModal({ open, onClose, settings, stages, onSave }) {
+function PipelineSettingsModal({ open, onClose, settings, stages, stageCounts = {}, onSave }) {
     const [stagesList, setStagesList] = useState(settings?.stages || []);
     const [fStage1, setFStage1] = useState(settings?.featured_stage_1 || 'negotiation');
     const [fStage2, setFStage2] = useState(settings?.featured_stage_2 || 'win');
     const [saving, setSaving] = useState(false);
+    const [removing, setRemoving] = useState(null);
+    const [destination, setDestination] = useState('');
+    const [stageMoves, setStageMoves] = useState({});
+    const [saveError, setSaveError] = useState('');
 
     useEffect(() => {
+        setRemoving(null); setDestination(''); setStageMoves({}); setSaveError('');
         if (settings?.stages) {
             setStagesList(settings.stages);
         }
@@ -545,21 +584,39 @@ function PipelineSettingsModal({ open, onClose, settings, stages, onSave }) {
         setStagesList(prev => prev.map(s => s.key === key ? { ...s, type } : s));
     };
 
+    const countFor = key => Number(stageCounts[key] || 0) + Object.entries(stageMoves).reduce((sum, [from, to]) => sum + (to === key ? Number(stageCounts[from] || 0) : 0), 0);
+    const removeStage = () => {
+        const remaining = stagesList.filter(s => s.key !== removing.key);
+        const target = destination || remaining[0].key;
+        setStageMoves(prev => Object.fromEntries([...Object.entries(prev).map(([from, to]) => [from, to === removing.key ? target : to]), [removing.key, target]]));
+        setStagesList(remaining);
+        if (fStage1 === removing.key) setFStage1(target);
+        if (fStage2 === removing.key) setFStage2(target);
+        setRemoving(null); setDestination('');
+    };
+    const moveStage = (index, direction) => setStagesList(prev => {
+        const next = [...prev]; const target = index + direction;
+        if (target >= 0 && target < next.length) [next[index], next[target]] = [next[target], next[index]];
+        return next;
+    });
+
     const handleSave = async (e) => {
         e.preventDefault();
-        setSaving(true);
+        setSaving(true); setSaveError('');
         try {
             const payload = {
                 featured_stage_1: fStage1,
                 featured_stage_2: fStage2,
                 stages: stagesList,
+                stage_moves: stageMoves,
+                original_stages: settings?.stages,
             };
             const res = await axios.post(route('leads.settings.update'), payload);
             toast.success(res.data?.message || 'Pengaturan pipeline berhasil disimpan');
             if (onSave) onSave(res.data?.settings || payload);
             onClose();
         } catch (err) {
-            console.error('Save pipeline settings error:', err);
+            setSaveError(Object.values(err.response?.data?.errors || {}).flat()[0] || err.response?.data?.message || 'Gagal menyimpan.');
             toast.error(err.response?.data?.message || 'Gagal menyimpan pengaturan pipeline');
         } finally {
             setSaving(false);
@@ -635,8 +692,9 @@ function PipelineSettingsModal({ open, onClose, settings, stages, onSave }) {
                         </div>
 
                         <div className="space-y-2.5">
-                            {stagesList.map(s => (
+                            {stagesList.map((s, index) => (
                                 <div key={s.key} className="flex items-center gap-3 p-2.5 bg-white rounded-xl border border-surface-200 hover:border-surface-300 transition-colors">
+                                    <div className="flex flex-col"><button type="button" aria-label={`Naikkan ${s.name}`} disabled={saving || index === 0} onClick={() => moveStage(index, -1)} className="disabled:opacity-25"><ArrowUp className="h-4 w-4" /></button><button type="button" aria-label={`Turunkan ${s.name}`} disabled={saving || index === stagesList.length - 1} onClick={() => moveStage(index, 1)} className="disabled:opacity-25"><ArrowDown className="h-4 w-4" /></button></div>
                                     <div className="relative group shrink-0">
                                         <label
                                             className="relative w-8 h-8 rounded-lg flex items-center justify-center shadow-xs cursor-pointer border border-black/10 overflow-hidden hover:ring-2 hover:ring-brand-500 hover:ring-offset-1 transition-all"
@@ -657,6 +715,7 @@ function PipelineSettingsModal({ open, onClose, settings, stages, onSave }) {
                                             type="text"
                                             value={s.name}
                                             onChange={e => handleStageNameChange(s.key, e.target.value)}
+                                            required maxLength={100}
                                             placeholder="Nama Tahap..."
                                             className="w-full border border-surface-200 rounded-lg px-3 py-1.5 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-brand-500"
                                         />
@@ -672,11 +731,25 @@ function PipelineSettingsModal({ open, onClose, settings, stages, onSave }) {
                                             <option value="lost">Lost</option>
                                         </select>
                                     </div>
+                                    <button type="button" title="Hapus tahap" aria-label={`Hapus ${s.name}`} disabled={saving || stagesList.length <= 1} onClick={() => { setRemoving(s); setDestination(''); }} className="p-1 text-red-500 disabled:opacity-25"><Trash2 className="h-4 w-4" /></button>
                                 </div>
                             ))}
                         </div>
                     </div>
 
+                    <button type="button" disabled={saving || stagesList.length >= 50} onClick={() => setStagesList(prev => [...prev, { key: `stage_${crypto.randomUUID().replaceAll('-', '')}`, name: '', color: '#009680', type: 'normal' }])} className="inline-flex items-center gap-2 rounded-lg border border-brand-200 px-3 py-2 text-sm font-semibold text-brand-700"><Plus className="h-4 w-4" />Tambah Tahap</button>
+                    {Object.keys(stageMoves).length > 0 && <p className="rounded-lg bg-amber-50 p-3 text-xs text-amber-800">Penghapusan tahap dan pemindahan lead akan diterapkan saat Simpan Pengaturan. Lead arsip juga ikut dipindahkan.</p>}
+                    {saveError && <p role="alert" className="text-sm text-red-600">{saveError}</p>}
+                    {removing && <div role="dialog" aria-modal="true" aria-label="Hapus tahap pipeline" className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4">
+                        <div className="w-full max-w-md space-y-4 rounded-2xl bg-white p-6 shadow-xl">
+                            <h3 className="text-lg font-bold">Hapus tahap “{removing.name || 'Tanpa nama'}”</h3>
+                            <p className="text-sm text-surface-600">{countFor(removing.key)} lead termasuk arsip. {countFor(removing.key) ? 'Pilih tahap tujuan untuk seluruh lead.' : 'Tahap kosong ini akan dihapus.'}</p>
+                            <label className="block text-sm font-semibold">Pindahkan ke<select value={destination} onChange={e => setDestination(e.target.value)} className="mt-2 w-full rounded-lg border-surface-200"><option value="">Pilih tahap tujuan</option>{stagesList.filter(s => s.key !== removing.key).map(s => <option key={s.key} value={s.key}>{s.name || 'Tahap baru'}</option>)}</select></label>
+                            {['deal', 'lost'].includes(stagesList.find(s => s.key === destination)?.type) && <p className="rounded-lg bg-amber-50 p-3 text-sm text-amber-800">Tujuan bertipe {stagesList.find(s => s.key === destination)?.type === 'deal' ? 'Deal: lead akan dihitung sebagai menang' : 'Lost: lead akan dihitung sebagai kalah'} pada laporan.</p>}
+                            <p className="text-xs text-surface-500">Konfirmasi ini menyiapkan perubahan. Klik Simpan Pengaturan untuk menerapkannya.</p>
+                            <div className="flex justify-end gap-3"><button type="button" onClick={() => setRemoving(null)} className="px-3 py-2">Batal</button><button type="button" disabled={countFor(removing.key) > 0 && !destination} onClick={removeStage} className="rounded-lg bg-red-600 px-3 py-2 text-white disabled:opacity-40">{countFor(removing.key) ? 'Pindahkan & Hapus Tahap' : 'Hapus Tahap'}</button></div>
+                        </div>
+                    </div>}
                     {/* Footer */}
                     <div className="flex items-center justify-end gap-2 pt-3 border-t border-surface-200">
                         <button
@@ -702,7 +775,7 @@ function PipelineSettingsModal({ open, onClose, settings, stages, onSave }) {
 
 // ─── Main Page ───────────────────────────────────────────────────────────────────
 
-export default function Leads({ grouped, stats, salesUsers, filters, isManagerOrAdmin, stages, sources, customers, pipelineSettings }) {
+export default function Leads({ grouped, stats, stageCounts = {}, salesUsers, filterSalesUsers = [], filters, isManagerOrAdmin, stages, sources, customers, pipelineSettings }) {
     const { auth } = usePage().props;
     const currentUser = auth?.user;
 
@@ -710,6 +783,24 @@ export default function Leads({ grouped, stats, salesUsers, filters, isManagerOr
     const [search, setSearch] = useState(filters?.search || '');
     const [filterStage, setFilterStage] = useState(filters?.stage || '');
     const [filterSales, setFilterSales] = useState(filters?.sales_id || '');
+    const [isFiltering, setIsFiltering] = useState(false);
+    const filterTimer = useRef(null);
+    const filterCancel = useRef(null);
+    const filterRequest = useRef(0);
+    const hasActiveFilters = Boolean(filters?.search || filters?.stage || filters?.sales_id);
+
+    useEffect(() => {
+        clearTimeout(filterTimer.current);
+        setSearch(filters?.search || '');
+        setFilterStage(filters?.stage || '');
+        setFilterSales(filters?.sales_id || '');
+    }, [filters?.search, filters?.stage, filters?.sales_id]);
+
+    useEffect(() => () => {
+        clearTimeout(filterTimer.current);
+        filterRequest.current += 1;
+        filterCancel.current?.cancel();
+    }, []);
     const [showForm, setShowForm] = useState(false);
     const [defaultFormStage, setDefaultFormStage] = useState('lead_masuk');
     const [showSettingsModal, setShowSettingsModal] = useState(false);
@@ -724,7 +815,7 @@ export default function Leads({ grouped, stats, salesUsers, filters, isManagerOr
             key: s,
             name: STAGE_META[s]?.label || s,
             type: (s === 'win' || s === 'selesai_terbayar' || s === 'proyek_deal' || s === 'proyek_selesai') ? 'deal' : (s === 'lost' || s === 'no_deal') ? 'lost' : 'normal',
-            color: s === 'lead_masuk' ? '#94A3B8' : s === 'follow_up' ? '#3B82F6' : s === 'lead_qualification' ? '#F59E0B' : s === 'negotiation' ? '#009680' : s === 'win' ? '#8B5CF6' : s === 'lost' ? '#10B981' : s === 'selesai_terbayar' ? '#EF4444' : '#94A3B8',
+            color: s === 'lead_masuk' ? '#94A3B8' : s === 'follow_up' ? '#3B82F6' : s === 'lead_qualification' ? '#F59E0B' : s === 'negotiation' ? '#009680' : s === 'win' ? '#8B5CF6' : s === 'lost' ? '#EF4444' : s === 'selesai_terbayar' ? '#10B981' : '#94A3B8',
         })),
     };
 
@@ -768,6 +859,10 @@ export default function Leads({ grouped, stats, salesUsers, filters, isManagerOr
         ? localSettings.stages
         : stages.map(s => ({ key: s, name: STAGE_META[s]?.label || s, color: STAGE_META[s]?.colorHex }));
 
+    const visibleStagesList = filters?.stage
+        ? activeStagesList.filter(stage => stage.key === filters.stage)
+        : activeStagesList;
+
     // Dynamically calculate counts directly from localGrouped so filters & drag-and-drop always match!
     const totalLeadsCount = Object.values(localGrouped).reduce((sum, list) => sum + (list?.length || 0), 0);
     const totalEstValue = Object.values(localGrouped).flat().reduce((sum, l) => sum + (Number(l.estimated_value) || 0), 0);
@@ -796,7 +891,7 @@ export default function Leads({ grouped, stats, salesUsers, filters, isManagerOr
         if (!kanbanRef.current) return;
         const { scrollLeft, scrollWidth, clientWidth } = kanbanRef.current;
         const maxScroll = scrollWidth - clientWidth;
-        const totalStages = activeStagesList.length || stages.length || 7;
+        const totalStages = visibleStagesList.length;
         if (maxScroll > 0) {
             setScrollProgress((scrollLeft / maxScroll) * 100);
             const colWidth = 304;
@@ -805,7 +900,8 @@ export default function Leads({ grouped, stats, salesUsers, filters, isManagerOr
             const last = Math.min(totalStages, first + count - 1);
             setVisibleRange(`Tahap ${first}–${last} dari ${totalStages}`);
         } else {
-            setVisibleRange(`Tahap 1–${totalStages} dari ${totalStages}`);
+            setScrollProgress(0);
+            setVisibleRange(totalStages ? `Tahap 1–${totalStages} dari ${totalStages}` : 'Tidak ada stage');
         }
     };
 
@@ -819,15 +915,43 @@ export default function Leads({ grouped, stats, salesUsers, filters, isManagerOr
         if (view === 'kanban') {
             handleKanbanScroll();
         }
-    }, [view, activeStagesList]);
+    }, [view, visibleStagesList]);
 
-    const applyFilters = useCallback(() => {
-        router.get(route('leads.index'), {
-            search: search || undefined,
-            stage: filterStage || undefined,
-            sales_id: filterSales || undefined,
-        }, { preserveState: true, replace: true });
-    }, [search, filterStage, filterSales]);
+    const submitFilters = useCallback((next, delay = 0) => {
+        clearTimeout(filterTimer.current);
+        const requestId = ++filterRequest.current;
+        filterCancel.current?.cancel();
+        filterCancel.current = null;
+        setIsFiltering(true);
+
+        const visit = () => router.get(route('leads.index'), {
+            search: next.search.trim() || undefined,
+            stage: next.stage || undefined,
+            sales_id: next.sales_id || undefined,
+        }, {
+            preserveState: true,
+            preserveScroll: true,
+            replace: true,
+            onCancelToken: token => { filterCancel.current = token; },
+            onError: errors => toast.error(Object.values(errors).flat()[0] || 'Filter gagal diterapkan.'),
+            onFinish: () => {
+                if (requestId === filterRequest.current) {
+                    filterCancel.current = null;
+                    setIsFiltering(false);
+                }
+            },
+        });
+        if (delay) filterTimer.current = setTimeout(visit, delay);
+        else visit();
+    }, []);
+
+    const applyFilters = () => submitFilters({ search, stage: filterStage, sales_id: filterSales });
+    const resetFilters = () => {
+        setSearch('');
+        setFilterStage('');
+        setFilterSales('');
+        submitFilters({ search: '', stage: '', sales_id: '' });
+    };
 
     const handleStageChange = (lead, newStage) => {
         handleDropCard(lead.id, newStage, lead.stage);
@@ -839,7 +963,7 @@ export default function Leads({ grouped, stats, salesUsers, filters, isManagerOr
         // Instant optimistic update
         setLocalGrouped(prev => {
             const copy = {};
-            stages.forEach(st => {
+            Object.keys(prev).forEach(st => {
                 copy[st] = [...(prev[st] || [])];
             });
 
@@ -847,8 +971,9 @@ export default function Leads({ grouped, stats, salesUsers, filters, isManagerOr
             if (leadIndex === -1) return prev;
 
             const [movedLead] = copy[fromStage].splice(leadIndex, 1);
-            movedLead.stage = targetStage;
-            copy[targetStage] = [movedLead, ...(copy[targetStage] || [])];
+            if (!filters?.stage || filters.stage === targetStage) {
+                copy[targetStage] = [{ ...movedLead, stage: targetStage }, ...(copy[targetStage] || [])];
+            }
             return copy;
         });
 
@@ -918,7 +1043,7 @@ export default function Leads({ grouped, stats, salesUsers, filters, isManagerOr
                             <p className="text-lg font-bold text-surface-800">{totalLeadsCount}</p>
                             <p className="text-xs font-semibold text-surface-600">Total Lead</p>
                             <p className="text-[10px] text-surface-400">
-                                {search || filterStage || filterSales ? 'Sesuai filter aktif' : 'Semua aktif'}
+                                {hasActiveFilters ? 'Sesuai filter aktif' : 'Semua aktif'}
                             </p>
                         </div>
 
@@ -995,8 +1120,12 @@ export default function Leads({ grouped, stats, salesUsers, filters, isManagerOr
                         <input
                             className="w-full pl-9 pr-3 py-2 text-sm border border-surface-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500"
                             placeholder="Cari lead, customer..."
+                            aria-label="Cari lead atau customer"
                             value={search}
-                            onChange={e => setSearch(e.target.value)}
+                            onChange={e => {
+                                setSearch(e.target.value);
+                                submitFilters({ search: e.target.value, stage: filterStage, sales_id: filterSales }, 350);
+                            }}
                             onKeyDown={e => e.key === 'Enter' && applyFilters()}
                         />
                     </div>
@@ -1004,28 +1133,38 @@ export default function Leads({ grouped, stats, salesUsers, filters, isManagerOr
                     {/* Stage filter */}
                     <select
                         className="border border-surface-200 rounded-lg px-3 py-2 text-sm text-surface-700 focus:outline-none focus:ring-2 focus:ring-brand-500"
+                        aria-label="Filter stage"
                         value={filterStage}
-                        onChange={e => { setFilterStage(e.target.value); }}>
+                        onChange={e => {
+                            setFilterStage(e.target.value);
+                            submitFilters({ search, stage: e.target.value, sales_id: filterSales });
+                        }}>
                         <option value="">Semua Stage</option>
                         {activeStagesList.map(s => <option key={s.key} value={s.key}>{s.name || stageMetaMap[s.key]?.label || s.key}</option>)}
                     </select>
 
-                    {/* Sales filter (manager only) */}
-                    {isManagerOrAdmin && (
+                    {/* Only offer owners within the user's existing visibility scope. */}
+                    {filterSalesUsers.length > 1 && (
                         <select
                             className="border border-surface-200 rounded-lg px-3 py-2 text-sm text-surface-700 focus:outline-none focus:ring-2 focus:ring-brand-500"
+                            aria-label="Filter pemilik lead"
                             value={filterSales}
-                            onChange={e => setFilterSales(e.target.value)}>
-                            <option value="">Semua Sales</option>
-                            {salesUsers.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+                            onChange={e => {
+                                setFilterSales(e.target.value);
+                                submitFilters({ search, stage: filterStage, sales_id: e.target.value });
+                            }}>
+                            <option value="">Semua pemilik lead</option>
+                            {filterSalesUsers.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
                         </select>
                     )}
 
-                    <button onClick={applyFilters}
+                    <button type="button" onClick={applyFilters}
                         className="px-3 py-2 text-sm font-semibold bg-brand-50 text-brand-700 hover:bg-brand-100 rounded-lg transition-colors flex items-center gap-1.5">
-                        <Filter className="w-4 h-4" />
-                        Filter
+                        {isFiltering ? <Loader2 className="w-4 h-4 animate-spin" /> : <Filter className="w-4 h-4" />}
+                        Terapkan
                     </button>
+                    {(search || filterStage || filterSales || hasActiveFilters) && <button type="button" onClick={resetFilters} className="rounded-lg px-3 py-2 text-xs font-semibold text-surface-500 hover:bg-surface-100">Reset filter</button>}
+                    <span role="status" className="text-xs text-surface-500">{isFiltering ? 'Memuat hasil…' : `${totalLeadsCount} lead ditemukan`}</span>
 
                     {/* View toggle */}
                     <div className="ml-auto flex items-center border border-surface-200 rounded-lg overflow-hidden">
@@ -1045,7 +1184,7 @@ export default function Leads({ grouped, stats, salesUsers, filters, isManagerOr
                 </div>
 
                 {/* Content */}
-                <div className="p-6 flex-1 flex flex-col">
+                <div className="p-6 flex-1 flex flex-col" aria-busy={isFiltering}>
                     {view === 'kanban' ? (
                         <>
                             {/* Top Kanban Horizontal Scroll Controller */}
@@ -1094,7 +1233,7 @@ export default function Leads({ grouped, stats, salesUsers, filters, isManagerOr
                                 onScroll={handleKanbanScroll}
                                 className="flex gap-4 overflow-x-auto pb-4 flex-1 items-stretch"
                             >
-                                {activeStagesList.map(st => (
+                                {visibleStagesList.map(st => (
                                     <KanbanColumn
                                         key={st.key}
                                         stage={st.key}
@@ -1142,10 +1281,11 @@ export default function Leads({ grouped, stats, salesUsers, filters, isManagerOr
                     open={showSettingsModal}
                     onClose={() => setShowSettingsModal(false)}
                     settings={localSettings}
+                    stageCounts={stageCounts}
                     stages={stages}
                     onSave={(newSettings) => {
                         setLocalSettings(newSettings);
-                        router.reload({ only: ['grouped', 'stats', 'pipelineSettings'] });
+                        router.reload({ only: ['grouped', 'stats', 'pipelineSettings', 'stageCounts'] });
                     }}
                 />
             )}

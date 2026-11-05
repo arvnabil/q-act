@@ -42,7 +42,7 @@ const SO_TABS = [
 ];
 
 export default function SalesOrders({ salesOrders = [], salesUsers = [], isFinance, canFilterSales: propCanFilterSales }) {
-    const { flash, auth } = usePage().props;
+    const { auth } = usePage().props;
     const userRole = auth?.user?.role || auth?.user?.spatie_role;
     const userPermissions = auth?.permissions || [];
 
@@ -258,17 +258,6 @@ export default function SalesOrders({ salesOrders = [], salesUsers = [], isFinan
             <Head title="Sales Orders" />
 
             <div className="animate-fade-in-up">
-                {/* Flash Messages */}
-                {flash?.message && (
-                    <div className="mb-4 px-4 py-3 bg-emerald-50 border border-emerald-200 text-emerald-700 text-sm font-medium rounded-xl">
-                        {flash.message}
-                    </div>
-                )}
-                {flash?.error && (
-                    <div className="mb-4 px-4 py-3 bg-red-50 border border-red-200 text-red-700 text-sm font-medium rounded-xl">
-                        {flash.error}
-                    </div>
-                )}
 
                 {/* Tabs */}
                 <div className="flex items-center gap-1 mb-5 overflow-x-auto pb-1">

@@ -21,7 +21,7 @@ const formatDate = (str) => {
 };
 
 export default function SalesOrderDetail({ so, costCategories = [], isFinance }) {
-    const { flash, auth } = usePage().props;
+    const { auth } = usePage().props;
 
     const [categories, setCategories] = useState(costCategories || []);
     const [selectedCategory, setSelectedCategory] = useState(costCategories[0]?.name || 'Others / Shipping/ Import');
@@ -196,7 +196,6 @@ export default function SalesOrderDetail({ so, costCategories = [], isFinance })
             onSuccess: () => {
                 setNewCostDesc('');
                 setNewCostAmt('');
-                toast.success('Cost berhasil ditambahkan!');
             },
             onError: (errs) => Object.values(errs).forEach(m => toast.error(m)),
             onFinish: () => setIsSubmittingCost(false),
@@ -207,7 +206,6 @@ export default function SalesOrderDetail({ so, costCategories = [], isFinance })
         if (!confirm('Hapus cost ini?')) return;
         router.delete(route('sales-orders.costs.destroy', [so.id, costId]), {
             preserveScroll: true,
-            onSuccess: () => toast.success('Cost berhasil dihapus!'),
             onError: (errs) => Object.values(errs).forEach(m => toast.error(m)),
         });
     };
@@ -219,7 +217,6 @@ export default function SalesOrderDetail({ so, costCategories = [], isFinance })
             status: 'Ditambahkan Finance',
         }, {
             preserveScroll: true,
-            onSuccess: () => toast.success('Status SO berhasil diperbarui!'),
             onError: (errs) => Object.values(errs).forEach(m => toast.error(m)),
             onFinish: () => setIsUpdatingStatus(false),
         });
@@ -239,7 +236,7 @@ export default function SalesOrderDetail({ so, costCategories = [], isFinance })
         }, {
             preserveScroll: true,
             forceFormData: true,
-            onSuccess: () => { setShowPoMetadataModal(false); toast.success('Data PO berhasil dilengkapi.'); },
+            onSuccess: () => { setShowPoMetadataModal(false); },
             onError: errors => toast.error(errors.po_number || errors.po_date || errors.po_status || errors.po_document || 'Data PO gagal disimpan.'),
             onFinish: () => setIsSavingPoMetadata(false),
         });
@@ -256,7 +253,7 @@ export default function SalesOrderDetail({ so, costCategories = [], isFinance })
         setIsSubmittingChangeRequest(true);
         router.post(route('quotations.change-requests.store', so.quotation_id), { type: changeRequestType, reason: changeRequestReason.trim() }, {
             preserveScroll: true,
-            onSuccess: () => { setChangeRequestType(null); setChangeRequestReason(''); toast.success('Pengajuan berhasil dikirim ke manager.'); },
+            onSuccess: () => { setChangeRequestType(null); setChangeRequestReason(''); },
             onError: (errors) => Object.values(errors).forEach(message => toast.error(message)),
             onFinish: () => setIsSubmittingChangeRequest(false),
         });
@@ -299,7 +296,7 @@ export default function SalesOrderDetail({ so, costCategories = [], isFinance })
         const { quotationObj, adjustments } = buildExportPayload();
         try {
             await exportSimulasiSOExcel(quotationObj, adjustments, auth?.user);
-            toast.success('File Excel analisa SO berhasil diunduh! 📥');
+            toast.success('File Excel analisa SO berhasil diunduh!');
         } catch (err) {
             console.error('Export Excel SO gagal:', err);
             toast.error('Gagal export Excel. Silakan coba lagi atau periksa console.');
@@ -311,17 +308,6 @@ export default function SalesOrderDetail({ so, costCategories = [], isFinance })
             <Head title={`Sales Order ${so.id}`} />
 
             <div className="animate-fade-in max-w-6xl pb-12">
-                {/* Flash message */}
-                {flash?.message && (
-                    <div className="mb-4 px-4 py-3 bg-emerald-50 border border-emerald-200 text-emerald-700 text-sm font-medium rounded-xl">
-                        {flash.message}
-                    </div>
-                )}
-                {flash?.error && (
-                    <div className="mb-4 px-4 py-3 bg-red-50 border border-red-200 text-red-700 text-sm font-medium rounded-xl">
-                        {flash.error}
-                    </div>
-                )}
 
                 {changeRequestType && (
                     <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-surface-900/60 backdrop-blur-sm">

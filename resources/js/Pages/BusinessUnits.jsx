@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import ReactDOM from 'react-dom';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
+import ManagementPageHeader from '@/Components/ManagementPageHeader';
 import { Head, router } from '@inertiajs/react';
 import { 
   Plus, Edit, Trash2, Users, Loader2, X, Building2, UserPlus, UserMinus, ChevronDown, ChevronUp, Shield, CheckCircle2 
@@ -136,33 +137,22 @@ export default function BusinessUnits({
   };
 
   return (
-    <AuthenticatedLayout
-      header={<h2 className="font-semibold text-xl text-surface-800 leading-tight">Business Units</h2>}
-    >
+    <AuthenticatedLayout>
       <Head title="Business Units" />
 
-      <div className="animate-fade-in-up space-y-6 max-w-5xl mx-auto py-4 px-4 sm:px-6 lg:px-8">
+      <div className="animate-fade-in-up space-y-6 w-full min-w-0 pb-8">
 
         {/* Header */}
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-extrabold text-surface-900 flex items-center gap-2">
-              <Building2 className="w-6 h-6 text-brand-500" />
-              Business Units
-            </h1>
-            <p className="text-sm text-surface-500 mt-0.5">
-              Kelola grup BU untuk berbagi data quotation &amp; customer antar anggota tim.
-            </p>
-          </div>
+        <ManagementPageHeader page="/business-units" icon={Building2}>
           <button
             type="button"
             onClick={() => setShowCreate(true)}
-            className="flex items-center gap-2 px-4 py-2.5 bg-brand-500 hover:bg-brand-600 text-white text-sm font-semibold rounded-xl transition-colors shadow-sm cursor-pointer"
+            className="inline-flex items-center gap-2 whitespace-nowrap px-4 py-2.5 bg-brand-600 hover:bg-brand-700 text-white text-sm font-semibold rounded-lg transition-colors shadow-sm cursor-pointer"
           >
             <Plus className="w-4 h-4" />
             Buat BU
           </button>
-        </div>
+        </ManagementPageHeader>
 
         {/* Stats */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">

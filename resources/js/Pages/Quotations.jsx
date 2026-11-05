@@ -97,7 +97,7 @@ const ResizableTH = ({ children, defaultWidth, align = 'left', className = '', s
 };
 
 export default function Quotations({ quotations, isFinance }) {
-    const { flash, auth } = usePage().props;
+    const { auth } = usePage().props;
     const { user } = auth;
 
     const [filterStatus, setFilterStatus] = useState('all');
@@ -417,12 +417,6 @@ export default function Quotations({ quotations, isFinance }) {
             <Head title="Quotations" />
 
             <div className="animate-fade-in-up w-full max-w-full min-w-0">
-                {/* Flash Messages */}
-                {flash?.message && (
-                    <div className="mb-4 px-4 py-3 bg-emerald-50 border border-emerald-200 text-emerald-700 text-sm font-medium rounded-xl">
-                        {flash.message}
-                    </div>
-                )}
 
                 {/* Status Tabs */}
                 <div className="flex items-center gap-1 mb-5 overflow-x-auto pb-1">

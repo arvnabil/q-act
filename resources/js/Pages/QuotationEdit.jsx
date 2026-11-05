@@ -1,7 +1,8 @@
+import QuotationWorkflowShortcut from '@/Components/QuotationWorkflowShortcut';
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import ReactDOM from 'react-dom';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
-import { Head, Link, router, usePage } from '@inertiajs/react';
+import { Head, Link, router } from '@inertiajs/react';
 import {
     ArrowLeft, Plus, Trash2, Save, Loader2, Info, ChevronDown,
     Check, Search, X, FileText, BookmarkPlus, AlertTriangle, Edit3,
@@ -59,7 +60,6 @@ const EditableCurrencyInput = ({ value, onChange, className, placeholder, disabl
 };
 
 export default function QuotationEdit({ quotation, customers, leads = [], products, brands, bankAccounts, currentUser, masterTerms = [], personalTerms = [] }) {
-    const { flash } = usePage().props;
 
     // ─── State ────────────────────────────────────────────────────────────────
     const [status, setStatus] = useState(quotation?.status || 'created');
@@ -69,7 +69,6 @@ export default function QuotationEdit({ quotation, customers, leads = [], produc
     const [poDocument, setPoDocument] = useState(null);
     const [poFormErrors, setPoFormErrors] = useState({});
     const [customerId, setCustomerId] = useState(quotation?.customer_id || '');
-    const [leadId, setLeadId] = useState(quotation?.lead_id || '');
     const [picId, setPicId] = useState(quotation?.pic_id ? String(quotation.pic_id) : '');
     const [expiryDays, setExpiryDays] = useState(7);
     const [bankAccountId, setBankAccountId] = useState(quotation?.bank_account_id || '');
@@ -108,7 +107,7 @@ export default function QuotationEdit({ quotation, customers, leads = [], produc
     const handleMigrateLegacyTemplates = async () => {
         const { key, templates } = getLegacyPersonalTemplates(userId);
         if (!templates.length) {
-            toast.success('Tidak ada template lama di browser ini.');
+            toast('Tidak ada template lama di browser ini.');
             setLegacyTemplates([]);
             return;
         }
@@ -713,9 +712,7 @@ const getProductDisplayName = (prod) => {
         // the regular "Simpan Perubahan" save instead of an immediate request.
         const allSaved = reordered.every(it => it.id != null && it.id !== '');
         if (!allSaved) {
-            toast('Urutan item baru akan tersimpan saat Anda klik "Simpan Perubahan".', {
-                icon: '↕️',
-            });
+            toast('Urutan item baru akan tersimpan saat Anda klik "Simpan Perubahan".');
             return;
         }
 
@@ -819,7 +816,6 @@ const getProductDisplayName = (prod) => {
                 setShowSubQuotationModal(false);
                 setSelectedSubItemIds([]);
                 setSubQuotationError('');
-                toast.success('Sub quotation berhasil dibuat.');
             },
             onError: (errors) => {
                 const message = errors.item_ids || 'Sub quotation gagal dibuat.';
@@ -845,7 +841,6 @@ const getProductDisplayName = (prod) => {
             onSuccess: () => {
                 setShowMoveItemModal(false);
                 setItemToMove(null);
-                toast.success('Item berhasil dipindahkan ke sub quotation.');
             },
             onError: errors => toast.error(errors.target_quotation_id || errors.item || 'Item gagal dipindahkan.'),
             onFinish: () => setIsMovingItem(false),
@@ -869,7 +864,6 @@ const getProductDisplayName = (prod) => {
 
         const payload = {
             customer_id: customerId || quotation.customer_id,
-            lead_id: leadId || null,
             pic_id: picId && picId !== '' && picId !== '0' ? picId : null,
             status: targetStatus,
             po_status: targetStatus === 'approved' ? poStatus : quotation?.po_status || null,
@@ -908,7 +902,6 @@ const getProductDisplayName = (prod) => {
 
         const saveOptions = {
             preserveScroll: true,
-            onSuccess: () => toast.success('Quotation berhasil disimpan!'),
             onError: (errors) => {
                 if (targetStatus === 'approved') setShowSOConfirmModal(true);
                 Object.values(errors).forEach(msg => toast.error(msg));
@@ -964,7 +957,7 @@ const getProductDisplayName = (prod) => {
         if (!productSearch || !productSearch.trim()) return true;
         const brandName = (typeof p.brand === 'object' ? p.brand?.name : p.brand) || '';
         const searchableText = `${p.name || ''} ${p.sku || ''} ${brandName} ${p.description || ''}`.toLowerCase();
-        
+
         const searchTerms = productSearch.toLowerCase().trim().split(/\s+/).filter(Boolean);
         return searchTerms.every(term => searchableText.includes(term));
     }).slice(0, 50);
@@ -983,58 +976,17 @@ const getProductDisplayName = (prod) => {
                     Batal &amp; Kembali
                 </Link>
 
-                {/* ─── Quotation structure ─────────────────────────────── */}
-                <div className="mb-6 rounded-2xl border border-brand-100 bg-brand-50/50 px-5 py-4 shadow-sm">
-                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                        <div>
-                            <div className="flex items-center gap-2 text-sm font-bold text-surface-800">
-                                <Layers className="h-4 w-4 text-brand-600" />
-                                Struktur Quotation
-                            </div>
-                            <p className="mt-1 text-xs text-surface-500">
-                                {quotation?.relation_type === 'split'
-                                    ? 'Dokumen ini adalah sub quotation dari quotation utama.'
-                                    : 'Dokumen ini adalah quotation utama dan dapat memiliki beberapa sub quotation.'}
-                            </p>
-                        </div>
-                        <span className="inline-flex w-fit rounded-full border border-brand-200 bg-white px-2.5 py-1 text-[11px] font-bold text-brand-700">
-                            {quotation?.relation_type === 'split' ? 'SUB QUOTATION' : 'QUOTATION UTAMA'}
-                        </span>
-                    </div>
-
-                    <div className="mt-4 flex flex-wrap items-center gap-2 text-xs">
-                        {quotationStructure.root && (
-                            <Link
-                                href={route('quotations.edit', quotationStructure.root.id)}
-                                className={`rounded-lg border px-3 py-2 font-bold transition-colors ${
-                                    quotationStructure.current_id === quotationStructure.root.id
-                                        ? 'border-brand-500 bg-brand-600 text-white'
-                                        : 'border-brand-200 bg-white text-brand-700 hover:bg-brand-100'
-                                }`}
-                            >
-                                {quotationStructure.root.id} <span className="ml-1 font-normal">(Utama)</span>
-                            </Link>
-                        )}
-
-                        {quotationStructure.children.map((child) => (
-                            <Link
-                                key={child.id}
-                                href={route('quotations.edit', child.id)}
-                                className={`rounded-lg border px-3 py-2 font-bold transition-colors ${
-                                    quotationStructure.current_id === child.id
-                                        ? 'border-brand-500 bg-brand-600 text-white'
-                                        : 'border-surface-200 bg-white text-surface-700 hover:border-brand-300 hover:bg-brand-50'
-                                }`}
-                            >
-                                {child.id}
+                {quotationStructure.root && (quotationStructure.children.length > 0 || quotationStructure.current_id !== quotationStructure.root.id) && (
+                    <nav aria-label="Quotation utama dan sub" className="mb-5 flex items-center gap-1 overflow-x-auto rounded-xl border border-brand-100 bg-brand-50/50 p-1.5">
+                        {[{...quotationStructure.root, isRoot:true}, ...quotationStructure.children].map(document => (
+                            <Link key={document.id} href={route('quotations.edit', document.id)}
+                                aria-current={quotationStructure.current_id === document.id ? 'page' : undefined}
+                                className={`shrink-0 rounded-lg px-3 py-2 text-xs font-semibold transition-colors ${quotationStructure.current_id === document.id ? 'bg-brand-600 text-white' : 'text-surface-600 hover:bg-white'}`}>
+                                {document.id}{document.isRoot ? ' (Utama)' : ''}
                             </Link>
                         ))}
-
-                        {quotationStructure.children.length === 0 && (
-                            <span className="text-surface-400">Belum ada sub quotation.</span>
-                        )}
-                    </div>
-                </div>
+                    </nav>
+                )}
 
                 {/* ─── Main card ──────────────────────────────── */}
                 <div className="bg-white rounded-2xl border border-surface-200 shadow-sm mb-6">
@@ -1044,8 +996,9 @@ const getProductDisplayName = (prod) => {
                         <div>
                             <h2 className="text-xl font-bold text-surface-900">Edit Quotation: <span className="font-mono text-brand-600">{quotation?.id}</span></h2>
                             <p className="text-xs text-surface-400 mt-0.5">{isQuotationLocked ? 'Quotation sudah menjadi PO/SO dan terkunci.' : 'Ubah item produk, kalkulasi margin, dan ketentuan penawaran'}</p>
+                            <div className="mt-1 -ml-2.5"><QuotationWorkflowShortcut quotationId={quotation.id} leadId={quotation.lead_id || quotation.lead?.id} editing /></div>
                         </div>
-                        <div className="flex items-center gap-3">
+                        <div className="flex flex-wrap items-center gap-3">
                             <Link
                                 href={route('quotations.index')}
                                 className="px-4 py-2 text-xs font-semibold text-surface-600 border border-surface-200 rounded-lg hover:bg-surface-50 transition-colors"
@@ -1195,31 +1148,6 @@ const getProductDisplayName = (prod) => {
                             />
                         </div>
 
-                        {/* Tautkan ke Lead Pipeline */}
-                        <div className="sm:col-span-2 md:col-span-4 bg-teal-50/60 border border-teal-100 rounded-xl p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                            <div className="flex items-center gap-2.5">
-                                <div className="w-8 h-8 rounded-lg bg-teal-100 text-teal-700 flex items-center justify-center shrink-0">
-                                    <TrendingUp className="w-4 h-4" />
-                                </div>
-                                <div>
-                                    <p className="text-xs font-bold text-teal-900">Tautkan ke Lead Pipeline</p>
-                                    <p className="text-[11px] text-teal-700">Menghubungkan penawaran ini dengan siklus deal & timeline di Lead Pipeline</p>
-                                </div>
-                            </div>
-                            <div className="w-full sm:w-80">
-                                <select
-                                    value={leadId || ''}
-                                    onChange={e => setLeadId(e.target.value)}
-                                    disabled={isQuotationLocked}
-                                    className="w-full bg-white border border-teal-200 rounded-lg px-3 py-1.5 text-xs text-surface-800 font-semibold focus:border-brand-500 outline-none cursor-pointer"
-                                >
-                                    <option value="">-- Tanpa Lead (Penawaran Mandiri) --</option>
-                                    {leads.map(l => (
-                                        <option key={l.id} value={l.id}>[{l.lead_code}] {l.title}</option>
-                                    ))}
-                                </select>
-                            </div>
-                        </div>
                     </div>
 
                     {/* ── Tax Options ───────────────────────── */}
@@ -2183,7 +2111,7 @@ const getProductDisplayName = (prod) => {
                                 <X className="w-5 h-5" />
                             </button>
                         </div>
-                        
+
                         {/* Body */}
                         <div className="p-6 overflow-y-auto flex flex-col gap-4">
                             {/* Row 1: SKU & Brand */}

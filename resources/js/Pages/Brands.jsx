@@ -2,13 +2,12 @@ import React, { useState, useEffect } from 'react';
 import ReactDOM from 'react-dom';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import Pagination from '@/Components/Pagination';
-import { Head, useForm, usePage, router } from '@inertiajs/react';
+import { Head, useForm, router } from '@inertiajs/react';
 import { Search, Plus, Edit, Trash2, X, Loader2 } from 'lucide-react';
 
 const PAGE_SIZE = 10;
 
 export default function Brands({ brands }) {
-    const { flash } = usePage().props;
 
     const [search, setSearch] = useState('');
     const [page, setPage] = useState(1);
@@ -75,17 +74,6 @@ export default function Brands({ brands }) {
             <Head title="Brands" />
 
             <div className="animate-fade-in-up">
-                {/* Flash Messages */}
-                {flash?.message && (
-                    <div className="mb-4 px-4 py-3 bg-emerald-50 border border-emerald-200 text-emerald-700 text-sm font-medium rounded-xl">
-                        {flash.message}
-                    </div>
-                )}
-                {flash?.error && (
-                    <div className="mb-4 px-4 py-3 bg-red-50 border border-red-200 text-red-700 text-sm font-medium rounded-xl">
-                        {flash.error}
-                    </div>
-                )}
 
                 {/* Controls */}
                 <div className="bg-white rounded-xl border border-surface-200 mb-5">

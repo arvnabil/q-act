@@ -41,6 +41,8 @@ class LeadActivity extends Model
         'completed_at' => 'datetime',
     ];
 
+    public function visit() { return $this->hasOne(LeadVisit::class, 'lead_activity_id'); }
+
     public function lead(): BelongsTo
     {
         return $this->belongsTo(Lead::class);

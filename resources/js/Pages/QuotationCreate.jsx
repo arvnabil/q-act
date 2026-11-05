@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import ReactDOM from 'react-dom';
+import LeadPicker from '@/Components/LeadPicker';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
-import { Head, router, usePage } from '@inertiajs/react';
+import { Head, router } from '@inertiajs/react';
 import { X, ChevronRight, Plus, Trash2, Info, Loader2, ArrowLeft } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 
 export default function QuotationCreate({ customers, bankAccounts, currentUser, leads = [], prefilledLead = null }) {
-    const { flash } = usePage().props;
 
     const isManagerOrAdmin = ['Administrator', 'Sales Manager', 'Manager'].includes(currentUser?.role);
     const [mode, setMode] = useState('existing'); // 'existing' | 'new'
@@ -65,7 +65,8 @@ export default function QuotationCreate({ customers, bankAccounts, currentUser, 
         }
         const customer = customers.find(c => String(c.id) === String(selectedCustomerId));
         if (customer?.pics?.length > 0) {
-            const primary = customer.pics.find(p => p.is_primary) || customer.pics[0];
+            const sourceLead = selectedLeadId === prefilledLead?.id ? prefilledLead : leads.find(l => l.id === selectedLeadId);
+            const primary = (sourceLead?.customer_id === selectedCustomerId && customer.pics.find(p => p.name === sourceLead.pic_name && (!sourceLead.pic_phone || p.phone === sourceLead.pic_phone))) || customer.pics.find(p => p.is_primary) || customer.pics[0];
             setSelectedPicId(String(primary.id));
             setPicForm({ name: primary.name || '', phone: primary.phone || '', email: primary.email || '' });
             setEditCompanyAddress(customer.address || '');
@@ -74,7 +75,7 @@ export default function QuotationCreate({ customers, bankAccounts, currentUser, 
             setPicForm({ name: '', phone: '', email: '' });
             setEditCompanyAddress('');
         }
-    }, [selectedCustomerId]);
+    }, [selectedCustomerId, selectedLeadId]);
 
     const handlePicSelectChange = (picId) => {
         setSelectedPicId(picId);
@@ -95,6 +96,10 @@ export default function QuotationCreate({ customers, bankAccounts, currentUser, 
         if (ld?.customer_id) {
             setMode('existing');
             setSelectedCustomerId(ld.customer_id);
+        } else if (ld?.customer_name) {
+            setMode('new'); setSelectedCustomerId(''); setSelectedPicId('');
+            setNewCompanyName(ld.customer_name); setNewCompanyAddress(ld.customer_address || '');
+            setNewPics([{name:ld.pic_name || '',phone:ld.pic_phone || '',email:ld.customer_email || ''}]);
         }
     };
 
@@ -117,7 +122,7 @@ export default function QuotationCreate({ customers, bankAccounts, currentUser, 
 
         const payload = {
             lead_id: selectedLeadId || null,
-            customer_id: selectedCustomerId,
+            customer_id: mode === 'existing' ? selectedCustomerId : null,
             pic_id: selectedPicId && selectedPicId !== 'new' ? selectedPicId : null,
             expiry_days: expiryDays,
             prefix_type: prefixType,
@@ -155,11 +160,6 @@ export default function QuotationCreate({ customers, bankAccounts, currentUser, 
                     <p className="text-sm text-surface-400 mt-1">Isi data customer & quotation, produk ditambahkan di langkah berikutnya</p>
                 </div>
 
-                {flash?.message && (
-                    <div className="mb-4 px-4 py-3 bg-emerald-50 border border-emerald-200 text-emerald-700 text-sm font-medium rounded-xl">
-                        {flash.message}
-                    </div>
-                )}
 
                 <form onSubmit={handleSubmit} className="bg-white rounded-2xl border border-surface-200 shadow-sm overflow-hidden">
                     <div className="px-6 py-5 flex flex-col gap-6">
@@ -174,18 +174,7 @@ export default function QuotationCreate({ customers, bankAccounts, currentUser, 
                                         </button>
                                     )}
                                 </div>
-                                <select
-                                    value={selectedLeadId}
-                                    onChange={e => handleLeadSelectChange(e.target.value)}
-                                    className="bg-white border border-brand-200 rounded-lg px-3 py-2 text-sm text-surface-800 outline-none focus:ring-2 focus:ring-brand-500 cursor-pointer"
-                                >
-                                    <option value="">-- Tanpa Lead (Langsung ke Customer) --</option>
-                                    {leads.map(l => (
-                                        <option key={l.id} value={l.id}>
-                                            {l.lead_code ? `[${l.lead_code}] ` : ''}{l.title}
-                                        </option>
-                                    ))}
-                                </select>
+                                                                <LeadPicker leads={prefilledLead && !leads.some(l => l.id === prefilledLead.id) ? [prefilledLead, ...leads] : leads} value={selectedLeadId} onChange={handleLeadSelectChange} />
                             </div>
                         )}
 

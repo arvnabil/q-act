@@ -66,7 +66,7 @@ export default function SalesZoneCard({ items = [], quotationId, quotation = nul
         const targetQ = quotation ? { ...quotation, items: items.length > 0 ? items : quotation.items } : { id: quotationId, items };
         try {
             await exportSimulasiSOExcel(targetQ, adjustments, currentUser);
-            toast.success('File Excel simulasi SO berhasil diunduh! 📥');
+            toast.success('File Excel simulasi SO berhasil diunduh!');
         } catch (err) {
             console.error('Export Excel simulasi SO gagal:', err);
             toast.error('Gagal export Excel. Silakan coba lagi atau periksa console.');

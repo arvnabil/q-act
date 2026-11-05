@@ -372,16 +372,13 @@ class QuotationController extends Controller
             'is_default' => $b->is_default ?? false,
         ]);
 
-        $leadsQuery = Lead::active();
-        if (! $isManagerOrAdmin) {
-            $leadsQuery->forUser($user->id);
-        }
-        $leads = $leadsQuery->select('id', 'title', 'lead_code', 'customer_id', 'pic_name', 'pic_phone')
+        $leadsQuery = \App\Services\WorkflowAccess::leads($user)->active();
+        $leads = $leadsQuery->select('id', 'title', 'lead_code', 'customer_id', 'customer_name', 'customer_address', 'customer_email', 'pic_name', 'pic_phone')
             ->orderBy('title')
             ->get();
 
         $leadId = $request->query('lead_id');
-        $prefilledLead = $leadId ? Lead::with('customer.pics')->find($leadId) : null;
+        $prefilledLead = $leadId ? \App\Services\WorkflowAccess::leads($user)->with('customer.pics')->findOrFail($leadId) : null;
 
         return Inertia::render('QuotationCreate', [
             'customers' => $customers,
@@ -421,17 +418,38 @@ class QuotationController extends Controller
 
         $user = $request->user()->load('businessUnit');
 
+        $contextLead = $request->filled('lead_id') ? \App\Services\WorkflowAccess::leads($user)->active()->findOrFail($request->lead_id) : null;
+        if ($contextLead && $contextLead->customer_id && $request->input('customer_id') !== $contextLead->customer_id) {
+            throw \Illuminate\Validation\ValidationException::withMessages(['customer_id' => 'Customer quotation harus sama dengan lead.']);
+        }
         $customerId = $request->input('customer_id');
         $picId = $request->input('pic_id');
 
         // Handle creation of new customer if new_customer_name is provided
         if (! $customerId && $request->filled('new_customer_name')) {
-            $customer = Customer::create([
-                'id' => $this->generateCustomerId(),
-                'name' => trim($request->input('new_customer_name')),
-                'address' => $request->input('new_customer_address') ?: null,
-                'created_by' => $user->id,
-            ]);
+            $customerName = trim($request->input('new_customer_name'));
+            $duplicateMessage = 'Nama customer sudah terdaftar. Pilih Customer Existing. Jika tidak muncul dalam daftar, hubungi admin untuk memeriksa akses customer.';
+            \Illuminate\Support\Facades\Validator::make(
+                ['new_customer_name' => $customerName],
+                ['new_customer_name' => 'required|string|max:255|unique:customers,name'],
+                ['new_customer_name.unique' => $duplicateMessage]
+            )->validate();
+            try {
+                $customer = Customer::create([
+                    'id' => $this->generateCustomerId(),
+                    'name' => trim($request->input('new_customer_name')),
+                    'address' => $request->input('new_customer_address') ?: null,
+                    'created_by' => $user->id,
+                ]);
+            } catch (\Illuminate\Database\UniqueConstraintViolationException $e) {
+                // Another request may have saved the same name after validation.
+                if (!Customer::where('name', $customerName)->exists()) {
+                    throw $e;
+                }
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'new_customer_name' => $duplicateMessage,
+                ]);
+            }
             $customerId = $customer->id;
 
             $newPics = $request->input('new_pics', []);
@@ -483,6 +501,7 @@ class QuotationController extends Controller
         if ($quotation->lead_id) {
             $lead = Lead::find($quotation->lead_id);
             if ($lead) {
+                \App\Services\WorkflowAccess::fillFromQuotation($lead, $quotation, $user);
                 if (! $lead->quotation_id) {
                     $lead->update(['quotation_id' => $quotation->id]);
                 }
@@ -666,7 +685,7 @@ class QuotationController extends Controller
         return Inertia::render('QuotationEdit', [
             'quotation' => $this->serializeFull($quotation),
             'customers' => $customers,
-            'leads' => Lead::active()->select('id', 'title', 'lead_code', 'customer_id')->orderBy('title')->get(),
+            'leads' => \App\Services\WorkflowAccess::leads($request->user())->active()->select('id', 'title', 'lead_code', 'customer_id')->orderBy('title')->get(),
             'products' => $products,
             'brands' => $brands,
             'bankAccounts' => $bankAccounts,
@@ -733,6 +752,12 @@ class QuotationController extends Controller
             'items.*.is_pph_applied' => 'nullable|boolean',
         ]);
 
+        if (array_key_exists('lead_id', $data) && $data['lead_id'] !== $quotation->lead_id) {
+            throw \Illuminate\Validation\ValidationException::withMessages(['lead_id' => 'Gunakan Hubungkan lead pada detail quotation agar revisi/sub tetap terhubung.']);
+        }
+        if ($quotation->lead_id && isset($data['customer_id']) && $data['customer_id'] !== $quotation->customer_id) {
+            throw \Illuminate\Validation\ValidationException::withMessages(['customer_id' => 'Quotation terkait lead tidak dapat dipindahkan ke customer lain.']);
+        }
         $previousStatus = $quotation->status;
 
         // An approved quotation is the immutable source document for its SO.

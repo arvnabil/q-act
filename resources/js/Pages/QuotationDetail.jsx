@@ -1,10 +1,11 @@
+import QuotationWorkflowShortcut from '@/Components/QuotationWorkflowShortcut';
 import React, { useState } from 'react';
 import ReactDOM from 'react-dom';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
-import { Head, Link, router, usePage } from '@inertiajs/react';
+import { Head, Link, router } from '@inertiajs/react';
 import {
     ArrowLeft, Edit, Download, CheckCircle2, Clock, XCircle,
-    AlertCircle, FileText, CreditCard, Loader2, Trash2, AlertTriangle, Copy, Layers, ChevronDown, X, UploadCloud
+    AlertCircle, FileText, CreditCard, Loader2, Trash2, AlertTriangle, Copy, Layers, ChevronDown, X, UploadCloud, History
 } from 'lucide-react';
 import { printQuotation } from '@/utils/printQuotation';
 import { format, parseISO, isValid, differenceInDays } from 'date-fns';
@@ -52,7 +53,6 @@ const statusBadge = (s) => {
 };
 
 export default function QuotationDetail({ quotation, printDocuments = [], bankAccounts, currentUser, companyInfo = {}, domainLogoMap = [] }) {
-    const { flash } = usePage().props;
     const [withImage, setWithImage] = useState(false);
     const [pdfLanguage, setPdfLanguage] = useState('id');
     const [deleteTarget, setDeleteTarget] = useState(null);
@@ -254,11 +254,6 @@ export default function QuotationDetail({ quotation, printDocuments = [], bankAc
         <AuthenticatedLayout>
             <Head title={`Quotation ${quotation.id}`} />
             <div className="animate-fade-in-up max-w-5xl">
-                {flash?.message && (
-                    <div className="mb-4 px-4 py-3 bg-emerald-50 border border-emerald-200 text-emerald-700 text-sm font-medium rounded-xl">
-                        {flash.message}
-                    </div>
-                )}
 
                 {changeRequestType && (
                     <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-surface-900/60 backdrop-blur-sm">
@@ -288,7 +283,7 @@ export default function QuotationDetail({ quotation, printDocuments = [], bankAc
                     Kembali ke Daftar Quotation
                 </Link>
 
-                {quotationStructure.root && (
+                {quotationStructure.root && (quotationStructure.children.length > 0 || quotationStructure.current_id !== quotationStructure.root.id) && (
                     <div className="mb-5 rounded-xl border border-brand-100 bg-brand-50/50 p-1.5 shadow-sm">
                         <div className="flex items-center gap-1 overflow-x-auto">
                             <Link
@@ -438,30 +433,6 @@ export default function QuotationDetail({ quotation, printDocuments = [], bankAc
                         <span className="text-[11px] text-surface-400 italic hidden md:inline">Pengaturan cetak PDF</span>
                     </div>
 
-                    {/* Lead Connection Banner */}
-                    {quotation.lead && (
-                        <div className="bg-brand-50/70 border-b border-brand-100 px-6 py-2.5 flex items-center justify-between gap-3 text-xs">
-                            <div className="flex items-center gap-2 flex-wrap">
-                                <span className="w-2 h-2 rounded-full bg-brand-500 animate-pulse" />
-                                <span className="font-semibold text-brand-800">
-                                    Terhubung ke Lead:
-                                </span>
-                                <span className="font-mono text-brand-700 bg-white px-2 py-0.5 rounded border border-brand-200 font-bold">
-                                    {quotation.lead.lead_code || 'LEAD'}
-                                </span>
-                                <span className="font-medium text-surface-800">
-                                    {quotation.lead.title}
-                                </span>
-                            </div>
-                            <Link
-                                href={route('leads.show', quotation.lead.id)}
-                                className="font-bold text-brand-600 hover:text-brand-700 hover:underline flex items-center gap-1 shrink-0"
-                            >
-                                Buka Lead Detail →
-                            </Link>
-                        </div>
-                    )}
-
                     {/* 4 Column Info Grid */}
                     <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 divide-y sm:divide-y-0 sm:divide-x divide-surface-100">
                         <div className="p-5">
@@ -503,6 +474,14 @@ export default function QuotationDetail({ quotation, printDocuments = [], bankAc
                                 <div className={`text-xs font-semibold mt-1 ${expiredColor}`}>{expiredLabel}</div>
                             )}
                         </div>
+                    </div>
+                    <div className="flex flex-wrap items-center justify-end gap-1 border-t border-surface-100 px-4 py-2">
+                        <QuotationWorkflowShortcut quotationId={quotation.id} leadId={quotation.lead_id || quotation.lead?.id} />
+                        <button type="button" onClick={() => setShowTimeline(true)} aria-haspopup="dialog"
+                            className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-surface-500 transition-colors hover:bg-brand-50 hover:text-brand-700 focus-visible:ring-2 focus-visible:ring-brand-500">
+                            <History className="h-3.5 w-3.5" />Timeline
+                            {quotation.timeline?.length > 0 && <span className="rounded-full bg-surface-100 px-1.5 text-[10px] text-surface-600">{quotation.timeline.length}</span>}
+                        </button>
                     </div>
                 </div>
 
@@ -608,29 +587,6 @@ export default function QuotationDetail({ quotation, printDocuments = [], bankAc
                     </div>
                 )}
 
-                {(quotation.parent_quotation || quotation.revisions?.length > 0 || quotation.change_requests?.length > 0 || quotation.timeline?.length > 0) && (
-                    <div className="bg-white rounded-2xl border border-surface-200 shadow-sm p-6 mb-6">
-                        <div className="flex items-center justify-between gap-4">
-                            <div>
-                                <h3 className="text-sm font-bold text-surface-800">Sub Quotation, Revisi & Persetujuan</h3>
-                                <p className="mt-1 text-xs text-surface-400">Riwayat lengkap tersedia dalam timeline.</p>
-                            </div>
-                            <button
-                                type="button"
-                                onClick={() => setShowTimeline(true)}
-                                className="shrink-0 rounded-lg border border-brand-200 bg-brand-50 px-3.5 py-2 text-xs font-bold text-brand-700 transition-colors hover:bg-brand-100"
-                            >
-                                Lihat Timeline
-                            </button>
-                        </div>
-                        <div className="mt-4 flex flex-wrap gap-2 text-[11px] font-semibold text-surface-600">
-                            <span className="rounded-full bg-surface-50 px-2.5 py-1">{quotation.revisions?.length || 0} sub/revisi</span>
-                            <span className="rounded-full bg-surface-50 px-2.5 py-1">{quotation.change_requests?.length || 0} pengajuan</span>
-                            <span className="rounded-full bg-surface-50 px-2.5 py-1">{quotation.timeline?.length || 0} aktivitas</span>
-                        </div>
-                    </div>
-                )}
-
                 {showTimeline && ReactDOM.createPortal(
                     <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-surface-900/60 p-4 backdrop-blur-sm">
                         <div className="flex max-h-[85vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
@@ -644,6 +600,12 @@ export default function QuotationDetail({ quotation, printDocuments = [], bankAc
                                 </button>
                             </div>
                             <div className="space-y-3 overflow-y-auto p-6 text-xs">
+                        <div className="mb-4 flex flex-wrap gap-2 text-[11px] font-semibold text-surface-600">
+                            <span className="rounded-full bg-surface-50 px-2.5 py-1">{quotation.revisions?.length || 0} sub/revisi</span>
+                            <span className="rounded-full bg-surface-50 px-2.5 py-1">{quotation.change_requests?.length || 0} pengajuan</span>
+                            <span className="rounded-full bg-surface-50 px-2.5 py-1">{quotation.timeline?.length || 0} aktivitas</span>
+                        </div>
+                                {!quotation.parent_quotation && !quotation.revisions?.length && !quotation.change_requests?.length && !quotation.timeline?.length && <p className="py-5 text-center text-surface-400">Belum ada aktivitas untuk quotation ini.</p>}
                                 {quotation.parent_quotation && <div className="rounded-lg bg-surface-50 p-3">Dibuat dari quotation sebelumnya: <Link className="font-bold text-brand-600" href={route('quotations.show', quotation.parent_quotation.id)}>{quotation.parent_quotation.id}</Link></div>}
                                 {quotation.revisions?.map(r => <div key={r.id} className="flex items-center justify-between gap-3 rounded-lg bg-surface-50 p-3"><span>{r.relation_type === 'split' ? 'Sub quotation:' : 'Quotation revisi:'} <Link className="font-bold text-brand-600" href={route('quotations.show', r.id)}>{r.id}</Link> · {r.status}</span>{r.relation_type === 'split' && <span className="rounded-full bg-brand-100 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-brand-700">Split PO</span>}</div>)}
                                 {quotation.change_requests?.map(cr => (

@@ -106,6 +106,16 @@ class ZoomService
     /**
      * Delete a Zoom meeting.
      */
+    public function updateMeeting(string $meetingId, string $topic, string $startTime, ?string $agenda = null): bool
+    {
+        $token = $this->getAccessToken();
+        if (!$token || \Carbon\Carbon::parse($startTime)->isPast()) return false;
+        return Http::withToken($token)->patch("https://api.zoom.us/v2/meetings/{$meetingId}", [
+            'topic' => $topic, 'start_time' => \Carbon\Carbon::parse($startTime)->utc()->format('Y-m-d\TH:i:s\Z'),
+            'timezone' => 'Asia/Jakarta', 'agenda' => $agenda ?? '',
+        ])->successful();
+    }
+
     public function deleteMeeting(string $meetingId): bool
     {
         $token = $this->getAccessToken();

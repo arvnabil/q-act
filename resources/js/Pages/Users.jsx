@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Head, useForm, usePage, router } from '@inertiajs/react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
+import ManagementPageHeader from '@/Components/ManagementPageHeader';
 import { Plus, Edit, Trash2, Users, Loader2, X, Eye, EyeOff, AlertTriangle, Shield } from 'lucide-react';
 
 const ROLES = ['Administrator', 'Manager', 'Sales', 'Presales', 'Finance'];
@@ -263,24 +264,17 @@ export default function UsersPage({ users }) {
         <AuthenticatedLayout>
             <Head title="Manajemen User" />
 
-            <div className="animate-fade-in-up max-w-5xl">
+            <div className="animate-fade-in-up w-full min-w-0 pb-8">
                 {/* Header */}
-                <div className="flex items-center justify-between mb-6">
-                    <div>
-                        <h1 className="text-xl font-extrabold text-surface-900 tracking-tight flex items-center gap-2">
-                            <Shield className="w-5 h-5 text-brand-500" />
-                            Manajemen User
-                        </h1>
-                        <p className="text-sm text-surface-500 mt-1">Kelola daftar tim dan akses masuk mereka.</p>
-                    </div>
+                <ManagementPageHeader page="/users" icon={Shield}>
                     {isAdmin && (
                         <button onClick={() => setShowAdd(true)}
-                            className="flex items-center gap-2 bg-brand-600 hover:bg-brand-700 text-white px-4 py-2 rounded-lg text-sm font-semibold transition-all shadow-sm hover:shadow active:scale-95 cursor-pointer">
+                            className="inline-flex items-center gap-2 whitespace-nowrap px-4 py-2.5 bg-brand-600 hover:bg-brand-700 text-white text-sm font-semibold rounded-lg transition-colors shadow-sm cursor-pointer">
                             <Plus className="w-4 h-4" />
                             Tambah User
                         </button>
                     )}
-                </div>
+                </ManagementPageHeader>
 
                 {/* Stats */}
                 <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-5">

@@ -151,21 +151,31 @@ class GoogleCalendarService
     public static function buildEventBody(
         string $summary,
         string $description,
-        string $startDatetime,   // ISO8601 e.g. "2026-11-10T09:00:00+07:00"
-        string $endDatetime,     // ISO8601
+        string $startDatetime,
+        string $endDatetime,
         ?string $location = null,
-        ?string $zoomJoinUrl = null
+        ?string $zoomJoinUrl = null,
+        bool $isAllDay = false
     ): array {
         if ($zoomJoinUrl) {
             $description .= "\n\n🎥 Zoom Meeting: {$zoomJoinUrl}";
         }
 
-        $body = [
-            'summary'     => $summary,
-            'description' => $description,
-            'start'       => ['dateTime' => $startDatetime, 'timeZone' => 'Asia/Jakarta'],
-            'end'         => ['dateTime' => $endDatetime,   'timeZone' => 'Asia/Jakarta'],
-        ];
+        if ($isAllDay) {
+            $body = [
+                'summary'     => $summary,
+                'description' => $description,
+                'start'       => ['date' => substr($startDatetime, 0, 10)],
+                'end'         => ['date' => substr($endDatetime, 0, 10)],
+            ];
+        } else {
+            $body = [
+                'summary'     => $summary,
+                'description' => $description,
+                'start'       => ['dateTime' => $startDatetime, 'timeZone' => 'Asia/Jakarta'],
+                'end'         => ['dateTime' => $endDatetime,   'timeZone' => 'Asia/Jakarta'],
+            ];
+        }
 
         if ($location) {
             $body['location'] = $location;
