@@ -13,7 +13,11 @@ const FEATURE_LABELS = {
     'leads_view_bu': 'Lead Pipeline - Lihat data sendiri + BU',
     'leads_view_all': 'Lead Pipeline - Lihat semua data',
     'leads_manage': 'Lead Pipeline - Tambah / Edit / Pindah Stage',
+    'leads_manage_bu': 'Lead Pipeline - Kelola data sendiri + BU',
+    'leads_manage_all': 'Lead Pipeline - Kelola semua data',
     'leads_visits': 'Lead Pipeline - Visit & Follow-up',
+    'leads_visits_bu': 'Lead Pipeline - Visit data sendiri + BU',
+    'leads_visits_all': 'Lead Pipeline - Visit semua data',
     'calendar_view_bu': 'Kalender & Agenda - Lihat data sendiri + BU',
     'calendar_view_all': 'Kalender & Agenda - Lihat semua data',
     'calendar_view': 'Kalender & Agenda - Lihat',
@@ -61,7 +65,7 @@ const GROUPS = [
     { id: 'reports', label: 'Laporan', match: f => ['view_reports', 'achievements_view', 'manager_view'].includes(f) },
     { id: 'system', label: 'Pengguna & Sistem', match: f => ['user_management', 'manage_business_units', 'manage_settings', 'manage_roles'].includes(f) },
 ];
-const SCOPED = ['dashboard_view', 'leads_view', 'calendar_view', 'quotations_view', 'sales_orders_view', 'customers_view'];
+const SCOPED = ['dashboard_view', 'leads_view', 'leads_manage', 'leads_visits', 'calendar_view', 'quotations_view', 'sales_orders_view', 'customers_view'];
 const isScope = f => f.endsWith('_view_bu') || f.endsWith('_view_all');
 const describe = f => SCOPED.includes(f) ? 'Membuka daftar, hasil pencarian, dan detail sesuai cakupan data.'
     : f.includes('import') ? 'Mengimpor quotation lama ke dalam sistem.'

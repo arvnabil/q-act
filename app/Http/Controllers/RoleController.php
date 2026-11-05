@@ -21,7 +21,11 @@ const SYSTEM_PERMISSIONS = [
     'leads_view_bu',
     'leads_view_all',
     'leads_manage',
+    'leads_manage_bu',
+    'leads_manage_all',
     'leads_visits',
+    'leads_visits_bu',
+    'leads_visits_all',
     'calendar_view',
     'calendar_view_bu',
     'calendar_view_all',
@@ -62,18 +66,18 @@ const STANDARD_ROLES = ['Administrator', 'Manager', 'Sales', 'Presales', 'Financ
 const DEFAULT_ROLE_PERMISSIONS = [
     'Administrator' => SYSTEM_PERMISSIONS,
     'Manager' => [
-        'dashboard', 'sales_targets_edit', 'leads_view', 'leads_view_all', 'leads_manage', 'leads_visits',
+        'dashboard', 'sales_targets_edit', 'leads_view', 'leads_view_all', 'leads_manage', 'leads_manage_all', 'leads_visits', 'leads_visits_all',
         'calendar_view', 'calendar_view_all', 'quotations_view', 'quotations_create', 'quotations_edit', 'quotations_delete',
         'sales_orders_view', 'sales_orders_edit', 'sales_orders_delete', 'sales_orders_delete_bulk', 'customers_view', 'customers_create', 'customers_edit',
         'products_view', 'view_reports', 'manager_view'
     ],
     'Sales' => [
-        'dashboard', 'leads_view', 'leads_view_bu', 'leads_manage', 'leads_visits',
+        'dashboard', 'leads_view', 'leads_view_bu', 'leads_manage', 'leads_manage_bu', 'leads_visits', 'leads_visits_bu',
         'calendar_view', 'quotations_view', 'quotations_create', 'quotations_edit', 'quotations_delete',
         'sales_orders_view', 'sales_orders_edit', 'customers_view', 'customers_create', 'customers_edit', 'products_view'
     ],
     'Presales' => [
-        'dashboard', 'leads_view', 'leads_view_bu', 'leads_manage', 'leads_visits',
+        'dashboard', 'leads_view', 'leads_view_bu', 'leads_manage', 'leads_manage_bu', 'leads_visits', 'leads_visits_bu',
         'calendar_view', 'quotations_view', 'quotations_create', 'quotations_edit', 'quotations_delete',
         'sales_orders_view', 'customers_view', 'products_view'
     ],
@@ -139,6 +143,11 @@ class RoleController extends Controller
             foreach (['dashboard', 'calendar', 'leads', 'quotations', 'sales_orders', 'customers'] as $module) {
                 if (!empty($permissions[$module.'_view_all']) && !empty($permissions[$module.'_view_bu'])) {
                     $data['rolePermissions'][$roleName][$module.'_view_bu'] = false;
+                }
+            }
+            foreach (['leads_manage', 'leads_visits'] as $action) {
+                if (!empty($permissions[$action.'_all']) && !empty($permissions[$action.'_bu'])) {
+                    $data['rolePermissions'][$roleName][$action.'_bu'] = false;
                 }
             }
             if ($roleName === 'Administrator') {

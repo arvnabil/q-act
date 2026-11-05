@@ -961,8 +961,8 @@ function ScheduleVisitModal({ open, onClose, lead, customerPics = [], googleCale
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-surface-900/60 backdrop-blur-sm">
-            <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg overflow-hidden border border-surface-200">
-                <div className="px-6 py-4 border-b border-surface-100 flex items-center justify-between bg-surface-50">
+            <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg overflow-hidden border border-surface-200 max-h-[90vh] flex flex-col">
+                <div className="px-6 py-4 border-b border-surface-100 flex items-center justify-between bg-surface-50 shrink-0">
                     <div className="flex items-center gap-2">
                         <div className="w-8 h-8 rounded-lg bg-teal-100 text-teal-700 flex items-center justify-center">
                             <MapPin className="w-4 h-4" />
@@ -977,7 +977,8 @@ function ScheduleVisitModal({ open, onClose, lead, customerPics = [], googleCale
                     </button>
                 </div>
 
-                <form onSubmit={handleSubmit} className="p-6 space-y-4">
+                <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0 overflow-hidden">
+                    <div className="p-6 space-y-4 overflow-y-auto flex-1">
                     <div>
                         <label className="block text-xs font-semibold text-surface-700 mb-1">Agenda / Subject <span className="text-red-500">*</span></label>
                         <input
@@ -1155,7 +1156,9 @@ function ScheduleVisitModal({ open, onClose, lead, customerPics = [], googleCale
                         )}
                     </div>
 
-                    <div className="flex justify-end gap-2 pt-2 border-t border-surface-100">
+                    </div>
+
+                    <div className="flex justify-end gap-2 px-6 py-4 border-t border-surface-100 bg-surface-50 shrink-0">
                         <button type="button" onClick={onClose} className="px-4 py-2 text-xs font-semibold text-surface-600 hover:bg-surface-100 rounded-lg cursor-pointer">
                             Batal
                         </button>

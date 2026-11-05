@@ -12,11 +12,17 @@ class WorkflowAccess
 {
     public static function ids(User $user)
     {
-        if (DocumentVisibility::allows($user, 'leads_view_all') || DocumentVisibility::allows($user, 'quotations_view_all')) {
+        if (DocumentVisibility::allows($user, 'leads_view_all')
+            || DocumentVisibility::allows($user, 'leads_manage_all')
+            || DocumentVisibility::allows($user, 'leads_visits_all')
+            || DocumentVisibility::allows($user, 'quotations_view_all')) {
             return User::pluck('id');
         }
         $ids = collect([$user->id]);
-        if (DocumentVisibility::allows($user, 'leads_view_bu') || DocumentVisibility::allows($user, 'quotations_view_bu')) {
+        if (DocumentVisibility::allows($user, 'leads_view_bu')
+            || DocumentVisibility::allows($user, 'leads_manage_bu')
+            || DocumentVisibility::allows($user, 'leads_visits_bu')
+            || DocumentVisibility::allows($user, 'quotations_view_bu')) {
             $bus = BusinessUnitMember::where('user_id', $user->id)->pluck('business_unit_id');
             $ids = $ids->merge(BusinessUnitMember::whereIn('business_unit_id', $bus)->pluck('user_id'));
         }
