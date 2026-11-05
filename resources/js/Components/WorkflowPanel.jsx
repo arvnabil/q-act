@@ -76,7 +76,8 @@ export default function WorkflowPanel({
         [busy, setBusy] = useState(false);
     const [error, setError] = useState(""),
         [warnings, setWarnings] = useState([]),
-        [all, setAll] = useState(false);
+        [all, setAll] = useState(false),
+        [filterTab, setFilterTab] = useState("active");
     const [otherIds, setOtherIds] = useState([]);
     const [selected, setSelected] = useState(""),
         [title, setTitle] = useState(""),
@@ -173,6 +174,7 @@ export default function WorkflowPanel({
                       create_zoom: Boolean(
                           visit?.zoom_meeting_id || data?.zoomConfigured,
                       ),
+                      include_lead_info: true,
                   }
                 : {
                       subject: quotationId
@@ -189,6 +191,7 @@ export default function WorkflowPanel({
                       attendee_emails: [],
                       sync_calendar: Boolean(data?.calendarConfigured),
                       create_zoom: Boolean(data?.zoomConfigured),
+                      include_lead_info: true,
                   },
         );
         setMode(visit ? "reschedule" : "schedule");
@@ -210,10 +213,12 @@ export default function WorkflowPanel({
     }, [data, leadId]);
     const visits = data?.visits || [];
     const pending = visits.filter((v) => !v.checked_in_at && !v.cancelled_at);
+    const history = visits.filter((v) => v.checked_in_at || v.cancelled_at);
     const list = [
         ...pending,
-        ...visits.filter((v) => v.checked_in_at || v.cancelled_at),
+        ...history,
     ];
+    const displayList = filterTab === "active" ? pending : filterTab === "history" ? history : list;
     const close = () => {
         if (!busy) {
             setMode(null);
@@ -426,110 +431,214 @@ export default function WorkflowPanel({
                     Jadwalkan tindak lanjut tanpa lead
                 </button>
             )}
-            {pending.length > 0 && (
-                <p className="mt-4 text-xs font-semibold text-brand-700">
-                    {pending.length} agenda aktif. Gunakan Jadwal ulang untuk
-                    memperbarui agenda yang sudah ada.
-                </p>
-            )}
-            <div className="mt-3 divide-y divide-surface-100">
-                {(all ? list : list.slice(0, 4)).map((v) => (
-                    <div
-                        key={v.id}
-                        className="flex flex-wrap items-center justify-between gap-3 py-3"
-                    >
-                        <div className="min-w-0">
-                            <p className="text-sm font-semibold text-surface-800">
-                                {v.subject}
-                            </p>
-                            <p className="mt-1 text-xs text-surface-500">
-                                {formatVisitPeriod(v)} ·{" "}
-                                {v.cancelled_at
-                                    ? "Dibatalkan"
-                                    : v.checked_in_at
-                                      ? "Selesai"
-                                      : new Date(v.scheduled_at) < new Date()
-                                        ? "Terlambat"
-                                        : "Terjadwal"}
-                            </p>
-                            {v.quotation_id && (
-                                <Link
-                                    href={`/quotations/${v.quotation_id}`}
-                                    className="text-xs text-brand-600"
-                                >
-                                    {v.quotation_id}
-                                </Link>
-                            )}
-                            {v.zoom_join_url && !v.cancelled_at && (
-                                <a
-                                    href={v.zoom_join_url}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="ml-2 text-xs font-semibold text-brand-600"
-                                >
-                                    Buka Zoom ↗
-                                </a>
-                            )}
-                        </div>
-                        {data?.canSchedule &&
-                            !v.checked_in_at &&
-                            !v.cancelled_at && (
-                                <div className="flex flex-wrap gap-2">
-                                    <button
-                                        type="button"
-                                        disabled={busy}
-                                        className={button}
-                                        onClick={() =>
-                                            perform(() =>
-                                                axios.post(
-                                                    `/leads/visits/${v.id}/check-in`,
-                                                ),
-                                            )
-                                        }
-                                    >
-                                        <Check className="h-3 w-3" />
-                                        Selesai
-                                    </button>
-                                    <button
-                                        type="button"
-                                        className={button}
-                                        onClick={() => schedule(v)}
-                                    >
-                                        Jadwal ulang
-                                    </button>
-                                    <button
-                                        type="button"
-                                        className={`${button} text-red-600`}
-                                        onClick={() => {
-                                            setForm(v);
-                                            setMode("cancel");
-                                        }}
-                                    >
-                                        Batalkan
-                                    </button>
-                                </div>
-                            )}
+            {/* Sub-tabs: Aktif / Riwayat / Semua */}
+            {data && visits.length > 0 && (
+                <div className="flex items-center justify-between gap-2 border-b border-surface-100 pb-2.5 mt-3">
+                    <div className="flex items-center gap-1 bg-surface-100 p-0.5 rounded-lg text-xs">
+                        <button
+                            type="button"
+                            onClick={() => setFilterTab("active")}
+                            className={`px-2.5 py-1 rounded-md font-semibold transition-all cursor-pointer flex items-center gap-1.5 ${
+                                filterTab === "active"
+                                    ? "bg-white text-surface-900 shadow-2xs"
+                                    : "text-surface-500 hover:text-surface-800"
+                            }`}
+                        >
+                            Aktif
+                            <span
+                                className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
+                                    filterTab === "active"
+                                        ? "bg-brand-50 text-brand-700"
+                                        : "bg-surface-200 text-surface-600"
+                                }`}
+                            >
+                                {pending.length}
+                            </span>
+                        </button>
+
+                        <button
+                            type="button"
+                            onClick={() => setFilterTab("history")}
+                            className={`px-2.5 py-1 rounded-md font-semibold transition-all cursor-pointer flex items-center gap-1.5 ${
+                                filterTab === "history"
+                                    ? "bg-white text-surface-900 shadow-2xs"
+                                    : "text-surface-500 hover:text-surface-800"
+                            }`}
+                        >
+                            Riwayat
+                            <span
+                                className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
+                                    filterTab === "history"
+                                        ? "bg-surface-200 text-surface-700"
+                                        : "bg-surface-200 text-surface-600"
+                                }`}
+                            >
+                                {history.length}
+                            </span>
+                        </button>
+
+                        <button
+                            type="button"
+                            onClick={() => setFilterTab("all")}
+                            className={`px-2.5 py-1 rounded-md font-semibold transition-all cursor-pointer flex items-center gap-1.5 ${
+                                filterTab === "all"
+                                    ? "bg-white text-surface-900 shadow-2xs"
+                                    : "text-surface-500 hover:text-surface-800"
+                            }`}
+                        >
+                            Semua
+                            <span
+                                className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
+                                    filterTab === "all"
+                                        ? "bg-surface-200 text-surface-700"
+                                        : "bg-surface-200 text-surface-600"
+                                }`}
+                            >
+                                {list.length}
+                            </span>
+                        </button>
                     </div>
-                ))}
+
+                    {pending.length > 0 && filterTab === "active" && (
+                        <span className="text-[11px] font-medium text-brand-600 hidden sm:inline">
+                            {pending.length} agenda perlu tindak lanjut
+                        </span>
+                    )}
+                </div>
+            )}
+
+            <div className="max-h-56 overflow-y-auto divide-y divide-surface-100 pr-1 mt-1">
+                {displayList.length === 0 ? (
+                    <div className="py-4 text-center bg-surface-50/50 rounded-xl border border-dashed border-surface-200 my-2">
+                        <p className="text-xs text-surface-500">
+                            {filterTab === "active"
+                                ? "Tidak ada agenda aktif saat ini."
+                                : filterTab === "history"
+                                  ? "Belum ada riwayat agenda selesai atau dibatalkan."
+                                  : "Belum ada agenda tercatat."}
+                        </p>
+                        {filterTab === "active" && data?.canSchedule && (!quotationId || data?.lead) && (
+                            <button
+                                type="button"
+                                onClick={() => schedule()}
+                                className="mt-2 text-xs font-bold text-brand-600 hover:underline cursor-pointer"
+                            >
+                                + Buat Jadwal Tindak Lanjut
+                            </button>
+                        )}
+                    </div>
+                ) : (
+                    displayList.map((v) => {
+                        const isCancelled = Boolean(v.cancelled_at);
+                        const isDone = Boolean(v.checked_in_at);
+                        const isLate = !isDone && !isCancelled && new Date(v.scheduled_at) < new Date();
+                        const statusLabel = isCancelled
+                            ? "Dibatalkan"
+                            : isDone
+                              ? "Selesai"
+                              : isLate
+                                ? "Terlambat"
+                                : "Terjadwal";
+                        const statusClass = isCancelled
+                            ? "bg-surface-100 text-surface-500 border-surface-200"
+                            : isDone
+                              ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                              : isLate
+                                ? "bg-amber-50 text-amber-700 border-amber-200"
+                                : "bg-blue-50 text-blue-700 border-blue-200";
+
+                        return (
+                            <div
+                                key={v.id}
+                                className="flex flex-wrap items-center justify-between gap-3 py-2.5"
+                            >
+                                <div className="min-w-0 flex-1">
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                        <span className="text-xs font-semibold text-surface-900 truncate">
+                                            {v.subject}
+                                        </span>
+                                        <span
+                                            className={`text-[10px] px-1.5 py-0.5 rounded font-medium border ${statusClass}`}
+                                        >
+                                            {statusLabel}
+                                        </span>
+                                    </div>
+                                    <p className="mt-0.5 text-[11px] text-surface-500 flex items-center gap-2 flex-wrap">
+                                        <span>{formatVisitPeriod(v)}</span>
+                                        {v.quotation_id && (
+                                            <Link
+                                                href={`/quotations/${encodeURIComponent(v.quotation_id)}`}
+                                                className="text-brand-600 hover:underline font-medium"
+                                            >
+                                                {v.quotation_id}
+                                            </Link>
+                                        )}
+                                        {v.zoom_join_url && !v.cancelled_at && (
+                                            <a
+                                                href={v.zoom_join_url}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="font-semibold text-sky-600 hover:underline inline-flex items-center gap-0.5"
+                                            >
+                                                Zoom ↗
+                                            </a>
+                                        )}
+                                    </p>
+                                </div>
+
+                                {data?.canSchedule && !isDone && !isCancelled && (
+                                    <div className="flex items-center gap-1.5 shrink-0">
+                                        <button
+                                            type="button"
+                                            disabled={busy}
+                                            className="px-2 py-1 text-xs font-semibold rounded-lg bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 transition-colors cursor-pointer flex items-center gap-1"
+                                            onClick={() =>
+                                                perform(() =>
+                                                    axios.post(
+                                                        `/leads/visits/${v.id}/check-in`,
+                                                    ),
+                                                )
+                                            }
+                                        >
+                                            <Check className="h-3 w-3" />
+                                            Selesai
+                                        </button>
+                                        <button
+                                            type="button"
+                                            className="px-2 py-1 text-xs font-semibold rounded-lg bg-surface-50 text-surface-700 hover:bg-surface-100 border border-surface-200 transition-colors cursor-pointer"
+                                            onClick={() => schedule(v)}
+                                        >
+                                            Jadwal ulang
+                                        </button>
+                                        <button
+                                            type="button"
+                                            className="px-2 py-1 text-xs font-semibold rounded-lg text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
+                                            onClick={() => {
+                                                setForm(v);
+                                                setMode("cancel");
+                                            }}
+                                        >
+                                            Batalkan
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
+                        );
+                    })
+                )}
             </div>
+
             {data && !visits.length && (
                 <p className="mt-3 text-xs text-surface-400">
-                    Belum ada agenda. Pilih waktu untuk follow-up atau pertemuan
-                    berikutnya.
+                    Belum ada agenda. Pilih waktu untuk follow-up atau pertemuan berikutnya.
                 </p>
             )}
-            {list.length > 4 && (
-                <button
-                    type="button"
-                    className="mt-2 text-xs font-semibold text-brand-600"
-                    onClick={() => setAll(!all)}
-                >
-                    {all ? "Ringkas" : `Lihat semua (${list.length})`}
-                </button>
-            )}
-            <div className="mt-3 flex gap-4 text-xs text-brand-600">
-                <Link href="/leads/visits">Visit & Follow-up →</Link>
-                <Link href="/team-calendar">Kalender →</Link>
+
+            <div className="mt-2.5 flex items-center justify-between text-xs text-brand-600 pt-2 border-t border-surface-100">
+                <div className="flex gap-4">
+                    <Link href="/leads/visits" className="hover:underline">Visit & Follow-up →</Link>
+                    <Link href="/team-calendar" className="hover:underline">Kalender →</Link>
+                </div>
             </div>
             {!mode && error && (
                 <p role="alert" className="mt-3 text-xs text-red-600">
@@ -983,6 +1092,23 @@ export default function WorkflowPanel({
                                             {!data?.calendarConfigured &&
                                                 "(belum terhubung)"}
                                         </label>
+                                        {form.sync_calendar && (data?.lead?.id || quotationId) && (
+                                            <label className="flex items-center gap-2 pl-0.5">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={!!form.include_lead_info}
+                                                    onChange={(e) =>
+                                                        setForm({
+                                                            ...form,
+                                                            include_lead_info: e.target.checked,
+                                                        })
+                                                    }
+                                                />
+                                                <span className="text-xs text-surface-600">
+                                                    Sertakan info Lead/Sales di deskripsi
+                                                </span>
+                                            </label>
+                                        )}
                                         <label className="flex items-center gap-2">
                                             <input
                                                 type="checkbox"

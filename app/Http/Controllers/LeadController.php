@@ -664,10 +664,11 @@ class LeadController extends Controller
             'end_at'       => 'nullable|date',
             'is_all_day'   => 'nullable|boolean',
             'notes'        => 'nullable|string',
-            'create_zoom'   => 'nullable|boolean',
-            'sync_calendar' => 'nullable|boolean',
-            'attendee_emails'   => 'nullable|array',
-            'attendee_emails.*' => 'email',
+            'create_zoom'        => 'nullable|boolean',
+            'sync_calendar'      => 'nullable|boolean',
+            'include_lead_info'  => 'nullable|boolean',
+            'attendee_emails'    => 'nullable|array',
+            'attendee_emails.*'  => 'email',
         ]);
 
         if (!empty($data['quotation_id'])) {
@@ -730,8 +731,9 @@ class LeadController extends Controller
         // Clean out extra form flags before creating model
         $createZoom      = !empty($data['create_zoom']);
         $syncCalendar    = $data['sync_calendar'] ?? false;
+        $includeLeadInfo = $data['include_lead_info'] ?? true;
         $attendeeEmails  = array_filter($data['attendee_emails'] ?? []);
-        unset($data['create_zoom'], $data['sync_calendar'], $data['attendee_emails']);
+        unset($data['create_zoom'], $data['sync_calendar'], $data['include_lead_info'], $data['attendee_emails']);
 
         $visit = DB::transaction(function () use ($data) {
             // Lock the owner to make double clicks/retries idempotent across both entry points.
@@ -787,12 +789,14 @@ class LeadController extends Controller
                     if (!empty($attendeeEmails)) {
                         $desc .= "\n\nPeserta / Tamu:\n- " . implode("\n- ", $attendeeEmails);
                     }
-                    $desc .= "\n\n---\nSales: " . Auth::user()->name;
-                    if ($visit->lead_id) {
-                        $ld = Lead::find($visit->lead_id);
-                        if ($ld) $desc .= "\nLead: {$ld->lead_code} - {$ld->title}";
+                    if ($includeLeadInfo) {
+                        $desc .= "\n\n---\nSales: " . Auth::user()->name;
+                        if ($visit->lead_id) {
+                            $ld = Lead::find($visit->lead_id);
+                            if ($ld) $desc .= "\nLead: {$ld->lead_code} - {$ld->title}";
+                        }
+                        if ($visit->quotation_id) $desc .= "\nQuotation: " . url('/quotations/'.$visit->quotation_id);
                     }
-                    if ($visit->quotation_id) $desc .= "\nQuotation: " . url('/quotations/'.$visit->quotation_id);
 
                     $body = GoogleCalendarService::buildEventBody(
                         $visit->subject,
@@ -839,15 +843,20 @@ class LeadController extends Controller
         WorkflowAccess::visit($request->user(), $visit);
         abort_if($visit->cancelled_at || $visit->checked_in_at, 422, 'Agenda sudah selesai/dibatalkan.');
         $data = $request->validate([
-            'visit_type'   => 'required|string|in:visit,follow_up,demo,presentation,installation,maintenance,leave,other',
-            'subject'      => 'required|string|max:255',
-            'location'     => 'nullable|string|max:255',
-            'scheduled_at' => 'required|date',
-            'end_at'       => 'nullable|date',
-            'is_all_day'   => 'nullable|boolean',
-            'notes'        => 'nullable|string',
-            'outcome'      => 'nullable|string',
+            'visit_type'        => 'required|string|in:visit,follow_up,demo,presentation,installation,maintenance,leave,other',
+            'subject'           => 'required|string|max:255',
+            'location'          => 'nullable|string|max:255',
+            'scheduled_at'      => 'required|date',
+            'end_at'            => 'nullable|date',
+            'is_all_day'        => 'nullable|boolean',
+            'notes'             => 'nullable|string',
+            'outcome'           => 'nullable|string',
+            'include_lead_info' => 'nullable|boolean',
         ]);
+
+        $includeLeadInfo = $data['include_lead_info'] ?? true;
+        $attendeeEmails  = [];
+        unset($data['include_lead_info']);
 
         $isAllDay = !empty($data['is_all_day']);
         $data['is_all_day'] = $isAllDay;
@@ -904,12 +913,14 @@ class LeadController extends Controller
                     if (!empty($attendeeEmails)) {
                         $desc .= "\n\nPeserta / Tamu:\n- " . implode("\n- ", $attendeeEmails);
                     }
-                    $desc .= "\n\n---\nSales: " . Auth::user()->name;
-                    if ($visit->lead_id) {
-                        $ld = Lead::find($visit->lead_id);
-                        if ($ld) $desc .= "\nLead: {$ld->lead_code} - {$ld->title}";
+                    if ($includeLeadInfo) {
+                        $desc .= "\n\n---\nSales: " . Auth::user()->name;
+                        if ($visit->lead_id) {
+                            $ld = Lead::find($visit->lead_id);
+                            if ($ld) $desc .= "\nLead: {$ld->lead_code} - {$ld->title}";
+                        }
+                        if ($visit->quotation_id) $desc .= "\nQuotation: " . url('/quotations/'.$visit->quotation_id);
                     }
-                    if ($visit->quotation_id) $desc .= "\nQuotation: " . url('/quotations/'.$visit->quotation_id);
 
                     $body = GoogleCalendarService::buildEventBody(
                         $visit->subject,
