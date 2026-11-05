@@ -617,10 +617,11 @@ export default function WorkflowPanel({
                             <X className="h-5 w-5 text-surface-400" />
                         </button>
                     </div>
-                    <fieldset
-                        disabled={busy}
-                        className="space-y-4 overflow-y-auto p-5"
-                    >
+                    <div className="flex-1 min-h-0 overflow-y-auto p-5">
+                        <fieldset
+                            disabled={busy}
+                            className="space-y-4"
+                        >
                         {mode === "create" && (
                             <>
                                 <p className="text-sm text-surface-500">
@@ -1092,8 +1093,9 @@ export default function WorkflowPanel({
                                 {error}
                             </p>
                         )}
-                    </fieldset>
-                    <div className="flex justify-end gap-2 border-t border-surface-100 p-4">
+                        </fieldset>
+                    </div>
+                    <div className="flex shrink-0 justify-end gap-2 border-t border-surface-100 bg-surface-50/50 p-4">
                         <button
                             type="button"
                             onClick={close}
