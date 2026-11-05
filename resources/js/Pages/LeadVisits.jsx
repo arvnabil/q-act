@@ -567,90 +567,19 @@ function AddVisitModal({ open, onClose, leads, customers, customerPics = [], goo
                                 : [];
 
                             return (
-                                <div className="pt-2.5 border-t border-surface-200 space-y-2">
+                                <div className="pt-2.5 border-t border-surface-200 space-y-1.5 opacity-80">
                                     <div className="flex items-center justify-between">
-                                        <span className="text-xs font-semibold text-surface-800 flex items-center gap-1.5">
-                                            <Users className="w-3.5 h-3.5 text-blue-600" /> Undang Peserta / Tamu (Google Calendar)
+                                        <span className="text-xs font-semibold text-surface-700 flex items-center gap-1.5">
+                                            <Users className="w-3.5 h-3.5 text-surface-400" /> Undang Peserta / Tamu (Google Calendar)
                                         </span>
-                                        <span className="text-[10px] text-surface-400">Opsional</span>
+                                        <span className="px-2 py-0.5 text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200 rounded-full">
+                                            Coming Soon
+                                        </span>
                                     </div>
-
-                                    {leadPics.length > 0 && (
-                                        <div className="bg-white p-2.5 rounded-lg border border-surface-200 space-y-1">
-                                            <p className="text-[10px] font-semibold text-surface-500 uppercase tracking-wider">Pilih PIC Customer:</p>
-                                            {leadPics.map((p) => {
-                                                const hasEmail = Boolean(p.email);
-                                                const isChecked = hasEmail && (form.attendee_emails || []).includes(p.email.toLowerCase());
-                                                return (
-                                                    <div key={p.id || p.name} className="flex items-center justify-between text-xs py-0.5">
-                                                        <label className={`flex items-center gap-2 ${hasEmail ? "cursor-pointer text-surface-800" : "text-surface-400"}`}>
-                                                            <input
-                                                                type="checkbox"
-                                                                disabled={!hasEmail}
-                                                                checked={isChecked}
-                                                                onChange={(e) => {
-                                                                    if (!hasEmail) return;
-                                                                    if (e.target.checked) {
-                                                                        addAttendeeEmail(p.email);
-                                                                    } else {
-                                                                        removeAttendeeEmail(p.email.toLowerCase());
-                                                                    }
-                                                                }}
-                                                                className="w-3.5 h-3.5 rounded text-blue-600 cursor-pointer disabled:opacity-40"
-                                                            />
-                                                            <span className="font-medium">{p.name}</span>
-                                                            {p.position && <span className="text-surface-400">({p.position})</span>}
-                                                        </label>
-                                                        <span className={`text-[11px] ${hasEmail ? "text-surface-500" : "text-amber-600 font-medium"}`}>
-                                                            {hasEmail ? p.email : "Belum ada email"}
-                                                        </span>
-                                                    </div>
-                                                );
-                                            })}
-                                        </div>
-                                    )}
-
-                                    <div>
-                                        <div className="flex gap-1.5">
-                                            <input
-                                                type="email"
-                                                placeholder="Ketik email tamu (misal: client@gmail.com)"
-                                                value={customEmail}
-                                                onChange={(e) => setCustomEmail(e.target.value)}
-                                                onKeyDown={(e) => {
-                                                    if (e.key === "Enter") {
-                                                        e.preventDefault();
-                                                        addAttendeeEmail();
-                                                    }
-                                                }}
-                                                className="flex-1 text-xs border border-surface-200 rounded-lg px-2.5 py-1.5 outline-none focus:ring-1 focus:ring-blue-500 bg-white"
-                                            />
-                                            <button
-                                                type="button"
-                                                onClick={() => addAttendeeEmail()}
-                                                className="px-2.5 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 font-semibold text-xs rounded-lg border border-blue-200 cursor-pointer"
-                                            >
-                                                + Tambah
-                                            </button>
-                                        </div>
-                                        <p className="text-[10px] text-surface-400 mt-1">Tekan Enter atau klik + Tambah untuk memasukkan email tamu yang akan diundang.</p>
-
-                                        {(form.attendee_emails || []).length > 0 && (
-                                            <div className="flex flex-wrap gap-1.5 mt-2">
-                                                {form.attendee_emails.map((email) => (
-                                                    <span key={email} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] bg-blue-50 text-blue-700 border border-blue-200 font-medium">
-                                                        {email}
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => removeAttendeeEmail(email)}
-                                                            className="hover:text-red-600 cursor-pointer ml-0.5 font-bold"
-                                                        >
-                                                            ×
-                                                        </button>
-                                                    </span>
-                                                ))}
-                                            </div>
-                                        )}
+                                    <div className="p-2.5 bg-surface-50 border border-dashed border-surface-300 rounded-lg text-xs text-surface-500">
+                                        <p className="text-[11px] text-surface-500 leading-relaxed">
+                                            Pengiriman undangan email langsung ke peserta sedang dinonaktifkan sementara dan akan hadir pada pembaruan Google OAuth.
+                                        </p>
                                     </div>
                                 </div>
                             );
