@@ -8,7 +8,7 @@ import axios from 'axios';
 import {
     Search, Plus, Users as UsersIcon, Mail, Phone,
     Edit, Trash2, LayoutGrid, List as ListIcon, Loader2, Box,
-    AlertTriangle, GitMerge, ChevronRight, CheckCircle2, X
+    AlertTriangle, GitMerge, ChevronRight, CheckCircle2, X, Eye
 } from 'lucide-react';
 
 const PAGE_SIZE = 8;
@@ -179,7 +179,7 @@ function MergeDuplicatesModal({ onClose }) {
 }
 
 export default function Customers({ customers }) {
-    const { flash, auth } = usePage().props;
+    const { auth } = usePage().props;
     const isManagerOrAdmin = ['Administrator', 'Sales Manager', 'Manager'].includes(auth?.user?.role);
 
     const [search, setSearch] = useState('');
@@ -270,17 +270,6 @@ export default function Customers({ customers }) {
             <Head title="Customers" />
 
             <div className="animate-fade-in-up">
-                {/* Flash Messages */}
-                {flash?.message && (
-                    <div className="mb-4 px-4 py-3 bg-emerald-50 border border-emerald-200 text-emerald-700 text-sm font-medium rounded-xl">
-                        {flash.message}
-                    </div>
-                )}
-                {flash?.error && (
-                    <div className="mb-4 px-4 py-3 bg-red-50 border border-red-200 text-red-700 text-sm font-medium rounded-xl">
-                        {flash.error}
-                    </div>
-                )}
 
                 {/* Controls */}
                 <div className="bg-white rounded-xl border border-surface-200 mb-5">
@@ -377,8 +366,8 @@ export default function Customers({ customers }) {
                                             const primaryPic = c.pics?.find(p => p.is_primary) || c.pics?.[0];
                                             const isChecked = selectedIds.includes(c.id);
                                             return (
-                                                <tr key={c.id} className={`hover:bg-brand-50/30 transition-colors group ${isChecked ? 'bg-brand-50/20' : ''}`}>
-                                                    <td className="px-5 py-3 text-center">
+                                                <tr key={c.id} onClick={() => router.visit(route('customers.show', c.id))} className={`hover:bg-brand-50/30 transition-colors group cursor-pointer ${isChecked ? 'bg-brand-50/20' : ''}`}>
+                                                    <td className="px-5 py-3 text-center" onClick={e => e.stopPropagation()}>
                                                         <input
                                                             type="checkbox"
                                                             checked={isChecked}
@@ -411,8 +400,15 @@ export default function Customers({ customers }) {
                                                     <td className="px-5 py-4 text-sm font-bold text-brand-700 text-right">
                                                         {formatCurrency(c.total_spend)}
                                                     </td>
-                                                    <td className="px-5 py-4 text-center">
+                                                    <td className="px-5 py-4 text-center" onClick={e => e.stopPropagation()}>
                                                         <div className="flex items-center justify-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                            <button
+                                                                onClick={() => router.visit(route('customers.show', c.id))}
+                                                                className="p-1.5 rounded-lg text-surface-500 hover:bg-surface-100 hover:text-brand-600 transition-colors cursor-pointer"
+                                                                title="Lihat Detail Customer"
+                                                            >
+                                                                <Eye className="w-4 h-4" />
+                                                            </button>
                                                             <button
                                                                 onClick={() => { setCustomerToEdit(c); setIsModalOpen(true); }}
                                                                 className="p-1.5 rounded-lg text-brand-600 hover:bg-brand-100 transition-colors cursor-pointer"
@@ -445,7 +441,7 @@ export default function Customers({ customers }) {
                             {pageItems.map(c => {
                                 const primaryPic = c.pics?.find(p => p.is_primary) || c.pics?.[0];
                                 return (
-                                    <div key={c.id} className="bg-white rounded-xl border border-surface-200 overflow-hidden hover:shadow-md hover:border-surface-300 transition-all flex flex-col group">
+                                    <div key={c.id} onClick={() => router.visit(route('customers.show', c.id))} className="bg-white rounded-xl border border-surface-200 overflow-hidden hover:shadow-md hover:border-brand-300 transition-all flex flex-col group cursor-pointer">
                                         <div className="p-5 border-b border-surface-100 flex-1">
                                             <div className="flex items-start justify-between mb-3">
                                                 <div className="w-10 h-10 rounded-xl bg-brand-50 text-brand-600 flex items-center justify-center shrink-0 text-sm font-extrabold">
@@ -453,13 +449,20 @@ export default function Customers({ customers }) {
                                                 </div>
                                                 <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                                                     <button
-                                                        onClick={() => { setCustomerToEdit(c); setIsModalOpen(true); }}
+                                                        onClick={e => { e.stopPropagation(); router.visit(route('customers.show', c.id)); }}
+                                                        className="text-surface-400 hover:text-brand-600 p-1.5 rounded-lg hover:bg-surface-50 transition-colors cursor-pointer"
+                                                        title="Lihat Detail"
+                                                    >
+                                                        <Eye className="w-4 h-4" />
+                                                    </button>
+                                                    <button
+                                                        onClick={e => { e.stopPropagation(); setCustomerToEdit(c); setIsModalOpen(true); }}
                                                         className="text-surface-400 hover:text-brand-600 p-1.5 rounded-lg hover:bg-surface-50 transition-colors cursor-pointer"
                                                     >
                                                         <Edit className="w-4 h-4" />
                                                     </button>
                                                     <button
-                                                        onClick={() => openSingleDeleteModal(c.id, c.name)}
+                                                        onClick={e => { e.stopPropagation(); openSingleDeleteModal(c.id, c.name); }}
                                                         className="text-surface-400 hover:text-red-600 p-1.5 rounded-lg hover:bg-surface-50 transition-colors cursor-pointer"
                                                     >
                                                         <Trash2 className="w-4 h-4" />
