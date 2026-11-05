@@ -359,7 +359,7 @@ function Timeline({ activities, leadId, currentUserId, isManagerOrAdmin, onActiv
 
     return (
         <div>
-            <QuickLogBar leadId={leadId} onActivityAdded={onActivityAdded} />
+            <WorkflowPanel leadId={leadId} />
 
             {groups.length === 0 ? (
                 <div className="text-center py-12 text-surface-400 bg-surface-50/50 rounded-xl border border-dashed border-surface-200">
@@ -1616,8 +1616,8 @@ export default function LeadDetail({
                             </div>
                         </div>
 
-                        {/* Proyek & Tindak Lanjut */}
-                        <WorkflowPanel leadId={lead.id} />
+                        {/* Catat hasil komunikasi */}
+                        <QuickLogBar leadId={lead.id} onActivityAdded={handleActivityAdded} />
 
                         {/* Notes */}
                         {lead.notes && (
