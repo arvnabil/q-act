@@ -952,7 +952,7 @@ export default function WorkflowPanel({
                                         placeholder="Unit yang dibawa, tim yang bertugas, PIC..."
                                     />
                                 </label>
-                                {mode === "schedule" && (
+                                {(mode === "schedule" || mode === "reschedule") && (
                                     <div className="space-y-2 text-xs">
                                         <p className="text-surface-500">
                                             Kalender internal otomatis
