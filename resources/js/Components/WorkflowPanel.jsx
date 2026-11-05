@@ -152,7 +152,48 @@ export default function WorkflowPanel({ quotationId, leadId, embedded = false, r
                     {pending.length > 0 && mode === 'schedule' && <p className="text-xs text-amber-700">Sudah ada {pending.length} agenda aktif. Simpan akan menambah agenda lain.</p>}
                     <label className="block text-xs font-semibold">Jenis agenda<select value={form.visit_type} onChange={e => setForm({...form,visit_type:e.target.value})} className={`${field} mt-1`}><option value="follow_up">Follow-up</option><option value="visit">Kunjungan</option><option value="demo">Demo</option><option value="other">Meeting online / lainnya</option><option value="presentation">Presentasi</option><option value="installation">Instalasi</option><option value="maintenance">Maintenance</option><option value="leave">Cuti</option></select></label>
                     <label className="block text-xs font-semibold">Tindakan<input required maxLength={255} value={form.subject || ''} onChange={e => setForm({...form,subject:e.target.value})} className={`${field} mt-1`} /></label>
-                    <label className="block text-xs font-semibold">Tanggal & waktu<input type="datetime-local" required value={form.scheduled_at || ''} onChange={e => setForm({...form,scheduled_at:e.target.value})} className={`${field} mt-1`} /></label>
+                    <div className="space-y-2 rounded-xl bg-surface-50 p-3 border border-surface-200">
+    <label className="flex items-center gap-2 text-xs font-semibold text-surface-700 cursor-pointer">
+        <input
+            type="checkbox"
+            checked={Boolean(form.is_all_day)}
+            onChange={e => {
+                const checked = e.target.checked;
+                setForm({
+                    ...form,
+                    is_all_day: checked,
+                    scheduled_at: checked ? (form.scheduled_at ? form.scheduled_at.slice(0, 10) : '') : (form.scheduled_at ? `${form.scheduled_at.slice(0, 10)}T09:00` : ''),
+                    end_at: ''
+                });
+            }}
+            className="rounded border-surface-300 text-brand-600 focus:ring-brand-500"
+        />
+        <span>Kegiatan Seharian / Multi-hari</span>
+    </label>
+    {form.is_all_day ? (
+        <div className="grid grid-cols-2 gap-2">
+            <label className="block text-xs font-semibold">
+                Tgl mulai <span className="text-red-500">*</span>
+                <input type="date" required value={form.scheduled_at?.slice(0, 10) || ''} onChange={e => setForm({...form, scheduled_at: e.target.value})} className={`${field} mt-1`} />
+            </label>
+            <label className="block text-xs font-semibold">
+                Tgl selesai (opsional)
+                <input type="date" min={form.scheduled_at?.slice(0, 10) || ''} value={form.end_at?.slice(0, 10) || ''} onChange={e => setForm({...form, end_at: e.target.value})} className={`${field} mt-1`} />
+            </label>
+        </div>
+    ) : (
+        <div className="grid grid-cols-2 gap-2">
+            <label className="block text-xs font-semibold">
+                Waktu mulai <span className="text-red-500">*</span>
+                <input type="datetime-local" required value={form.scheduled_at || ''} onChange={e => setForm({...form, scheduled_at: e.target.value})} className={`${field} mt-1`} />
+            </label>
+            <label className="block text-xs font-semibold">
+                Waktu selesai (opsional)
+                <input type="datetime-local" min={form.scheduled_at || ''} value={form.end_at || ''} onChange={e => setForm({...form, end_at: e.target.value})} className={`${field} mt-1`} />
+            </label>
+        </div>
+    )}
+</div>
                     <label className="block text-xs font-semibold">Lokasi / catatan (opsional)<input value={form.location || ''} maxLength={255} onChange={e => setForm({...form,location:e.target.value})} className={`${field} mt-1`} /></label>
                     {mode === 'schedule' && <div className="space-y-2 text-xs"><p className="text-surface-500">Kalender internal otomatis diperbarui. Integrasi berikut opsional:</p><label className="flex items-center gap-2"><input type="checkbox" disabled={!data?.calendarConfigured} checked={!!form.sync_calendar} onChange={e => setForm({...form,sync_calendar:e.target.checked})} />Sinkronkan Google Calendar {!data?.calendarConfigured && '(belum terhubung)'}</label><label className="flex items-center gap-2"><input type="checkbox" disabled={!data?.zoomConfigured} checked={!!form.create_zoom} onChange={e => setForm({...form,create_zoom:e.target.checked})} />Buat tautan Zoom {!data?.zoomConfigured && '(belum tersedia)'}</label></div>}
                 </>}
