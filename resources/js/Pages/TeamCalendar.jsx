@@ -342,21 +342,28 @@ export default function TeamCalendar({
                                             const isSpan = ev._isSpan;
                                             const isFirst = ev._isFirst;
                                             const isLast = ev._isLast;
+                                            const isMonday = cell.date.getDay() === 1;
                                             return (
                                                 <button
                                                     key={`${ev.id}-${idx}`}
                                                     type="button"
                                                     onClick={() => setSelectedEvent(ev)}
+                                                    title={`${ev.subject}${ev.customer?.name ? ` • ${ev.customer.name}` : ''}`}
                                                     className={`w-full text-left px-1.5 py-0.5 text-[11px] font-medium border transition-all flex items-center gap-1 cursor-pointer hover:shadow-2xs ${typeMeta.bg} ${
                                                         isSpan
                                                             ? isFirst ? 'rounded-l rounded-r-none border-r-0' : isLast ? 'rounded-r rounded-l-none border-l-0' : 'rounded-none border-x-0'
                                                             : 'rounded'
                                                     }`}
                                                 >
-                                                    {(!isSpan || isFirst) && <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${typeMeta.dot}`} />}
-                                                    {(!isSpan || isFirst) && <span className="truncate flex-1 font-semibold">{ev.subject}</span>}
-                                                    {isSpan && !isFirst && <span className="flex-1" />}
-                                                    {ev.is_all_day && (!isSpan || isFirst) && <span className="text-[9px] font-bold opacity-60">ALL-DAY</span>}
+                                                    {(!isSpan || isFirst || isMonday) && <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${typeMeta.dot}`} />}
+                                                    {(!isSpan || isFirst) ? (
+                                                        <span className="truncate flex-1 font-semibold">{ev.subject}</span>
+                                                    ) : (
+                                                        <span className="truncate flex-1 text-[10px] font-medium opacity-85">
+                                                            {isMonday ? `↳ ${ev.subject}` : ev.subject}
+                                                        </span>
+                                                    )}
+                                                    {ev.is_all_day && (!isSpan || isFirst) && <span className="text-[9px] font-bold opacity-60 shrink-0">ALL-DAY</span>}
                                                     {ev.zoom_join_url && (!isSpan || isFirst) && <Video className="w-2.5 h-2.5 text-sky-600 shrink-0" />}
                                                 </button>
                                             );
@@ -449,6 +456,21 @@ export default function TeamCalendar({
                                             className="text-xs font-bold text-brand-700 hover:underline flex items-center gap-1"
                                         >
                                             Buka Lead <ExternalLink className="w-3 h-3" />
+                                        </Link>
+                                    </div>
+                                )}
+
+                                {selectedEvent.quotation_id && (
+                                    <div className="flex items-center justify-between bg-emerald-50/60 p-2.5 rounded-lg border border-emerald-100">
+                                        <div>
+                                            <p className="text-[10px] text-emerald-600 font-bold uppercase tracking-wider">Terkait Quotation</p>
+                                            <p className="font-bold text-surface-800 text-xs">{selectedEvent.quotation_id}</p>
+                                        </div>
+                                        <Link
+                                            href={`/quotations/${encodeURIComponent(selectedEvent.quotation_id)}`}
+                                            className="text-xs font-bold text-emerald-700 hover:underline flex items-center gap-1"
+                                        >
+                                            Buka Quotation <ExternalLink className="w-3 h-3" />
                                         </Link>
                                     </div>
                                 )}

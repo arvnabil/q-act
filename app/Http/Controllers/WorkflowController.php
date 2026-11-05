@@ -52,8 +52,13 @@ class WorkflowController extends Controller
             $pics = $quotation->customer->pics()->select('id', 'name', 'email', 'position', 'phone')->get();
         }
 
+        $customerName = $quotation
+            ? ($quotation->customer?->name ?: ($lead?->customer?->name ?: $lead?->customer_name ?: ''))
+            : ($lead?->customer?->name ?: $lead?->customer_name ?: '');
+
         return [
             'lead' => $lead?->only('id', 'title', 'lead_code'),
+            'customerName' => $customerName,
             'visits' => $visits->whereIn('user_id', WorkflowAccess::ids($request->user()))->orderBy('scheduled_at')->get(),
             'canManage' => WorkflowAccess::canManage($request->user()),
             'canSchedule' => WorkflowAccess::canSchedule($request->user()),

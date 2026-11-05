@@ -720,6 +720,12 @@ class LeadController extends Controller
                 $data['customer_id'] = $ld->customer_id;
             }
         }
+        if (!empty($data['quotation_id']) && empty($data['customer_id'])) {
+            $q = Quotation::find($data['quotation_id']);
+            if ($q && $q->customer_id) {
+                $data['customer_id'] = $q->customer_id;
+            }
+        }
 
         // Clean out extra form flags before creating model
         $createZoom      = !empty($data['create_zoom']);

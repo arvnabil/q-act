@@ -175,7 +175,11 @@ export default function WorkflowPanel({
                       ),
                   }
                 : {
-                      subject: `Follow-up ${quotationId || data?.lead?.title || "peluang"}`,
+                      subject: quotationId
+                          ? ((data?.customerName || data?.lead?.title)
+                              ? `Follow-up ${quotationId} - ${data?.customerName || data?.lead?.title}`
+                              : `Follow-up ${quotationId}`)
+                          : `Follow-up ${data?.lead?.title || "peluang"}`,
                       scheduled_at: localInput(tomorrow),
                       end_at: "",
                       is_all_day: false,
