@@ -875,7 +875,7 @@ function PicsTab({ lead, pics, onOpenAdd }) {
 
 // ─── Schedule Visit Modal ─────────────────────────────────────────────────────────
 
-function ScheduleVisitModal({ open, onClose, lead, googleCalendarConfigured, zoomConfigured }) {
+function ScheduleVisitModal({ open, onClose, lead, customerPics = [], googleCalendarConfigured, zoomConfigured }) {
     const [form, setForm] = useState({
         visit_type: 'visit',
         subject: '',
@@ -886,6 +886,7 @@ function ScheduleVisitModal({ open, onClose, lead, googleCalendarConfigured, zoo
         notes: '',
         sync_calendar: Boolean(googleCalendarConfigured),
         create_zoom: Boolean(zoomConfigured),
+        attendee_emails: [],
     });
     const [submitting, setSubmitting] = useState(false);
 
@@ -906,6 +907,7 @@ function ScheduleVisitModal({ open, onClose, lead, googleCalendarConfigured, zoo
                 notes: '',
                 sync_calendar: Boolean(googleCalendarConfigured),
                 create_zoom: Boolean(zoomConfigured),
+                attendee_emails: [],
             });
         }
     }, [open, lead, googleCalendarConfigured, zoomConfigured]);
@@ -927,6 +929,7 @@ function ScheduleVisitModal({ open, onClose, lead, googleCalendarConfigured, zoo
             notes: form.notes,
             sync_calendar: form.sync_calendar,
             create_zoom: form.create_zoom,
+            attendee_emails: form.attendee_emails,
         }, {
             preserveScroll: true,
             onSuccess: () => {
@@ -1112,6 +1115,37 @@ function ScheduleVisitModal({ open, onClose, lead, googleCalendarConfigured, zoo
                                 </div>
                             </label>
                         )}
+
+                        {/* PIC Attendees */}
+                        {form.sync_calendar && (() => {
+                            const availablePics = (customerPics || []).filter(p => p.email);
+                            if (!availablePics.length) return null;
+                            return (
+                                <div className="pt-2 border-t border-surface-200">
+                                    <p className="text-xs font-semibold text-surface-700 mb-1.5">Undang PIC Customer ke Google Calendar (opsional):</p>
+                                    <div className="space-y-1">
+                                        {availablePics.map(p => (
+                                            <label key={p.id} className="flex items-center gap-2 text-xs cursor-pointer">
+                                                <input
+                                                    type="checkbox"
+                                                    className="w-3.5 h-3.5 rounded text-blue-600 cursor-pointer"
+                                                    checked={form.attendee_emails.includes(p.email)}
+                                                    onChange={e => setForm(f => ({
+                                                        ...f,
+                                                        attendee_emails: e.target.checked
+                                                            ? [...f.attendee_emails, p.email]
+                                                            : f.attendee_emails.filter(em => em !== p.email)
+                                                    }))}
+                                                />
+                                                <span className="text-surface-700 font-medium">{p.name}</span>
+                                                <span className="text-surface-400">{p.email}</span>
+                                                {p.position && <span className="text-surface-400">({p.position})</span>}
+                                            </label>
+                                        ))}
+                                    </div>
+                                </div>
+                            );
+                        })()}
                     </div>
 
                     <div className="flex justify-end gap-2 pt-2 border-t border-surface-100">
@@ -1672,6 +1706,7 @@ export default function LeadDetail({
                 open={showScheduleModal}
                 onClose={() => setShowScheduleModal(false)}
                 lead={lead}
+                customerPics={customerPics}
                 googleCalendarConfigured={googleCalendarConfigured}
                 zoomConfigured={zoomConfigured}
             />

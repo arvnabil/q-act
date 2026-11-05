@@ -265,12 +265,13 @@ function CalendarPlaceholder() {
 
 // ─── Add Visit Modal ──────────────────────────────────────────────────────────────
 
-function AddVisitModal({ open, onClose, leads, customers, googleCalendarConfigured, zoomConfigured, userHasZoomLicense }) {
+function AddVisitModal({ open, onClose, leads, customers, customerPics = [], googleCalendarConfigured, zoomConfigured, userHasZoomLicense }) {
     const [form, setForm] = useState({
         lead_id: '', customer_id: '', visit_type: 'visit',
         subject: '', location: '', scheduled_at: '', end_at: '', is_all_day: false, notes: '',
         sync_calendar: googleCalendarConfigured,
         create_zoom: false,
+        attendee_emails: [],
     });
     const [submitting, setSubmitting] = useState(false);
     const [showDirectCustomer, setShowDirectCustomer] = useState(false);
@@ -283,6 +284,7 @@ function AddVisitModal({ open, onClose, leads, customers, googleCalendarConfigur
                 ...f,
                 sync_calendar: Boolean(googleCalendarConfigured),
                 create_zoom: Boolean(canCreateZoom),
+                attendee_emails: [],
             }));
         }
     }, [open, googleCalendarConfigured, canCreateZoom]);
@@ -532,6 +534,42 @@ function AddVisitModal({ open, onClose, leads, customers, googleCalendarConfigur
                                 </span>
                             </label>
                         )}
+
+                        {/* PIC Attendees */}
+                        {form.sync_calendar && (() => {
+                            const leadPics = form.lead_id
+                                ? customerPics.filter(p => {
+                                    const lead = leads.find(l => String(l.id) === String(form.lead_id));
+                                    return lead && String(p.customer_id) === String(lead.customer_id);
+                                  })
+                                : form.customer_id
+                                ? customerPics.filter(p => String(p.customer_id) === String(form.customer_id))
+                                : [];
+                            if (!leadPics.length) return null;
+                            return (
+                                <div className="pt-2 border-t border-surface-200">
+                                    <p className="text-xs font-semibold text-surface-700 mb-1.5">Undang PIC Customer ke Google Calendar (opsional):</p>
+                                    <div className="space-y-1">
+                                        {leadPics.map(p => (
+                                            <label key={p.id} className="flex items-center gap-2 text-xs cursor-pointer">
+                                                <input
+                                                    type="checkbox"
+                                                    className="w-3.5 h-3.5 rounded text-blue-600 cursor-pointer"
+                                                    checked={form.attendee_emails.includes(p.email)}
+                                                    onChange={e => set('attendee_emails', e.target.checked
+                                                        ? [...form.attendee_emails, p.email]
+                                                        : form.attendee_emails.filter(em => em !== p.email)
+                                                    )}
+                                                />
+                                                <span className="text-surface-700 font-medium">{p.name}</span>
+                                                <span className="text-surface-400">{p.email}</span>
+                                                {p.position && <span className="text-surface-400">({p.position})</span>}
+                                            </label>
+                                        ))}
+                                    </div>
+                                </div>
+                            );
+                        })()}
                     </div>
 
                     <div className="flex justify-end gap-2 pt-2 border-t border-surface-100">
@@ -557,7 +595,8 @@ export default function LeadVisits({
     stats = {}, 
     todayVisit = null, 
     leads = [], 
-    customers = [], 
+    customers = [],
+    customerPics = [],
     isManagerOrAdmin = false,
     googleCalendarConfigured = false,
     zoomConfigured = false,
@@ -702,6 +741,7 @@ export default function LeadVisits({
                 onClose={() => setShowForm(false)}
                 leads={leads}
                 customers={customers}
+                customerPics={customerPics}
                 googleCalendarConfigured={googleCalendarConfigured}
                 zoomConfigured={zoomConfigured}
                 userHasZoomLicense={userHasZoomLicense}

@@ -36,6 +36,7 @@ export default function TeamCalendar({
     users = [],
     leads = [],
     customers = [],
+    customerPics = [],
     isManagerOrAdmin = false,
     googleCalendarConfigured = false,
     zoomConfigured = false,
@@ -529,6 +530,7 @@ export default function TeamCalendar({
                     onClose={() => setShowAddModal(false)}
                     leads={leads}
                     customers={customers}
+                    customerPics={customerPics}
                     initialDate={initialDateForAdd}
                     googleCalendarConfigured={googleCalendarConfigured}
                     zoomConfigured={zoomConfigured}
@@ -540,7 +542,7 @@ export default function TeamCalendar({
 
 // ─── Add Calendar Visit Modal ─────────────────────────────────────────────────────
 
-function AddCalendarVisitModal({ open, onClose, leads, customers, initialDate, googleCalendarConfigured, zoomConfigured }) {
+function AddCalendarVisitModal({ open, onClose, leads, customers, customerPics = [], initialDate, googleCalendarConfigured, zoomConfigured }) {
     const [form, setForm] = useState({
         lead_id: '',
         customer_id: '',
@@ -553,6 +555,7 @@ function AddCalendarVisitModal({ open, onClose, leads, customers, initialDate, g
         notes: '',
         sync_calendar: Boolean(googleCalendarConfigured),
         create_zoom: Boolean(zoomConfigured),
+        attendee_emails: [],
     });
     const [submitting, setSubmitting] = useState(false);
 
@@ -565,6 +568,7 @@ function AddCalendarVisitModal({ open, onClose, leads, customers, initialDate, g
                 is_all_day: false,
                 sync_calendar: Boolean(googleCalendarConfigured),
                 create_zoom: Boolean(zoomConfigured),
+                attendee_emails: [],
             }));
         }
     }, [open, initialDate, googleCalendarConfigured, zoomConfigured]);
@@ -796,6 +800,44 @@ function AddCalendarVisitModal({ open, onClose, leads, customers, initialDate, g
                                 </span>
                             </label>
                         )}
+
+                        {/* PIC Attendees */}
+                        {form.sync_calendar && (() => {
+                            const calPics = form.lead_id
+                                ? customerPics.filter(p => {
+                                    const lead = leads.find(l => String(l.id) === String(form.lead_id));
+                                    return lead && String(p.customer_id) === String(lead.customer_id);
+                                  })
+                                : form.customer_id
+                                ? customerPics.filter(p => String(p.customer_id) === String(form.customer_id))
+                                : [];
+                            if (!calPics.length) return null;
+                            return (
+                                <div className="pt-2 border-t border-surface-200">
+                                    <p className="text-xs font-semibold text-surface-700 mb-1.5">Undang PIC Customer ke Google Calendar (opsional):</p>
+                                    <div className="space-y-1">
+                                        {calPics.map(p => (
+                                            <label key={p.id} className="flex items-center gap-2 text-xs cursor-pointer">
+                                                <input
+                                                    type="checkbox"
+                                                    className="w-3.5 h-3.5 rounded text-blue-600 cursor-pointer"
+                                                    checked={form.attendee_emails.includes(p.email)}
+                                                    onChange={e => setForm(f => ({
+                                                        ...f,
+                                                        attendee_emails: e.target.checked
+                                                            ? [...f.attendee_emails, p.email]
+                                                            : f.attendee_emails.filter(em => em !== p.email)
+                                                    }))}
+                                                />
+                                                <span className="text-surface-700 font-medium">{p.name}</span>
+                                                <span className="text-surface-400">{p.email}</span>
+                                                {p.position && <span className="text-surface-400">({p.position})</span>}
+                                            </label>
+                                        ))}
+                                    </div>
+                                </div>
+                            );
+                        })()}
                     </div>
 
                     <div className="flex justify-end gap-2 pt-2 border-t border-surface-100">

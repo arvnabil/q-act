@@ -62,6 +62,9 @@ export default function WorkflowPanel({ quotationId, leadId, embedded = false, r
             scheduled_at: visit.is_all_day && visit.scheduled_at ? visit.scheduled_at.slice(0, 10) : localInput(visit.scheduled_at),
             end_at: visit.end_at ? (visit.is_all_day ? visit.end_at.slice(0, 10) : localInput(visit.end_at)) : '',
             is_all_day: Boolean(visit.is_all_day),
+            notes: visit.notes || '',
+            location: visit.location || '',
+            attendee_emails: [],
             sync_calendar: Boolean(visit?.google_calendar_event_id || data?.calendarConfigured),
             create_zoom: Boolean(visit?.zoom_meeting_id || data?.zoomConfigured)
         } : {
@@ -72,6 +75,7 @@ export default function WorkflowPanel({ quotationId, leadId, embedded = false, r
             visit_type: 'follow_up',
             location: '',
             notes: '',
+            attendee_emails: [],
             sync_calendar: Boolean(data?.calendarConfigured),
             create_zoom: Boolean(data?.zoomConfigured),
         });
@@ -194,8 +198,35 @@ export default function WorkflowPanel({ quotationId, leadId, embedded = false, r
         </div>
     )}
 </div>
-                    <label className="block text-xs font-semibold">Lokasi / catatan (opsional)<input value={form.location || ''} maxLength={255} onChange={e => setForm({...form,location:e.target.value})} className={`${field} mt-1`} /></label>
-                    {mode === 'schedule' && <div className="space-y-2 text-xs"><p className="text-surface-500">Kalender internal otomatis diperbarui. Integrasi berikut opsional:</p><label className="flex items-center gap-2"><input type="checkbox" disabled={!data?.calendarConfigured} checked={!!form.sync_calendar} onChange={e => setForm({...form,sync_calendar:e.target.checked})} />Sinkronkan Google Calendar {!data?.calendarConfigured && '(belum terhubung)'}</label><label className="flex items-center gap-2"><input type="checkbox" disabled={!data?.zoomConfigured} checked={!!form.create_zoom} onChange={e => setForm({...form,create_zoom:e.target.checked})} />Buat tautan Zoom {!data?.zoomConfigured && '(belum tersedia)'}</label></div>}
+                    <label className="block text-xs font-semibold">Lokasi (opsional)<input value={form.location || ''} maxLength={255} onChange={e => setForm({...form,location:e.target.value})} className={`${field} mt-1`} placeholder="Alamat, Google Meet, dll" /></label>
+                    <label className="block text-xs font-semibold">Catatan / Deskripsi Agenda (opsional)<textarea rows={3} value={form.notes || ''} onChange={e => setForm({...form,notes:e.target.value})} className={`${field} mt-1 resize-none`} placeholder="Unit yang dibawa, tim yang bertugas, PIC..." /></label>
+                    {mode === 'schedule' && <div className="space-y-2 text-xs"><p className="text-surface-500">Kalender internal otomatis diperbarui. Integrasi berikut opsional:</p><label className="flex items-center gap-2"><input type="checkbox" disabled={!data?.calendarConfigured} checked={!!form.sync_calendar} onChange={e => setForm({...form,sync_calendar:e.target.checked})} />Sinkronkan Google Calendar {!data?.calendarConfigured && '(belum terhubung)'}</label><label className="flex items-center gap-2"><input type="checkbox" disabled={!data?.zoomConfigured} checked={!!form.create_zoom} onChange={e => setForm({...form,create_zoom:e.target.checked})} />Buat tautan Zoom {!data?.zoomConfigured && '(belum tersedia)'}</label>
+                    {form.sync_calendar && (data?.pics || []).length > 0 && (
+                        <div className="pt-2 border-t border-surface-200">
+                            <p className="text-xs font-semibold text-surface-700 mb-1.5">Undang PIC Customer ke Google Calendar (opsional):</p>
+                            <div className="space-y-1">
+                                {data.pics.map(p => (
+                                    <label key={p.id} className="flex items-center gap-2 text-xs cursor-pointer">
+                                        <input
+                                            type="checkbox"
+                                            className="w-3.5 h-3.5 rounded text-blue-600 cursor-pointer"
+                                            checked={(form.attendee_emails || []).includes(p.email)}
+                                            onChange={e => setForm(f => ({
+                                                ...f,
+                                                attendee_emails: e.target.checked
+                                                    ? [...(f.attendee_emails || []), p.email]
+                                                    : (f.attendee_emails || []).filter(em => em !== p.email)
+                                            }))}
+                                        />
+                                        <span className="text-surface-700 font-medium">{p.name}</span>
+                                        <span className="text-surface-400">{p.email}</span>
+                                        {p.position && <span className="text-surface-400">({p.position})</span>}
+                                    </label>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+                    </div>}
                 </>}
                 {error && <p role="alert" className="text-xs text-red-600">{error}</p>}
             </fieldset>

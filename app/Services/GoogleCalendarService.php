@@ -155,7 +155,8 @@ class GoogleCalendarService
         string $endDatetime,
         ?string $location = null,
         ?string $zoomJoinUrl = null,
-        bool $isAllDay = false
+        bool $isAllDay = false,
+        ?array $attendees = null
     ): array {
         if ($zoomJoinUrl) {
             $description .= "\n\n🎥 Zoom Meeting: {$zoomJoinUrl}";
@@ -179,6 +180,10 @@ class GoogleCalendarService
 
         if ($location) {
             $body['location'] = $location;
+        }
+
+        if (!empty($attendees)) {
+            $body['attendees'] = array_map(fn($email) => ['email' => $email], array_filter($attendees));
         }
 
         return $body;

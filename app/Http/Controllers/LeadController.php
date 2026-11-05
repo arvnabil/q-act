@@ -630,12 +630,15 @@ class LeadController extends Controller
 
         $todayVisit = $visits->first(fn($v) => $v->scheduled_at->toDateString() === $today);
 
+        $leadsForVisits = WorkflowAccess::leads($request->user())->active()->select('id', 'title', 'lead_code', 'customer_id', 'customer_name')->with('customer:id,name')->orderBy('title')->get();
+        $customerIds    = $leadsForVisits->pluck('customer_id')->filter()->unique()->values()->all();
         return Inertia::render('LeadVisits', [
             'visits'                   => $visits,
             'stats'                    => $stats,
             'todayVisit'               => $todayVisit,
-            'leads'                    => WorkflowAccess::leads($request->user())->active()->select('id', 'title', 'lead_code', 'customer_id', 'customer_name')->with('customer:id,name')->orderBy('title')->get(),
+            'leads'                    => $leadsForVisits,
             'customers'                => DocumentVisibility::apply(Customer::query(), $request->user(), 'customers')->select('id', 'name')->orderBy('name')->get(),
+            'customerPics'             => \App\Models\CustomerPic::whereIn('customer_id', $customerIds)->whereNotNull('email')->select('id', 'customer_id', 'name', 'email', 'position', 'phone')->get(),
             'isManagerOrAdmin'         => $isManagerOrAdmin,
             'googleCalendarConfigured' => (new GoogleCalendarService())->isConfigured(),
             'zoomConfigured'           => (new ZoomService())->isConfigured(),
@@ -659,8 +662,10 @@ class LeadController extends Controller
             'end_at'       => 'nullable|date',
             'is_all_day'   => 'nullable|boolean',
             'notes'        => 'nullable|string',
-            'create_zoom'  => 'nullable|boolean',
-            'sync_calendar'=> 'nullable|boolean',
+            'create_zoom'   => 'nullable|boolean',
+            'sync_calendar' => 'nullable|boolean',
+            'attendee_emails'   => 'nullable|array',
+            'attendee_emails.*' => 'email',
         ]);
 
         if (!empty($data['quotation_id'])) {
@@ -715,9 +720,10 @@ class LeadController extends Controller
         }
 
         // Clean out extra form flags before creating model
-        $createZoom   = !empty($data['create_zoom']);
-        $syncCalendar = $data['sync_calendar'] ?? false;
-        unset($data['create_zoom'], $data['sync_calendar']);
+        $createZoom      = !empty($data['create_zoom']);
+        $syncCalendar    = $data['sync_calendar'] ?? false;
+        $attendeeEmails  = array_filter($data['attendee_emails'] ?? []);
+        unset($data['create_zoom'], $data['sync_calendar'], $data['attendee_emails']);
 
         $visit = DB::transaction(function () use ($data) {
             // Lock the owner to make double clicks/retries idempotent across both entry points.
@@ -766,11 +772,16 @@ class LeadController extends Controller
                         $gEnd   = $endCarbon->toIso8601String();
                     }
 
-                    $desc = ($visit->notes ?? '') . ($visit->quotation_id ? "\nQuotation: ".url('/quotations/'.$visit->quotation_id) : '') . "\n\nSales: " . Auth::user()->name;
+                    $notes = trim($visit->notes ?? '');
+                    $desc  = $visit->subject . "\n";
+                    if ($visit->location) $desc .= "\nLokasi: " . $visit->location;
+                    if ($notes) $desc .= "\n\n" . $notes;
+                    $desc .= "\n\n---\nSales: " . Auth::user()->name;
                     if ($visit->lead_id) {
                         $ld = Lead::find($visit->lead_id);
-                        if ($ld) $desc .= "\nLead: {$ld->title} ({$ld->lead_code})";
+                        if ($ld) $desc .= "\nLead: {$ld->lead_code} - {$ld->title}";
                     }
+                    if ($visit->quotation_id) $desc .= "\nQuotation: " . url('/quotations/'.$visit->quotation_id);
 
                     $body = GoogleCalendarService::buildEventBody(
                         $visit->subject,
@@ -779,7 +790,8 @@ class LeadController extends Controller
                         $gEnd,
                         $visit->location,
                         $visit->zoom_join_url,
-                        $isAllDay
+                        $isAllDay,
+                        $attendeeEmails ?: null
                     );
 
                     $eventId = $calendarService->createEvent($body);
@@ -874,11 +886,16 @@ class LeadController extends Controller
                         $gEnd   = Carbon::parse($visit->end_at ?: $visit->scheduled_at)->toIso8601String();
                     }
 
-                    $desc = ($visit->notes ?? '');
+                    $notes = trim($visit->notes ?? '');
+                    $desc  = $visit->subject . "\n";
+                    if ($visit->location) $desc .= "\nLokasi: " . $visit->location;
+                    if ($notes) $desc .= "\n\n" . $notes;
+                    $desc .= "\n\n---\nSales: " . Auth::user()->name;
                     if ($visit->lead_id) {
                         $ld = Lead::find($visit->lead_id);
-                        if ($ld) $desc .= "\nLead: {$ld->title} ({$ld->lead_code})";
+                        if ($ld) $desc .= "\nLead: {$ld->lead_code} - {$ld->title}";
                     }
+                    if ($visit->quotation_id) $desc .= "\nQuotation: " . url('/quotations/'.$visit->quotation_id);
 
                     $body = GoogleCalendarService::buildEventBody(
                         $visit->subject,
@@ -1057,6 +1074,7 @@ class LeadController extends Controller
         $userBuIds = \App\Models\BusinessUnitMember::where('user_id', $user->id)->pluck('business_unit_id');
         $buUserIds = \App\Models\BusinessUnitMember::whereIn('business_unit_id', $userBuIds)->pluck('user_id')->unique()->values()->all();
 
+        $calCustomerIds = $leads->pluck('customer_id')->filter()->unique()->values()->all();
         return Inertia::render('TeamCalendar', [
             'calendarScope'            => $calendarScope,
             'buUserIds'                => $buUserIds,
@@ -1064,6 +1082,7 @@ class LeadController extends Controller
             'users'                    => $users,
             'leads'                    => $leads,
             'customers'                => $customers,
+            'customerPics'             => \App\Models\CustomerPic::whereIn('customer_id', $calCustomerIds)->whereNotNull('email')->select('id', 'customer_id', 'name', 'email', 'position', 'phone')->get(),
             'isManagerOrAdmin'         => $isManagerOrAdmin,
             'googleCalendarConfigured' => $googleCalendarConfigured,
             'zoomConfigured'           => $zoomConfigured,
