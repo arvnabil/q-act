@@ -1,5 +1,5 @@
 import useAgendaCancellation from '@/Components/useAgendaCancellation';
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Head, router, Link, usePage } from '@inertiajs/react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import {
