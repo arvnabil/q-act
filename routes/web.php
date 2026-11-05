@@ -45,6 +45,11 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // Dynamic customer routes
     Route::get('/customers/{customer}', [CustomerController::class, 'show'])->name('customers.show');
     Route::post('/customers/{customer}/pics', [CustomerController::class, 'storePic'])->name('customers.pics.store');
+    Route::get('/customers/{customer}/npwp-document', [CustomerController::class, 'npwpDocument'])->name('customers.npwp-document');
+    Route::put('/customers/{customer}/pics/{pic}', [CustomerController::class, 'updatePic'])->name('customers.pics.update');
+    Route::delete('/customers/{customer}/pics/{pic}', [CustomerController::class, 'destroyPic'])->name('customers.pics.destroy');
+    Route::put('/customers/{customer}/pics/{pic}/profile', [CustomerController::class, 'updatePicProfile'])->name('customers.pics.profile.update');
+    Route::put('/customers/{customer}/profile', [CustomerController::class, 'updateProfile'])->name('customers.profile.update');
     Route::put('/customers/{customer}', [CustomerController::class, 'update'])->name('customers.update');
     Route::delete('/customers/{customer}', [CustomerController::class, 'destroy'])->name('customers.destroy');
 
@@ -62,6 +67,11 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('/brands', [BrandController::class, 'store'])->name('brands.store');
     Route::put('/brands/{brand}', [BrandController::class, 'update'])->name('brands.update');
     Route::delete('/brands/{brand}', [BrandController::class, 'destroy'])->name('brands.destroy');
+
+    Route::get('/workflow/quotations/{quotation}', [\App\Http\Controllers\WorkflowController::class, 'quotation']);
+    Route::post('/workflow/quotations/{quotation}/lead', [\App\Http\Controllers\WorkflowController::class, 'link']);
+    Route::get('/workflow/leads/{lead}', [\App\Http\Controllers\WorkflowController::class, 'lead']);
+    Route::post('/workflow/visits/{visit}/cancel', [\App\Http\Controllers\WorkflowController::class, 'cancel']);
 
     // Quotations
     Route::get('/quotations', [QuotationController::class, 'index'])->name('quotations.index');

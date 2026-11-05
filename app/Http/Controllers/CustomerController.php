@@ -98,17 +98,153 @@ class CustomerController extends Controller
                 'id'      => $customer->id,
                 'name'    => $customer->name,
                 'address' => $customer->address,
+                'crm_profile' => $customer->crm_profile ?? [],
                 'pics'    => $customer->pics->map(fn($p) => [
                     'id'         => $p->id,
                     'name'       => $p->name,
                     'email'      => $p->email,
                     'phone'      => $p->phone,
+                    'position'   => $p->position,
                     'is_primary' => (bool) $p->is_primary,
+                    'crm_profile' => $p->crm_profile ?? [],
                 ]),
             ],
             'quotations'  => $quotations,
             'salesOrders' => $salesOrders,
         ]);
+    }
+
+
+    public function updateProfile(Request $request, Customer $customer)
+    {
+        abort_unless(\App\Services\DocumentVisibility::allows($request->user(), 'customers_edit'), 403);
+        \App\Services\DocumentVisibility::authorize($request->user(), 'customers', $customer);
+        $rules = [];
+        foreach (['legal_name', 'industry', 'npwp', 'tax_name', 'source', 'category'] as $field) {
+            $rules[$field] = 'nullable|string|max:255';
+        }
+        foreach (['address', 'billing_address', 'shipping_address', 'tax_address', 'billing_instructions', 'notes'] as $field) {
+            $rules[$field] = 'nullable|string|max:5000';
+        }
+        foreach (['website', 'procurement_website', 'instagram', 'linkedin', 'facebook', 'youtube', 'tiktok', 'x'] as $field) {
+            $rules[$field] = ['nullable', 'url:http,https', 'max:2048'];
+        }
+        $rules['anniversary'] = 'nullable|date_format:Y-m-d|before_or_equal:today';
+        $rules['company_email'] = 'nullable|email|max:255';
+        $rules['billing_email'] = 'nullable|email|max:255';
+        $rules['company_phone'] = 'nullable|string|max:50';
+        $rules['payment_terms_days'] = 'nullable|integer|min:0|max:365';
+        $rules['billing_same_as_office'] = 'required|boolean';
+        $rules['shipping_same_as_office'] = 'required|boolean';
+        $rules['npwp_file'] = 'nullable|file|mimes:pdf,jpg,jpeg,png,webp|max:3072';
+        $rules['remove_npwp_file'] = 'sometimes|boolean';
+        $data = $request->validate($rules);
+        $disk = \Illuminate\Support\Facades\Storage::disk('local');
+        $old = $customer->crm_profile['npwp_document'] ?? null;
+        $newPath = null;
+        if ($request->hasFile('npwp_file')) {
+            $newPath = $request->file('npwp_file')->store('customer-npwp', 'local');
+            abort_unless($newPath, 500, 'Dokumen NPWP gagal disimpan.');
+        }
+        try {
+            DB::transaction(function () use ($customer, $request, $data, $newPath) {
+                $locked = Customer::whereKey($customer->id)->lockForUpdate()->firstOrFail();
+                $profile = array_merge($locked->crm_profile ?? [], \Illuminate\Support\Arr::except($data, ['address', 'npwp_file', 'remove_npwp_file']));
+                if ($request->boolean('remove_npwp_file')) unset($profile['npwp_document']);
+                if ($newPath) $profile['npwp_document'] = ['path' => $newPath, 'name' => $request->file('npwp_file')->getClientOriginalName()];
+                $updates = ['crm_profile' => $profile];
+                if (array_key_exists('address', $data)) $updates['address'] = $data['address'];
+                $locked->update($updates);
+            });
+        } catch (\Throwable $e) {
+            if ($newPath) $disk->delete($newPath);
+            throw $e;
+        }
+        if (($newPath || $request->boolean('remove_npwp_file')) && !empty($old['path'])) $disk->delete($old['path']);
+        return back()->with('message', 'Informasi perusahaan berhasil disimpan.');
+    }
+
+    public function npwpDocument(Request $request, Customer $customer)
+    {
+        \App\Services\DocumentVisibility::authorize($request->user(), 'customers', $customer);
+        $doc = $customer->crm_profile['npwp_document'] ?? null;
+        abort_unless($doc && \Illuminate\Support\Facades\Storage::disk('local')->exists($doc['path']), 404);
+        return \Illuminate\Support\Facades\Storage::disk('local')->response($doc['path'], $doc['name'], ['X-Content-Type-Options' => 'nosniff', 'Cache-Control' => 'private, no-store']);
+    }
+
+    public function updatePicProfile(Request $request, Customer $customer, CustomerPic $pic)
+    {
+        abort_unless(\App\Services\DocumentVisibility::allows($request->user(), 'customers_edit'), 403);
+        \App\Services\DocumentVisibility::authorize($request->user(), 'customers', $customer);
+        abort_unless($pic->customer_id === $customer->id, 404);
+        $rules = ['birthday' => 'nullable|date_format:Y-m-d|before_or_equal:today'];
+        foreach (['instagram', 'linkedin', 'facebook', 'youtube', 'tiktok', 'x'] as $key) $rules[$key] = ['nullable', 'url:http,https', 'max:2048'];
+        $pic->update(['crm_profile' => $request->validate($rules)]);
+        return back()->with('message', 'Informasi PIC berhasil disimpan.');
+    }
+
+    public function updatePic(Request $request, Customer $customer, CustomerPic $pic)
+    {
+        abort_unless(\App\Services\DocumentVisibility::allows($request->user(), 'customers_edit'), 403);
+        \App\Services\DocumentVisibility::authorize($request->user(), 'customers', $customer);
+        abort_unless($pic->customer_id === $customer->id, 404);
+
+        $validated = $request->validate([
+            'name'       => 'required|string|max:255',
+            'email'      => 'nullable|email|max:255',
+            'phone'      => 'nullable|string|max:50',
+            'position'   => 'nullable|string|max:255',
+            'is_primary' => 'boolean',
+            // CRM profile fields
+            'birthday'   => 'nullable|date_format:Y-m-d|before_or_equal:today',
+            'instagram'  => ['nullable', 'url:http,https', 'max:2048'],
+            'linkedin'   => ['nullable', 'url:http,https', 'max:2048'],
+            'facebook'   => ['nullable', 'url:http,https', 'max:2048'],
+            'youtube'    => ['nullable', 'url:http,https', 'max:2048'],
+            'tiktok'     => ['nullable', 'url:http,https', 'max:2048'],
+            'x'          => ['nullable', 'url:http,https', 'max:2048'],
+        ]);
+
+        DB::transaction(function () use ($customer, $pic, $validated) {
+            if (! empty($validated['is_primary'])) {
+                $customer->pics()->where('id', '!=', $pic->id)->update(['is_primary' => false]);
+            }
+
+            $crmProfile = $pic->crm_profile ?? [];
+            foreach (['birthday', 'instagram', 'linkedin', 'facebook', 'youtube', 'tiktok', 'x'] as $key) {
+                $crmProfile[$key] = $validated[$key] ?? null;
+            }
+
+            $pic->update([
+                'name'        => trim($validated['name']),
+                'email'       => $validated['email'] ?? null,
+                'phone'       => $validated['phone'] ?? null,
+                'position'    => $validated['position'] ?? null,
+                'is_primary'  => ! empty($validated['is_primary']),
+                'crm_profile' => $crmProfile,
+            ]);
+        });
+
+        return back()->with('message', 'Data PIC berhasil diperbarui.');
+    }
+
+    public function destroyPic(Request $request, Customer $customer, CustomerPic $pic)
+    {
+        abort_unless(\App\Services\DocumentVisibility::allows($request->user(), 'customers_edit'), 403);
+        \App\Services\DocumentVisibility::authorize($request->user(), 'customers', $customer);
+        abort_unless($pic->customer_id === $customer->id, 404);
+        // Cannot delete the only PIC
+        abort_if($customer->pics()->count() <= 1, 422, 'Customer harus memiliki minimal 1 PIC.');
+
+        $wasPrimary = $pic->is_primary;
+        $pic->delete();
+
+        // Promote another PIC to primary if the deleted one was primary
+        if ($wasPrimary) {
+            $customer->pics()->oldest()->first()?->update(['is_primary' => true]);
+        }
+
+        return back()->with('message', 'PIC berhasil dihapus.');
     }
 
 
@@ -155,10 +291,14 @@ class CustomerController extends Controller
 
     public function storePic(Request $request, Customer $customer)
     {
+        abort_unless(\App\Services\DocumentVisibility::allows($request->user(), 'customers_edit'), 403);
+        \App\Services\DocumentVisibility::authorize($request->user(), 'customers', $customer);
+
         $validated = $request->validate([
-            'name' => 'required|string|max:255',
-            'email' => 'nullable|email|max:255',
-            'phone' => 'nullable|string|max:50',
+            'name'       => 'required|string|max:255',
+            'position'   => 'nullable|string|max:255',
+            'email'      => 'nullable|email|max:255',
+            'phone'      => 'nullable|string|max:50',
             'is_primary' => 'nullable|boolean',
         ]);
 
@@ -168,24 +308,29 @@ class CustomerController extends Controller
 
         $pic = CustomerPic::create([
             'customer_id' => $customer->id,
-            'name' => trim($validated['name']),
-            'email' => $validated['email'] ?? null,
-            'phone' => $validated['phone'] ?? null,
-            'is_primary' => ! empty($validated['is_primary']),
-            'created_by' => $request->user()->id,
+            'name'        => trim($validated['name']),
+            'position'    => $validated['position'] ?? null,
+            'email'       => $validated['email'] ?? null,
+            'phone'       => $validated['phone'] ?? null,
+            'is_primary'  => ! empty($validated['is_primary']),
+            'created_by'  => $request->user()->id,
         ]);
 
-        return response()->json([
-            'pic' => [
-                'id' => $pic->id,
-                'name' => $pic->name,
-                'email' => $pic->email,
-                'phone' => $pic->phone,
-                'is_primary' => (bool) $pic->is_primary,
-            ],
-        ]);
+        if ($request->wantsJson()) {
+            return response()->json([
+                'pic' => [
+                    'id'         => $pic->id,
+                    'name'       => $pic->name,
+                    'position'   => $pic->position,
+                    'email'      => $pic->email,
+                    'phone'      => $pic->phone,
+                    'is_primary' => (bool) $pic->is_primary,
+                ],
+            ]);
+        }
+
+        return back()->with('message', 'PIC berhasil ditambahkan.');
     }
-
     public function update(Request $request, Customer $customer)
     {
         $validated = $request->validate([
@@ -199,24 +344,19 @@ class CustomerController extends Controller
             'pics.*.is_primary' => 'nullable|boolean',
         ]);
 
-        $customer->update([
-            'name' => $validated['name'],
-            'address' => $validated['address'] ?? null,
-        ]);
-
-        if (isset($validated['pics'])) {
-            // Delete existing and recreate
-            $customer->pics()->delete();
-            foreach ($validated['pics'] as $pic) {
-                CustomerPic::create([
-                    'customer_id' => $customer->id,
-                    'name' => $pic['name'],
-                    'email' => $pic['email'] ?? null,
-                    'phone' => $pic['phone'] ?? null,
-                    'is_primary' => !empty($pic['is_primary']),
-                ]);
+        DB::transaction(function () use ($customer, $validated) {
+            $customer->update(['name' => $validated['name'], 'address' => $validated['address'] ?? null]);
+            if (isset($validated['pics'])) {
+                $kept = [];
+                foreach ($validated['pics'] as $pic) {
+                    $record = !empty($pic['id']) ? $customer->pics()->whereKey($pic['id'])->firstOrFail() : new CustomerPic(['customer_id' => $customer->id]);
+                    $record->fill(['name' => $pic['name'], 'email' => $pic['email'] ?? null, 'phone' => $pic['phone'] ?? null, 'is_primary' => !empty($pic['is_primary'])]);
+                    $record->save();
+                    $kept[] = $record->id;
+                }
+                $customer->pics()->whereNotIn('id', $kept)->delete();
             }
-        }
+        });
 
         NotificationService::notifyUser(
             $request->user()->id,

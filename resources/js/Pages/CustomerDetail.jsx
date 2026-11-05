@@ -1,10 +1,13 @@
+import CustomerPicProfile from '../Components/CustomerPicProfile';
+import CustomerCompanyProfile from '@/Components/CustomerCompanyProfile';
+import AddCustomerPicModal from '@/Components/AddCustomerPicModal';
 import React, { useState, useMemo } from 'react';
-import { Head, Link } from '@inertiajs/react';
+import { Head, Link, usePage } from '@inertiajs/react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import {
     ArrowLeft, MapPin, Users, FileText, ShoppingCart,
     CheckCircle2, AlertTriangle, Phone, Mail, Star,
-    Building2, TrendingUp, ChevronRight, ExternalLink
+    Building2, TrendingUp, ChevronRight, ExternalLink, Plus
 } from 'lucide-react';
 import { formatMoney } from '@/utils/money';
 
@@ -31,8 +34,10 @@ const quotationStatusConfig = (status) => {
 };
 
 export default function CustomerDetail({ customer, quotations = [], salesOrders = [] }) {
+    const canEdit = (usePage().props.auth?.permissions || []).includes('customers_edit');
     const [activeTab, setActiveTab] = useState('quotations');
     const [search, setSearch] = useState('');
+    const [isAddPicOpen, setIsAddPicOpen] = useState(false);
 
     const totalQuotValue = useMemo(() => quotations.reduce((s, q) => s + (q.grand_total || 0), 0), [quotations]);
     const totalPoValue   = useMemo(() => quotations.filter(q => q.status === 'approved').reduce((s, q) => s + (q.grand_total || 0), 0), [quotations]);
@@ -217,6 +222,7 @@ export default function CustomerDetail({ customer, quotations = [], salesOrders 
                                 {[
                                     { key: 'quotations',  label: 'Quotation',   count: quotations.length,  icon: FileText },
                                     { key: 'salesOrders', label: 'Sales Order', count: salesOrders.length, icon: ShoppingCart },
+                                    { key: 'company', label: 'Informasi Perusahaan', icon: Building2 },
                                 ].map(tab => (
                                     <button
                                         key={tab.key}
@@ -229,11 +235,11 @@ export default function CustomerDetail({ customer, quotations = [], salesOrders 
                                     >
                                         <tab.icon className="w-4 h-4" />
                                         {tab.label}
-                                        <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${
+                                        {tab.count !== undefined && <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${
                                             activeTab === tab.key
                                                 ? 'bg-brand-100 text-brand-700'
                                                 : 'bg-surface-100 text-surface-500'
-                                        }`}>{tab.count}</span>
+                                        }`}>{tab.count}</span>}
                                         {activeTab === tab.key && (
                                             <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-brand-500 rounded-full" />
                                         )}
@@ -242,7 +248,7 @@ export default function CustomerDetail({ customer, quotations = [], salesOrders 
                             </div>
 
                             {/* Search */}
-                            <div className="relative py-2">
+                            <div className={`relative py-2 ${activeTab === 'company' ? 'hidden' : ''}`}>
                                 <input
                                     type="text"
                                     value={search}
@@ -257,6 +263,7 @@ export default function CustomerDetail({ customer, quotations = [], salesOrders 
                         </div>
 
                         {/* ── Quotations Table ─────────────────────────── */}
+                        {activeTab === 'company' && <CustomerCompanyProfile customer={customer} />}
                         {activeTab === 'quotations' && (
                             filteredQuotations.length === 0 ? (
                                 <EmptyState icon={FileText} text={search ? 'Tidak ditemukan.' : 'Belum ada quotation.'} />
@@ -422,12 +429,39 @@ export default function CustomerDetail({ customer, quotations = [], salesOrders 
                     </div>
 
                     {/* ── All PICs ───────────────────────────────────────── */}
-                    {customer.pics?.length > 0 && (
-                        <div className="bg-white rounded-2xl border border-surface-200 shadow-sm p-6">
-                            <h3 className="text-sm font-bold text-surface-700 mb-4 flex items-center gap-2">
+                    <div className="bg-white rounded-2xl border border-surface-200 shadow-sm p-6">
+                        <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+                            <h3 className="text-sm font-bold text-surface-700 flex items-center gap-2">
                                 <Users className="w-4 h-4 text-brand-500" />
-                                Daftar PIC <span className="text-surface-400 font-normal">({customer.pics.length})</span>
+                                Daftar PIC <span className="text-surface-400 font-normal">({customer.pics?.length || 0})</span>
                             </h3>
+                            {canEdit && (
+                                <button
+                                    type="button"
+                                    onClick={() => setIsAddPicOpen(true)}
+                                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-brand-50 text-brand-700 hover:bg-brand-100 text-xs font-bold transition-colors cursor-pointer border border-brand-200"
+                                >
+                                    <Plus className="w-3.5 h-3.5" />
+                                    Tambah PIC
+                                </button>
+                            )}
+                        </div>
+
+                        {customer.pics?.length === 0 ? (
+                            <div className="text-center py-8 border-2 border-dashed border-surface-200 rounded-xl">
+                                <Users className="w-8 h-8 text-surface-300 mx-auto mb-2" />
+                                <p className="text-xs text-surface-500">Belum ada PIC untuk customer ini.</p>
+                                {canEdit && (
+                                    <button
+                                        type="button"
+                                        onClick={() => setIsAddPicOpen(true)}
+                                        className="mt-3 text-xs font-semibold text-brand-600 hover:underline"
+                                    >
+                                        + Tambah PIC Pertama
+                                    </button>
+                                )}
+                            </div>
+                        ) : (
                             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                                 {customer.pics.map(pic => (
                                     <div
@@ -443,7 +477,7 @@ export default function CustomerDetail({ customer, quotations = [], salesOrders 
                                         }`}>
                                             {pic.name?.[0]?.toUpperCase() || '?'}
                                         </div>
-                                        <div className="min-w-0">
+                                        <div className="min-w-0 flex-1">
                                             <div className="text-sm font-semibold text-surface-800 flex items-center gap-1.5">
                                                 {pic.name}
                                                 {pic.is_primary && (
@@ -452,6 +486,9 @@ export default function CustomerDetail({ customer, quotations = [], salesOrders 
                                                     </span>
                                                 )}
                                             </div>
+                                            {pic.position && (
+                                                <div className="text-xs text-surface-400 mt-0.5 font-medium">{pic.position}</div>
+                                            )}
                                             {pic.phone && (
                                                 <a href={`tel:${pic.phone}`} className="text-xs text-surface-500 flex items-center gap-1 mt-0.5 hover:text-brand-600 transition-colors">
                                                     <Phone className="w-3 h-3" /> {pic.phone}
@@ -462,12 +499,19 @@ export default function CustomerDetail({ customer, quotations = [], salesOrders 
                                                     <Mail className="w-3 h-3 shrink-0" /> {pic.email}
                                                 </a>
                                             )}
+                                            <CustomerPicProfile customerId={customer.id} pic={pic} canDelete={customer.pics.length > 1} />
                                         </div>
                                     </div>
                                 ))}
                             </div>
-                        </div>
-                    )}
+                        )}
+                    </div>
+
+                    <AddCustomerPicModal
+                        isOpen={isAddPicOpen}
+                        onClose={() => setIsAddPicOpen(false)}
+                        customerId={customer.id}
+                    />
 
                 </div>
             </div>

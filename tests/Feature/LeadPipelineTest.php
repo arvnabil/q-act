@@ -14,11 +14,18 @@ class LeadPipelineTest extends TestCase
 
     private function makeUser(string $role = 'Sales'): User
     {
-        return User::factory()->create([
+        $user = User::factory()->create([
             'role' => $role,
             'name' => 'Test User ' . $role,
             'email' => strtolower($role) . '_' . uniqid() . '@example.com',
+            'is_active' => true,
         ]);
+
+        foreach (['leads_view', 'leads_manage', 'quotations_view', 'quotations_edit'] as $perm) {
+            $user->givePermissionTo(\Spatie\Permission\Models\Permission::findOrCreate($perm, 'web'));
+        }
+
+        return $user;
     }
 
     public function test_leads_can_be_created_with_new_default_stage(): void
