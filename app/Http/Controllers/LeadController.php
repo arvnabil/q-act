@@ -12,6 +12,10 @@ use App\Models\SystemSetting;
 use App\Models\User;
 use App\Services\GoogleCalendarService;
 use App\Services\ZoomService;
+use App\Services\WorkflowAccess;
+use App\Services\DocumentVisibility;
+use App\Models\Quotation;
+use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -80,27 +84,12 @@ class LeadController extends Controller
     {
         $pipelineSettings = $this->getPipelineSettings();
         $configuredKeys = array_column($pipelineSettings['stages'] ?? [], 'key');
-        return array_values(array_unique(array_filter(array_merge(
-            Lead::STAGES,
-            $configuredKeys,
-            ['data_masuk', 'sph_terlayang', 'hot_progress', 'proyek_deal', 'proyek_berjalan', 'proyek_selesai', 'no_deal']
-        ))));
+        return array_values(array_unique($configuredKeys));
     }
 
     private function generateLeadCode(): string
     {
-        $prefix = 'L' . now()->format('ym') . '.';
-        $last = Lead::where('lead_code', 'like', $prefix . '%')
-            ->orderByDesc('lead_code')
-            ->value('lead_code');
-
-        $seq = 1;
-        if ($last) {
-            $parts = explode('.', $last);
-            $seq = (int) end($parts) + 1;
-        }
-
-        return $prefix . str_pad($seq, 3, '0', STR_PAD_LEFT);
+        return \App\Services\LeadCode::next();
     }
 
     private function convertToCustomer(Lead $lead): ?Customer
@@ -148,7 +137,7 @@ class LeadController extends Controller
             'lead_id'     => $lead->id,
             'user_id'     => Auth::id(),
             'type'        => $type,
-            'title'       => $title,
+            'title'       => mb_substr($title, 0, 255),
             'description' => $description,
             'metadata'    => $metadata ?: null,
         ]);
@@ -160,32 +149,39 @@ class LeadController extends Controller
     {
         $isManagerOrAdmin = $this->isManagerOrAdmin();
 
-        $query = Lead::active()
+        $query = WorkflowAccess::leads($request->user())->active()
             ->with(['sales:id,name', 'customer:id,name', 'quotation:id,status'])
             ->orderBy('sort_order')
             ->orderByDesc('created_at');
 
-        // RBAC
-        if (!$isManagerOrAdmin) {
-            $query->forUser(Auth::id());
-        }
+        $input = $request->validate([
+            'search' => 'nullable|string|max:255',
+            'stage' => 'nullable|string|max:100',
+            'sales_id' => 'nullable|string|max:64',
+        ]);
+        $filters = collect(['search', 'stage', 'sales_id'])
+            ->mapWithKeys(fn ($key) => [$key => trim($input[$key] ?? '')])->all();
 
-        // Filters
-        if ($request->filled('stage')) {
-            $query->where('stage', $request->stage);
+        // Filters only narrow the permission-scoped query, including for BU members.
+        if ($filters['stage'] !== '') {
+            $query->where('stage', $filters['stage']);
         }
-        if ($request->filled('sales_id') && $isManagerOrAdmin) {
-            $query->where('sales_id', $request->sales_id);
+        if ($filters['sales_id'] !== '') {
+            \App\Services\DashboardScope::owned($query, [$filters['sales_id']]);
         }
-        if ($request->filled('search')) {
-            $s = '%' . $request->search . '%';
+        if ($filters['search'] !== '') {
+            $s = '%' . $filters['search'] . '%';
             $query->where(function ($q) use ($s) {
                 $q->where('title', 'like', $s)
                     ->orWhere('customer_name', 'like', $s)
                     ->orWhere('customer_phone', 'like', $s)
-                    ->orWhere('lead_code', 'like', $s);
+                    ->orWhere('lead_code', 'like', $s)
+                    ->orWhereHas('customer', fn ($customer) => $customer->where('name', 'like', $s));
             });
         }
+
+        $filterSalesUsers = User::whereIn('id', WorkflowAccess::ids($request->user()))
+            ->select('id', 'name')->orderBy('name')->get();
 
         $leads = $query->get();
 
@@ -219,24 +215,26 @@ class LeadController extends Controller
             'dealsWon'        => $leads->whereIn('stage', $dealStages)->count(),
         ];
 
-        // Sales users for filter (manager only)
+        // Sales users available for lead assignment (manager only)
         $salesUsers = [];
         if ($isManagerOrAdmin) {
-            $salesUsers = User::whereIn('role', ['Sales', 'Presales', 'Sales Rep'])
+            $salesUsers = User::whereIn('id', WorkflowAccess::ids($request->user()))->whereIn('role', ['Sales', 'Presales', 'Sales Rep'])
                 ->select('id', 'name')
                 ->orderBy('name')
                 ->get();
         }
 
         return Inertia::render('Leads', [
+            'stageCounts'      => $isManagerOrAdmin ? Lead::query()->selectRaw('stage, COUNT(*) as total')->groupBy('stage')->pluck('total', 'stage') : [],
             'grouped'          => $grouped,
             'stats'            => $stats,
             'salesUsers'       => $salesUsers,
-            'filters'          => $request->only(['stage', 'sales_id', 'search']),
+            'filters'          => $filters,
+            'filterSalesUsers' => $filterSalesUsers,
             'isManagerOrAdmin' => $isManagerOrAdmin,
             'stages'           => Lead::STAGES,
             'sources'          => Lead::SOURCES,
-            'customers'        => Customer::select('id', 'name')->orderBy('name')->get(),
+            'customers'        => DocumentVisibility::apply(Customer::query(), $request->user(), 'customers')->select('id', 'name', 'address')->with('pics:id,customer_id,name,phone,email,is_primary')->orderBy('name')->get(),
             'pipelineSettings' => $this->getPipelineSettings(),
         ]);
     }
@@ -245,9 +243,13 @@ class LeadController extends Controller
 
     public function store(Request $request)
     {
+        abort_unless(WorkflowAccess::canManage($request->user()), 403);
         $data = $request->validate([
+            'customer_mode' => 'nullable|in:existing,new',
+            'pic_mode' => 'nullable|in:existing,new',
+            'pic_id' => 'nullable|integer',
             'title'           => 'required|string|max:255',
-            'customer_id'     => 'nullable|string|exists:customers,id',
+            'customer_id'     => 'required_if:customer_mode,existing|nullable|string|exists:customers,id',
             'customer_name'   => 'nullable|string|max:255',
             'customer_phone'  => 'nullable|string|max:50',
             'customer_email'  => 'nullable|email|max:100',
@@ -269,18 +271,12 @@ class LeadController extends Controller
         $data['stage']      = $data['stage'] ?? 'lead_masuk';
         $data['lead_code']  = $this->generateLeadCode();
 
-        // If customer_id given, populate denormalised fields from Customer
-        if (!empty($data['customer_id'])) {
-            $c = Customer::find($data['customer_id']);
-            if ($c) {
-                $data['customer_name']    = $data['customer_name'] ?? $c->name;
-                $data['customer_address'] = $data['customer_address'] ?? $c->address;
-            }
-        }
-
-        $lead = Lead::create($data);
-
-        $this->logActivity($lead, 'note', 'Lead dibuat', 'Lead baru ditambahkan: ' . $lead->title);
+        DB::transaction(function () use ($request, $data) {
+            $pic = \App\Services\LeadCustomerInput::prepare($request->user(), $data);
+            $lead = Lead::create($data);
+            \App\Services\LeadCustomerInput::attach($lead, $pic, $request->user());
+            $this->logActivity($lead, 'note', 'Lead dibuat', 'Lead baru ditambahkan: ' . $lead->title);
+        });
 
         return back()->with('message', 'Lead berhasil dibuat.');
     }
@@ -289,6 +285,7 @@ class LeadController extends Controller
 
     public function show(Lead $lead)
     {
+        WorkflowAccess::lead(request()->user(), $lead);
         $lead->load([
             'sales:id,name',
             'customer:id,name,address',
@@ -304,7 +301,7 @@ class LeadController extends Controller
 
         // Load activities sorted newest first
         $lead->setRelation('activities',
-            $lead->activities()->with('user:id,name')->orderByDesc('created_at')->get()
+            $lead->activities()->with(['user:id,name', 'visit'])->orderByDesc('created_at')->get()
         );
 
         $customerPics = $lead->customer_id ? CustomerPic::where('customer_id', $lead->customer_id)->get() : [];
@@ -359,6 +356,8 @@ class LeadController extends Controller
 
     public function update(Request $request, Lead $lead)
     {
+        WorkflowAccess::lead($request->user(), $lead);
+        abort_unless(WorkflowAccess::canManage($request->user()), 403);
         $data = $request->validate([
             'title'           => 'sometimes|required|string|max:255',
             'customer_id'     => 'nullable|string|exists:customers,id',
@@ -455,6 +454,8 @@ class LeadController extends Controller
 
     public function addActivity(Request $request, Lead $lead)
     {
+        WorkflowAccess::lead($request->user(), $lead);
+        abort_unless(WorkflowAccess::canManage($request->user()), 403);
         $data = $request->validate([
             'type'         => 'required|string|in:' . implode(',', LeadActivity::TYPES),
             'title'        => 'required|string|max:255',
@@ -462,16 +463,26 @@ class LeadController extends Controller
             'scheduled_at' => 'nullable|date',
         ]);
 
+        if (!empty($data['scheduled_at'])) $data['scheduled_at'] = Carbon::parse($data['scheduled_at'])->setTimezone(config('app.timezone'))->format('Y-m-d H:i:s');
         $data['lead_id'] = $lead->id;
         $data['user_id'] = Auth::id();
 
-        $activity = LeadActivity::create($data);
+        $activity = DB::transaction(function () use ($data, $lead) {
+            $activity = LeadActivity::create($data);
+            if (!empty($data['scheduled_at'])) {
+                LeadVisit::create(['lead_id' => $lead->id, 'lead_activity_id' => $activity->id,
+                    'user_id' => Auth::id(), 'customer_id' => $lead->customer_id,
+                    'visit_type' => $data['type'] === 'meeting' ? 'other' : 'follow_up',
+                    'subject' => mb_substr('Tindak lanjut: '.$data['title'], 0, 255), 'scheduled_at' => $data['scheduled_at'], 'notes' => $data['description'] ?? null]);
+            }
+            return $activity;
+        });
 
         // Always return JSON — axios calls from frontend don't send X-Inertia header
         return response()->json([
             'success'  => true,
             'message'  => 'Aktivitas berhasil ditambahkan.',
-            'activity' => $activity->load('user:id,name'),
+            'activity' => $activity->load(['user:id,name', 'visit']),
         ]);
     }
 
@@ -479,6 +490,10 @@ class LeadController extends Controller
 
     public function updateActivity(Request $request, Lead $lead, LeadActivity $activity): \Illuminate\Http\JsonResponse
     {
+        WorkflowAccess::lead($request->user(), $lead);
+        abort_unless(WorkflowAccess::canManage($request->user()), 403);
+        abort_unless($activity->lead_id === $lead->id, 404);
+        if ($activity->visit()->exists()) return response()->json(['message' => 'Gunakan panel agenda untuk jadwal ulang atau pembatalan. Riwayat progres tetap disimpan.'], 422);
         if ($activity->user_id !== Auth::id() && !$this->isManagerOrAdmin()) {
             return response()->json(['message' => 'Tidak diizinkan.'], 403);
         }
@@ -502,6 +517,10 @@ class LeadController extends Controller
 
     public function destroyActivity(Request $request, Lead $lead, LeadActivity $activity): \Illuminate\Http\JsonResponse
     {
+        WorkflowAccess::lead($request->user(), $lead);
+        abort_unless(WorkflowAccess::canManage($request->user()), 403);
+        abort_unless($activity->lead_id === $lead->id, 404);
+        if ($activity->visit()->exists()) return response()->json(['message' => 'Gunakan panel agenda untuk jadwal ulang atau pembatalan. Riwayat progres tetap disimpan.'], 422);
         // Only the owner or admin can delete
         if ($activity->user_id !== Auth::id() && !$this->isManagerOrAdmin()) {
             return response()->json(['message' => 'Tidak diizinkan.'], 403);
@@ -528,16 +547,48 @@ class LeadController extends Controller
         $data = $request->validate([
             'featured_stage_1' => 'nullable|string',
             'featured_stage_2' => 'nullable|string',
-            'stages'           => 'nullable|array',
+            'stages' => 'sometimes|required|array|min:1|max:50',
+            'stages.*.key' => 'required|string|max:100|regex:/^[a-z][a-z0-9_]*$/|distinct',
+            'stages.*.name' => 'required|string|max:100',
+            'stages.*.color' => 'required|string|regex:/^#[0-9a-fA-F]{6}$/',
+            'stages.*.type' => 'required|in:normal,deal,lost',
+            'stage_moves' => 'sometimes|array',
+            'stage_moves.*' => 'required|string|max:100',
+            'original_stages' => 'sometimes|array',
         ]);
 
-        $current = $this->getPipelineSettings();
-        $merged = array_merge($current, array_filter($data, fn($v) => !is_null($v)));
-
-        SystemSetting::updateOrCreate(
-            ['key' => 'lead_pipeline_settings'],
-            ['value' => $merged]
-        );
+        $merged = DB::transaction(function () use ($data) {
+            // Serialize settings changes before reading the current stage definitions.
+            SystemSetting::firstOrCreate(['key' => 'lead_pipeline_settings'], ['value' => $this->getPipelineSettings()]);
+            SystemSetting::where('key', 'lead_pipeline_settings')->lockForUpdate()->first();
+            $current = $this->getPipelineSettings();
+            if (isset($data['original_stages']) && $data['original_stages'] != $current['stages']) {
+                throw \Illuminate\Validation\ValidationException::withMessages(['stages' => 'Tahap telah diubah pengguna lain. Tutup dan muat ulang halaman sebelum mengedit.']);
+            }
+            $merged = array_merge($current, array_filter(
+                \Illuminate\Support\Arr::only($data, ['stages', 'featured_stage_1', 'featured_stage_2']), fn ($v) => !is_null($v)));
+            $keys = array_column($merged['stages'], 'key');
+            foreach (['featured_stage_1', 'featured_stage_2'] as $field) {
+                if (!in_array($merged[$field], $keys, true)) {
+                    throw \Illuminate\Validation\ValidationException::withMessages([$field => 'Pilih tahap ringkasan yang masih tersedia.']);
+                }
+            }
+            $removed = array_diff(array_column($current['stages'], 'key'), $keys);
+            foreach ($removed as $from) {
+                $leads = Lead::where('stage', $from)->lockForUpdate()->get(); // Includes archived leads.
+                $to = $data['stage_moves'][$from] ?? null;
+                if ($leads->isNotEmpty() && (!$to || !in_array($to, $keys, true))) {
+                    throw \Illuminate\Validation\ValidationException::withMessages(['stages' => 'Tahap '.$from.' masih berisi '.$leads->count().' lead. Pilih tahap tujuan yang masih tersedia.']);
+                }
+                foreach ($leads as $lead) {
+                    $lead->update(['stage' => $to, 'updated_by' => Auth::id()]);
+                    $this->logActivity($lead, 'stage_change', 'Tahap dipindahkan karena penghapusan tahap pipeline',
+                        $from.' → '.$to, ['from' => $from, 'to' => $to, 'reason' => 'stage_removed']);
+                }
+            }
+            SystemSetting::updateOrCreate(['key' => 'lead_pipeline_settings'], ['value' => $merged]);
+            return $merged;
+        });
 
         if (!$request->header('X-Inertia') && ($request->wantsJson() || $request->ajax())) {
             return response()->json([
@@ -554,17 +605,16 @@ class LeadController extends Controller
 
     public function indexVisits(Request $request)
     {
+        abort_unless(WorkflowAccess::canRead($request->user()) || WorkflowAccess::canSchedule($request->user()), 403);
         $isManagerOrAdmin = $this->isManagerOrAdmin();
 
-        $query = LeadVisit::with([
+        $query = LeadVisit::whereNull('cancelled_at')->whereIn('user_id', WorkflowAccess::ids($request->user()))->with([
             'lead:id,title,lead_code',
             'user:id,name',
             'customer:id,name',
         ])->orderBy('scheduled_at');
 
-        if (!$isManagerOrAdmin) {
-            $query->where('user_id', Auth::id());
-        }
+
 
         $visits = $query->get();
 
@@ -584,8 +634,8 @@ class LeadController extends Controller
             'visits'                   => $visits,
             'stats'                    => $stats,
             'todayVisit'               => $todayVisit,
-            'leads'                    => Lead::active()->select('id', 'title', 'lead_code', 'customer_id', 'customer_name')->with('customer:id,name')->orderBy('title')->get(),
-            'customers'                => Customer::select('id', 'name')->orderBy('name')->get(),
+            'leads'                    => WorkflowAccess::leads($request->user())->active()->select('id', 'title', 'lead_code', 'customer_id', 'customer_name')->with('customer:id,name')->orderBy('title')->get(),
+            'customers'                => DocumentVisibility::apply(Customer::query(), $request->user(), 'customers')->select('id', 'name')->orderBy('name')->get(),
             'isManagerOrAdmin'         => $isManagerOrAdmin,
             'googleCalendarConfigured' => (new GoogleCalendarService())->isConfigured(),
             'zoomConfigured'           => (new ZoomService())->isConfigured(),
@@ -597,10 +647,12 @@ class LeadController extends Controller
 
     public function storeVisit(Request $request)
     {
+        abort_unless(WorkflowAccess::canSchedule($request->user()), 403);
         $data = $request->validate([
+            'quotation_id' => 'nullable|string|exists:quotations,id',
             'lead_id'      => 'nullable|uuid|exists:leads,id',
             'customer_id'  => 'nullable|string|exists:customers,id',
-            'visit_type'   => 'required|string|in:visit,follow_up,demo,presentation,other',
+            'visit_type'   => 'required|string|in:visit,follow_up,demo,presentation,installation,maintenance,leave,other',
             'subject'      => 'required|string|max:255',
             'location'     => 'nullable|string|max:255',
             'scheduled_at' => 'required|date',
@@ -609,7 +661,26 @@ class LeadController extends Controller
             'sync_calendar'=> 'nullable|boolean',
         ]);
 
+        if (!empty($data['quotation_id'])) {
+            $quotation = Quotation::findOrFail($data['quotation_id']);
+            DocumentVisibility::authorize($request->user(), 'quotations', $quotation);
+            $data['lead_id'] = $quotation->lead_id ?: $quotation->parentQuotation?->lead_id;
+            $data['customer_id'] = $quotation->customer_id;
+        }
+        if (!empty($data['lead_id'])) {
+            $contextLead = Lead::findOrFail($data['lead_id']);
+            WorkflowAccess::lead($request->user(), $contextLead);
+            $data['customer_id'] = $contextLead->customer_id;
+        } elseif (!empty($data['customer_id']) && empty($data['quotation_id'])) {
+            DocumentVisibility::authorize($request->user(), 'customers', Customer::findOrFail($data['customer_id']));
+        }
+        if (!empty($data['create_zoom']) && !$request->user()->has_zoom_license) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'create_zoom' => 'Akun Anda belum memiliki lisensi Zoom. Nonaktifkan opsi Zoom untuk menyimpan kunjungan biasa.',
+            ]);
+        }
         $data['user_id'] = Auth::id();
+        $data['scheduled_at'] = Carbon::parse($data['scheduled_at'])->setTimezone(config('app.timezone'))->format('Y-m-d H:i:s');
 
         if (!empty($data['lead_id']) && empty($data['customer_id'])) {
             $ld = Lead::find($data['lead_id']);
@@ -620,10 +691,21 @@ class LeadController extends Controller
 
         // Clean out extra form flags before creating model
         $createZoom   = !empty($data['create_zoom']);
-        $syncCalendar = $data['sync_calendar'] ?? true;
+        $syncCalendar = $data['sync_calendar'] ?? false;
         unset($data['create_zoom'], $data['sync_calendar']);
 
-        $visit = LeadVisit::create($data);
+        $visit = DB::transaction(function () use ($data) {
+            // Lock the owner to make double clicks/retries idempotent across both entry points.
+            User::whereKey(Auth::id())->lockForUpdate()->firstOrFail();
+            $existing = LeadVisit::where('user_id', Auth::id())->where('lead_id', $data['lead_id'] ?? null)
+                ->where('quotation_id', $data['quotation_id'] ?? null)->where('subject', $data['subject'])
+                ->where('scheduled_at', Carbon::parse($data['scheduled_at']))->whereNull('cancelled_at')->first();
+            return $existing ?: LeadVisit::create($data);
+        });
+        if (!$visit->wasRecentlyCreated) return $request->wantsJson()
+            ? response()->json(['visit' => $visit, 'warnings' => [], 'message' => 'Agenda tersebut sudah tersedia.'])
+            : back()->with('message', 'Agenda tersebut sudah tersedia.');
+        $warnings = [];
 
         // 1. Zoom Integration (if requested)
         if ($createZoom) {
@@ -653,7 +735,7 @@ class LeadController extends Controller
                     $startDt = Carbon::parse($visit->scheduled_at);
                     $endDt   = (clone $startDt)->addHour();
 
-                    $desc = ($visit->notes ?? '') . "\n\nSales: " . Auth::user()->name;
+                    $desc = ($visit->notes ?? '') . ($visit->quotation_id ? "\nQuotation: ".url('/quotations/'.$visit->quotation_id) : '') . "\n\nSales: " . Auth::user()->name;
                     if ($visit->lead_id) {
                         $ld = Lead::find($visit->lead_id);
                         if ($ld) $desc .= "\nLead: {$ld->title} ({$ld->lead_code})";
@@ -678,6 +760,9 @@ class LeadController extends Controller
             }
         }
 
+        if ($createZoom && !$visit->zoom_meeting_id) $warnings[] = 'Agenda tersimpan, tetapi tautan Zoom belum berhasil dibuat.';
+        if ($syncCalendar && !$visit->gc_event_id) $warnings[] = 'Agenda tersimpan di kalender internal; sinkronisasi Google Calendar belum berhasil.';
+
         // Log on lead if linked
         if ($visit->lead_id) {
             $lead = Lead::find($visit->lead_id);
@@ -688,15 +773,18 @@ class LeadController extends Controller
             }
         }
 
-        return back()->with('message', 'Kunjungan berhasil dijadwalkan.');
+        if ($request->wantsJson()) return response()->json(['visit' => $visit, 'warnings' => $warnings]);
+        return back()->with('message', $warnings ? implode(' ', $warnings) : 'Agenda berhasil dijadwalkan.');
     }
 
     // ─── Update Visit ────────────────────────────────────────────────────────────
 
     public function updateVisit(Request $request, LeadVisit $visit)
     {
+        WorkflowAccess::visit($request->user(), $visit);
+        abort_if($visit->cancelled_at || $visit->checked_in_at, 422, 'Agenda sudah selesai/dibatalkan.');
         $data = $request->validate([
-            'visit_type'   => 'required|string|in:visit,follow_up,demo,presentation,other',
+            'visit_type'   => 'required|string|in:visit,follow_up,demo,presentation,installation,maintenance,leave,other',
             'subject'      => 'required|string|max:255',
             'location'     => 'nullable|string|max:255',
             'scheduled_at' => 'required|date',
@@ -704,12 +792,22 @@ class LeadController extends Controller
             'outcome'      => 'nullable|string',
         ]);
 
+        $data['scheduled_at'] = Carbon::parse($data['scheduled_at'])->setTimezone(config('app.timezone'))->format('Y-m-d H:i:s');
         $visit->update($data);
+        if ($visit->lead_activity_id) LeadActivity::whereKey($visit->lead_activity_id)->update(['scheduled_at' => $visit->scheduled_at]);
+        $warnings = [];
+        if ($visit->zoom_meeting_id) {
+            try {
+                if (!app(ZoomService::class)->updateMeeting($visit->zoom_meeting_id, $visit->subject, $visit->scheduled_at->toIso8601String(), $visit->notes)) {
+                    $warnings[] = 'Jadwal internal tersimpan; jadwal Zoom belum berhasil diperbarui.';
+                } else { $warnings[] = 'Google Calendar belum terhubung; jadwal eksternal belum diperbarui.'; }
+            } catch (\Throwable $e) { $warnings[] = 'Jadwal internal tersimpan; jadwal Zoom belum berhasil diperbarui.'; }
+        }
 
         // Sync with Google Calendar if event exists
         if ($visit->gc_event_id) {
             try {
-                $calendarService = new GoogleCalendarService();
+                $calendarService = app(GoogleCalendarService::class);
                 if ($calendarService->isConfigured()) {
                     $startDt = Carbon::parse($visit->scheduled_at);
                     $endDt   = (clone $startDt)->addHour();
@@ -729,9 +827,10 @@ class LeadController extends Controller
                         $visit->zoom_join_url
                     );
 
-                    $calendarService->updateEvent($visit->gc_event_id, $body);
-                }
+                    if (!$calendarService->updateEvent($visit->gc_event_id, $body)) $warnings[] = 'Jadwal Google Calendar belum berhasil diperbarui.';
+                } else { $warnings[] = 'Google Calendar belum terhubung; jadwal eksternal belum diperbarui.'; }
             } catch (\Throwable $e) {
+                $warnings[] = 'Jadwal Google Calendar belum berhasil diperbarui.';
                 \Log::warning('[LeadVisit] Update Google Calendar sync skipped: ' . $e->getMessage());
             }
         }
@@ -744,13 +843,15 @@ class LeadController extends Controller
             }
         }
 
-        return back()->with('message', 'Kunjungan berhasil diperbarui.');
+        if ($request->wantsJson()) return response()->json(['visit' => $visit, 'warnings' => $warnings]);
+        return back()->with('message', $warnings ? implode(' ', $warnings) : 'Agenda berhasil diperbarui.');
     }
 
     // ─── Destroy Visit ───────────────────────────────────────────────────────────
 
     public function destroyVisit(LeadVisit $visit)
     {
+        WorkflowAccess::visit(request()->user(), $visit);
         // 1. Remove from Google Calendar if linked
         if ($visit->gc_event_id) {
             try {
@@ -794,6 +895,8 @@ class LeadController extends Controller
 
     public function createZoomForVisit(Request $request, LeadVisit $visit)
     {
+        abort_if($visit->cancelled_at || $visit->checked_in_at, 422, 'Agenda sudah selesai/dibatalkan.');
+        WorkflowAccess::visit($request->user(), $visit);
         $zoomService = new ZoomService();
         if (!$zoomService->isConfigured()) {
             return back()->withErrors(['zoom' => 'Integrasi Zoom belum dikonfigurasi oleh Administrator di menu Settings.']);
@@ -852,15 +955,20 @@ class LeadController extends Controller
 
     public function indexCalendar(Request $request)
     {
+        abort_unless(WorkflowAccess::canViewCalendar($request->user()), 403);
         $isManagerOrAdmin = $this->isManagerOrAdmin();
+        $user = $request->user();
 
-        $query = LeadVisit::with([
+        $calendarScope = WorkflowAccess::calendarScope($user);
+        $calendarUserIds = WorkflowAccess::calendarUserIds($user);
+
+        $query = LeadVisit::whereNull('cancelled_at')->whereIn('user_id', $calendarUserIds)->with([
             'lead:id,title,lead_code',
             'user:id,name,avatar_initials,avatar_url',
             'customer:id,name',
         ])->orderBy('scheduled_at');
 
-        if (!$isManagerOrAdmin && $request->get('my_only', 'false') === 'true') {
+        if ($request->get('my_only', 'false') === 'true') {
             $query->where('user_id', Auth::id());
         }
 
@@ -874,15 +982,21 @@ class LeadController extends Controller
 
         $visits = $query->get();
 
-        $users = User::select('id', 'name', 'avatar_initials', 'avatar_url')->orderBy('name')->get();
-        $leads = Lead::active()->select('id', 'title', 'lead_code', 'customer_id', 'customer_name')->orderBy('title')->get();
-        $customers = Customer::select('id', 'name')->orderBy('name')->get();
+        $users = User::whereIn('id', $calendarUserIds)->select('id', 'name', 'avatar_initials', 'avatar_url')->orderBy('name')->get();
+        $leads = WorkflowAccess::leads($user)->active()->select('id', 'title', 'lead_code', 'customer_id', 'customer_name')->orderBy('title')->get();
+        $customers = DocumentVisibility::apply(Customer::query(), $user, 'customers')->select('id', 'name')->orderBy('name')->get();
 
         // Check configured status
         $googleCalendarConfigured = (new GoogleCalendarService())->isConfigured();
         $zoomConfigured           = (new ZoomService())->isConfigured();
 
+        // Get BU user IDs for the current user
+        $userBuIds = \App\Models\BusinessUnitMember::where('user_id', $user->id)->pluck('business_unit_id');
+        $buUserIds = \App\Models\BusinessUnitMember::whereIn('business_unit_id', $userBuIds)->pluck('user_id')->unique()->values()->all();
+
         return Inertia::render('TeamCalendar', [
+            'calendarScope'            => $calendarScope,
+            'buUserIds'                => $buUserIds,
             'visits'                   => $visits,
             'users'                    => $users,
             'leads'                    => $leads,
@@ -898,26 +1012,26 @@ class LeadController extends Controller
 
     public function checkIn(Request $request, LeadVisit $visit)
     {
-        $data = $request->validate([
-            'lat' => 'nullable|numeric',
-            'lng' => 'nullable|numeric',
-        ]);
-
-        $visit->update([
-            'checked_in_at'  => now(),
-            'checked_in_lat' => $data['lat'] ?? null,
-            'checked_in_lng' => $data['lng'] ?? null,
-        ]);
+        WorkflowAccess::visit($request->user(), $visit);
+        abort_if($visit->cancelled_at, 422, 'Agenda dibatalkan.');
+        // Keep the legacy timestamp so existing history and reports stay compatible.
+        // Completion is allowed before or after the scheduled time; GPS is not required.
+        if ($visit->checked_in_at) {
+            return $request->wantsJson() ? response()->json(['visit' => $visit]) : back()->with('message', 'Agenda sudah selesai.');
+        }
+        $visit->update(['checked_in_at' => now()]);
+        if ($visit->lead_activity_id) LeadActivity::whereKey($visit->lead_activity_id)->update(['completed_at' => $visit->checked_in_at]);
 
         // Log on lead if linked
         if ($visit->lead_id) {
             $lead = Lead::find($visit->lead_id);
             if ($lead) {
-                $this->logActivity($lead, 'visit', 'Check-in kunjungan: ' . $visit->subject);
+                $this->logActivity($lead, 'visit', 'Kunjungan selesai: ' . $visit->subject);
             }
         }
 
-        return back()->with('message', 'Check-in berhasil.');
+        if ($request->wantsJson()) return response()->json(['visit' => $visit]);
+        return back()->with('message', 'Agenda ditandai selesai.');
     }
 
     // ─── Zoom Webhook Handler ────────────────────────────────────────────────────

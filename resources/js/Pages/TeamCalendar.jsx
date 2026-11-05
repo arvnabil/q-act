@@ -1,3 +1,4 @@
+import useAgendaCancellation from '@/Components/useAgendaCancellation';
 import React, { useState, useMemo } from 'react';
 import { Head, router, Link, usePage } from '@inertiajs/react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
@@ -10,6 +11,9 @@ import {
 } from 'lucide-react';
 
 const VISIT_TYPES = {
+    installation: { label: 'Instalasi', bg: 'bg-indigo-50 text-indigo-700 border-indigo-200', dot: 'bg-indigo-500' },
+    maintenance: { label: 'Maintenance', bg: 'bg-orange-50 text-orange-700 border-orange-200', dot: 'bg-orange-500' },
+    leave: { label: 'Cuti', bg: 'bg-rose-50 text-rose-700 border-rose-200', dot: 'bg-rose-500' },
     visit:        { label: 'Visit Lapangan',  bg: 'bg-blue-50 text-blue-700 border-blue-200', dot: 'bg-blue-500' },
     follow_up:    { label: 'Follow-up',       bg: 'bg-amber-50 text-amber-700 border-amber-200', dot: 'bg-amber-500' },
     demo:         { label: 'Demo Produk',     bg: 'bg-violet-50 text-violet-700 border-violet-200', dot: 'bg-violet-500' },
@@ -23,7 +27,11 @@ const MONTH_NAMES = [
     'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
 ];
 
+const calendarDateKey = value => { const d = new Date(value); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; };
+
 export default function TeamCalendar({
+    calendarScope = 'own',
+    buUserIds = [],
     visits = [],
     users = [],
     leads = [],
@@ -38,6 +46,7 @@ export default function TeamCalendar({
 
     const [currentDate, setCurrentDate] = useState(new Date());
     const [selectedUser, setSelectedUser] = useState('');
+    const [agendaScope, setAgendaScope] = useState(calendarScope);
     const [selectedType, setSelectedType] = useState('');
     const [selectedEvent, setSelectedEvent] = useState(null);
     const [showAddModal, setShowAddModal] = useState(false);
@@ -50,14 +59,29 @@ export default function TeamCalendar({
     const handleNextMonth = () => setCurrentDate(new Date(year, month + 1, 1));
     const handleToday = () => setCurrentDate(new Date());
 
+    const scopeTabs = useMemo(() => {
+        const list = [{ key: 'own', label: 'Agenda Saya' }];
+        if (calendarScope === 'all') {
+            if (buUserIds?.length > 0) {
+                list.push({ key: 'bu', label: 'Agenda BU' });
+            }
+            list.push({ key: 'all', label: 'Semua Agenda' });
+        } else if (calendarScope === 'bu') {
+            list.push({ key: 'bu', label: 'Agenda BU' });
+        }
+        return list;
+    }, [calendarScope, buUserIds]);
+
     // Filtered visits
     const filteredVisits = useMemo(() => {
         return visits.filter(v => {
+            if (agendaScope === 'own' && String(v.user_id) !== String(currentUserId)) return false;
+            if (agendaScope === 'bu' && !buUserIds.includes(Number(v.user_id)) && String(v.user_id) !== String(currentUserId)) return false;
             if (selectedUser && String(v.user_id) !== String(selectedUser)) return false;
             if (selectedType && v.visit_type !== selectedType) return false;
             return true;
         });
-    }, [visits, selectedUser, selectedType]);
+    }, [visits, selectedUser, selectedType, agendaScope, currentUserId, buUserIds]);
 
     // Calendar grid calculation
     const calendarDays = useMemo(() => {
@@ -102,7 +126,7 @@ export default function TeamCalendar({
         const map = {};
         filteredVisits.forEach(v => {
             if (!v.scheduled_at) return;
-            const dateStr = new Date(v.scheduled_at).toISOString().slice(0, 10);
+            const dateStr = calendarDateKey(v.scheduled_at);
             if (!map[dateStr]) map[dateStr] = [];
             map[dateStr].push(v);
         });
@@ -116,21 +140,11 @@ export default function TeamCalendar({
             d.getFullYear() === today.getFullYear();
     };
 
-    const handleDeleteVisit = (visitId) => {
-        if (!confirm('Hapus jadwal kunjungan ini? Acara kalender dan Zoom meeting terkait akan ikut dibatalkan.')) return;
-        router.delete(route('leads.visits.destroy', visitId), {
-            preserveScroll: true,
-            onSuccess: () => {
-                toast.success('Jadwal kunjungan berhasil dihapus');
-                setSelectedEvent(null);
-            }
-        });
-    };
+    const { requestCancellation: handleDeleteVisit, cancellationModal } = useAgendaCancellation(() => setSelectedEvent(null));
 
     const handleCreateZoom = (visitId) => {
         router.post(route('leads.visits.zoom', visitId), {}, {
             preserveScroll: true,
-            onSuccess: () => toast.success('Zoom meeting berhasil dibuat!')
         });
     };
 
@@ -142,20 +156,21 @@ export default function TeamCalendar({
 
     return (
         <AuthenticatedLayout>
-            <Head title="Kalender Tim - Jadwal Kunjungan & Meeting" />
+            <Head title="Kalender" />
+            {cancellationModal}
 
             <div className="space-y-5">
                 {/* Header & Controls */}
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-5 rounded-2xl border border-surface-200 shadow-2xs">
                     <div>
                         <div className="flex items-center gap-2 mb-1">
-                            <span className="text-xs font-bold uppercase tracking-wider text-brand-600">Lead Pipeline & Kunjungan</span>
+                            <span className="text-xs font-bold uppercase tracking-wider text-brand-600">Agenda kerja</span>
                             <span className="text-surface-300">·</span>
-                            <span className="text-xs font-semibold text-surface-500">Shared Company Calendar</span>
+                            <span className="text-xs font-semibold text-surface-500">Follow-up, kunjungan & meeting</span>
                         </div>
                         <h1 className="text-xl font-bold text-surface-900 flex items-center gap-2">
                             <CalendarIcon className="w-5 h-5 text-brand-600" />
-                            Kalender Kunjungan & Meeting Tim
+                            Kalender
                         </h1>
                     </div>
 
@@ -183,6 +198,9 @@ export default function TeamCalendar({
                     </div>
                 </div>
 
+                <div className="flex flex-wrap gap-2" aria-label="Cakupan agenda">
+                    {scopeTabs.map(tab => <button key={tab.key} type="button" aria-pressed={agendaScope === tab.key} onClick={() => { setAgendaScope(tab.key); setSelectedUser(''); }} className={`rounded-lg px-4 py-2 text-sm font-semibold ${agendaScope === tab.key ? 'bg-brand-600 text-white' : 'bg-white border border-surface-200 text-surface-600'}`}>{tab.label}</button>)}
+                </div>
                 {/* Filters & Month Navigator */}
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-4 rounded-xl border border-surface-200">
                     <div className="flex items-center gap-2">
@@ -212,20 +230,20 @@ export default function TeamCalendar({
                     </div>
 
                     <div className="flex items-center gap-2.5 flex-wrap">
-                        {/* Sales Filter */}
-                        <div className="flex items-center gap-1.5 bg-surface-50 border border-surface-200 rounded-lg px-2.5 py-1.5">
+                        {/* User filter is only needed for shared agendas. */}
+                        {agendaScope !== 'own' && <div className="flex items-center gap-1.5 bg-surface-50 border border-surface-200 rounded-lg px-2.5 py-1.5">
                             <User className="w-3.5 h-3.5 text-surface-400" />
                             <select
                                 value={selectedUser}
                                 onChange={e => setSelectedUser(e.target.value)}
                                 className="bg-transparent text-xs font-semibold text-surface-700 outline-none cursor-pointer"
                             >
-                                <option value="">Semua Sales</option>
-                                {users.map(u => (
+                                <option value="">{agendaScope === 'own' ? 'Saya' : calendarScope === 'bu' ? 'Semua anggota BU' : 'Semua pengguna'}</option>
+                                {users.filter(u => agendaScope !== 'bu' || buUserIds.includes(Number(u.id)) || String(u.id) === String(currentUserId)).map(u => (
                                     <option key={u.id} value={u.id}>{u.name}</option>
                                 ))}
                             </select>
-                        </div>
+                        </div>}
 
                         {/* Visit Type Filter */}
                         <div className="flex items-center gap-1.5 bg-surface-50 border border-surface-200 rounded-lg px-2.5 py-1.5">
@@ -235,7 +253,7 @@ export default function TeamCalendar({
                                 onChange={e => setSelectedType(e.target.value)}
                                 className="bg-transparent text-xs font-semibold text-surface-700 outline-none cursor-pointer"
                             >
-                                <option value="">Semua Jenis Kunjungan</option>
+                                <option value="">Semua jenis agenda</option>
                                 {Object.entries(VISIT_TYPES).map(([k, v]) => (
                                     <option key={k} value={k}>{v.label}</option>
                                 ))}
@@ -252,6 +270,11 @@ export default function TeamCalendar({
                 </div>
 
                 {/* Calendar Grid */}
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-2 px-1 text-xs text-surface-600">
+                    <span className="font-semibold">Warna = jenis agenda:</span>
+                    {Object.entries(VISIT_TYPES).map(([key, type]) => <span key={key} className="inline-flex items-center gap-1.5"><span className={`h-2 w-2 rounded-full ${type.dot}`} />{type.label}</span>)}
+                    <span className="text-surface-400">Status selesai terlihat pada detail agenda.</span>
+                </div>
                 <div className="bg-white rounded-2xl border border-surface-200 shadow-2xs overflow-hidden">
                     {/* Day Headers */}
                     <div className="grid grid-cols-7 border-b border-surface-200 bg-surface-50/70 text-center text-xs font-bold text-surface-600 uppercase tracking-wider">
@@ -265,7 +288,7 @@ export default function TeamCalendar({
                     {/* Day Cells */}
                     <div className="grid grid-cols-7 auto-rows-fr divide-y divide-surface-200">
                         {calendarDays.map((cell, idx) => {
-                            const dateStr = cell.date.toISOString().slice(0, 10);
+                            const dateStr = calendarDateKey(cell.date);
                             const dayEvents = visitsByDate[dateStr] || [];
                             const today = isToday(cell.date);
 
@@ -411,8 +434,8 @@ export default function TeamCalendar({
                                     <CheckCircle2 className={`w-4 h-4 shrink-0 ${selectedEvent.checked_in_at ? 'text-emerald-600' : 'text-surface-300'}`} />
                                     <span>
                                         Status: {selectedEvent.checked_in_at
-                                            ? <strong className="text-emerald-700">Sudah Check-in ({new Date(selectedEvent.checked_in_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })})</strong>
-                                            : <span className="text-surface-400">Belum check-in</span>
+                                            ? <strong className="text-emerald-700">Selesai ({new Date(selectedEvent.checked_in_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })})</strong>
+                                            : <span className="text-surface-400">Belum selesai</span>
                                         }
                                     </span>
                                 </div>
@@ -453,6 +476,7 @@ export default function TeamCalendar({
                             <div className="flex items-center justify-between pt-3 border-t border-surface-100">
                                 <button
                                     type="button"
+                                    disabled={!!selectedEvent.checked_in_at || !!selectedEvent.cancelled_at}
                                     onClick={() => handleDeleteVisit(selectedEvent.id)}
                                     className="flex items-center gap-1 text-xs text-red-600 hover:text-red-700 font-semibold cursor-pointer"
                                 >
@@ -518,10 +542,9 @@ function AddCalendarVisitModal({ open, onClose, leads, customers, initialDate, g
     const handleSubmit = (e) => {
         e.preventDefault();
         setSubmitting(true);
-        router.post(route('leads.visits.store'), form, {
+        router.post(route('leads.visits.store'), { ...form, scheduled_at: new Date(form.scheduled_at).toISOString() }, {
             preserveScroll: true,
             onSuccess: () => {
-                toast.success('Jadwal kunjungan berhasil ditambahkan ke kalender!');
                 onClose();
             },
             onError: () => toast.error('Gagal menambahkan jadwal'),
@@ -597,7 +620,7 @@ function AddCalendarVisitModal({ open, onClose, leads, customers, initialDate, g
                                     setForm(f => ({
                                         ...f,
                                         visit_type: val,
-                                        create_zoom: (val === 'demo' || val === 'presentation') ? true : f.create_zoom
+                                        create_zoom: f.create_zoom
                                     }));
                                 }}
                                 className="w-full border border-surface-200 rounded-lg px-3 py-2 text-xs text-surface-800 outline-none focus:ring-2 focus:ring-brand-500 bg-white"
@@ -605,7 +628,7 @@ function AddCalendarVisitModal({ open, onClose, leads, customers, initialDate, g
                                 <option value="visit">Visit Lapangan</option>
                                 <option value="follow_up">Follow Up</option>
                                 <option value="demo">Demo Produk</option>
-                                <option value="presentation">Presentasi / Pitching</option>
+                                <option value="presentation">Presentasi / Pitching</option><option value="installation">Instalasi</option><option value="maintenance">Maintenance</option><option value="leave">Cuti</option>
                                 <option value="other">Lainnya</option>
                             </select>
                         </div>

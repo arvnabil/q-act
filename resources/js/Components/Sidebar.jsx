@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Link, usePage } from '@inertiajs/react';
-import { LayoutDashboard, FileText, Users, Box, Settings, LogOut, ChevronRight, ChevronDown, BarChart2, ShieldCheck, UserCog, FileStack, TrendingUp, MapPin, Trophy } from 'lucide-react';
+import { LayoutDashboard, FileText, Users, Box, Settings, LogOut, ChevronRight, ChevronDown, BarChart2, ShieldCheck, UserCog, FileStack, TrendingUp, MapPin, Trophy, Calendar } from 'lucide-react';
 
 export default function Sidebar({ mobileOpen, setMobileOpen }) {
     const { auth } = usePage().props;
@@ -71,9 +71,9 @@ export default function Sidebar({ mobileOpen, setMobileOpen }) {
             submenu: [
                 { path: '/leads', label: 'Pipeline Board', permission: 'leads_view' },
                 { path: '/leads/visits', label: 'Visit & Follow-up', permission: 'leads_visits' },
-                { path: '/team-calendar', label: 'Kalender Tim', permission: 'leads_visits' },
             ]
         },
+        { path: '/team-calendar', label: 'Kalender', icon: Calendar, calendarAccess: true },
         { path: '/quotations', label: 'Quotations', icon: FileText, badge: quotationsCount, permission: 'quotations_view' },
         { path: '/sales-orders', label: 'Sales Orders', icon: FileStack, permission: 'sales_orders_view' },
         { path: '/customers', label: 'Customers', icon: Users, hideForFinance: true, permission: 'customers_view' },
@@ -92,6 +92,7 @@ export default function Sidebar({ mobileOpen, setMobileOpen }) {
 
     const filterNavByPermission = (items) => {
         return items.filter(n => {
+            if (n.calendarAccess) return (permissions || []).some(p => ['calendar_view', 'leads_view', 'quotations_view', 'leads_visits', 'leads_manage', 'quotations_edit'].includes(p));
             if (isFinance && n.hideForFinance) return false;
             if (n.submenu) {
                 const filteredSubs = n.submenu.filter(sub => !sub.permission || canAccess(sub.permission));
@@ -111,15 +112,17 @@ export default function Sidebar({ mobileOpen, setMobileOpen }) {
     const currentPath = url.split('?')[0];
 
     const isActiveLink = (path) => {
+        if (path === '/team-calendar') return currentPath === path || currentPath === '/leads/calendar';
         if (path === '/leads') {
-            return currentPath === '/leads' || (currentPath.startsWith('/leads/') && !currentPath.startsWith('/leads/visits'));
+            return currentPath === '/leads' || (currentPath.startsWith('/leads/') && !currentPath.startsWith('/leads/visits') && currentPath !== '/leads/calendar');
         }
         return currentPath.startsWith(path);
     };
 
     const isActiveExact = (path) => {
+        if (path === '/team-calendar') return currentPath === path || currentPath === '/leads/calendar';
         if (path === '/leads') {
-            return currentPath === '/leads' || (currentPath.startsWith('/leads/') && !currentPath.startsWith('/leads/visits'));
+            return currentPath === '/leads' || (currentPath.startsWith('/leads/') && !currentPath.startsWith('/leads/visits') && currentPath !== '/leads/calendar');
         }
         return currentPath === path || currentPath.startsWith(path + '/');
     };
