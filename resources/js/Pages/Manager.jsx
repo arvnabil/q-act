@@ -7,7 +7,6 @@ import {
 import { format, parseISO, isValid } from 'date-fns';
 import { id as idLocale } from 'date-fns/locale';
 import Pagination from '@/Components/Pagination';
-import { exportReportPpt } from '@/utils/exportReportPpt';
 
 const PAGE_SIZE = 10;
 
@@ -88,7 +87,6 @@ export default function Manager({
   const [actionLoadingId, setActionLoadingId] = useState(null);
   const [selectedIds, setSelectedIds]   = useState([]);
   const [isBatchProcessing, setIsBatchProcessing] = useState(false);
-  const [isExportingPpt, setIsExportingPpt] = useState(false);
 
   const isTrashTab = filterStatus === 'trash';
   const quotations = isTrashTab ? trashQuotations : activeQuotations;
@@ -156,31 +154,6 @@ export default function Manager({
   }) || [];
 
   const totalNilaiQuotation = filtered.reduce((sum, q) => sum + calcGrandTotal(q), 0);
-
-  const handleExportReport = async () => {
-    try {
-      setIsExportingPpt(true);
-      const salesLabel = filterSales === 'all'
-        ? 'Semua sales'
-        : salesUsers.find((sales) => String(sales.id) === String(filterSales))?.name || 'Sales terpilih';
-      const buLabel = filterBU === 'all'
-        ? 'Semua business unit'
-        : businessUnits.find((bu) => String(bu.id) === String(filterBU))?.name || 'BU terpilih';
-
-      await exportReportPpt({
-        quotations: filtered,
-        filterStatus,
-        filterSalesName: salesLabel,
-        filterBuName: buLabel,
-        userName: user?.name || 'Manager',
-      });
-    } catch (err) {
-      console.error('Export PPT failed:', err);
-      alert('Gagal mengekspor laporan PPT. Silakan coba kembali.');
-    } finally {
-      setIsExportingPpt(false);
-    }
-  };
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const safePage   = Math.min(page, totalPages);
@@ -278,15 +251,6 @@ export default function Manager({
             </div>
             <p className="text-xs text-surface-500">Monitoring seluruh penawaran tim sales, approval status, dan pengelolaan arsip quotation terhapus.</p>
           </div>
-          <button
-            type="button"
-            disabled={isExportingPpt}
-            onClick={handleExportReport}
-            className="inline-flex items-center justify-center gap-2 rounded-xl border border-brand-200 bg-brand-50 px-4 py-2.5 text-xs font-bold text-brand-700 transition hover:bg-brand-100 disabled:opacity-50 cursor-pointer"
-          >
-            {isExportingPpt ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
-            {isExportingPpt ? 'Menyiapkan PPT...' : 'Export Report PPT'}
-          </button>
         </div>
 
         {pendingChangeRequests.length > 0 && <div className="bg-amber-50 rounded-2xl border border-amber-200 p-5 shadow-sm">
