@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\BusinessUnit;
+use App\Models\BusinessUnitMember;
 use App\Models\Customer;
 use App\Models\CustomerPic;
 use App\Models\Lead;
@@ -155,16 +157,25 @@ class LeadController extends Controller
             ->orderByDesc('created_at');
 
         $input = $request->validate([
-            'search' => 'nullable|string|max:255',
-            'stage' => 'nullable|string|max:100',
+            'search'   => 'nullable|string|max:255',
+            'stage'    => 'nullable|string|max:100',
             'sales_id' => 'nullable|string|max:64',
+            'bu_id'    => 'nullable|string|max:64',
         ]);
-        $filters = collect(['search', 'stage', 'sales_id'])
+        $filters = collect(['search', 'stage', 'sales_id', 'bu_id'])
             ->mapWithKeys(fn ($key) => [$key => trim($input[$key] ?? '')])->all();
 
         // Filters only narrow the permission-scoped query, including for BU members.
         if ($filters['stage'] !== '') {
             $query->where('stage', $filters['stage']);
+        }
+        if ($filters['bu_id'] !== '') {
+            $buMemberIds = BusinessUnitMember::where('business_unit_id', $filters['bu_id'])->pluck('user_id');
+            $query->where(function ($q) use ($buMemberIds, $filters) {
+                $q->whereIn('sales_id', $buMemberIds)
+                    ->orWhere(fn ($sub) => $sub->whereNull('sales_id')->whereIn('created_by', $buMemberIds))
+                    ->orWhere('bu_id', $filters['bu_id']);
+            });
         }
         if ($filters['sales_id'] !== '') {
             \App\Services\DashboardScope::owned($query, [$filters['sales_id']]);
@@ -224,6 +235,18 @@ class LeadController extends Controller
                 ->get();
         }
 
+        $userBuIds = BusinessUnitMember::where('user_id', $request->user()->id)->pluck('business_unit_id');
+        $buQuery = BusinessUnit::where('is_active', true)->with('members');
+        if (!$isManagerOrAdmin && DocumentVisibility::allows($request->user(), 'leads_view_bu')) {
+            $buQuery->whereIn('id', $userBuIds);
+        }
+        $businessUnits = $buQuery->orderBy('name')->get()->map(fn($bu) => [
+            'id'         => $bu->id,
+            'name'       => $bu->name,
+            'code'       => $bu->code,
+            'member_ids' => $bu->members->pluck('user_id')->all(),
+        ]);
+
         return Inertia::render('Leads', [
             'stageCounts'      => $isManagerOrAdmin ? Lead::query()->selectRaw('stage, COUNT(*) as total')->groupBy('stage')->pluck('total', 'stage') : [],
             'grouped'          => $grouped,
@@ -231,6 +254,7 @@ class LeadController extends Controller
             'salesUsers'       => $salesUsers,
             'filters'          => $filters,
             'filterSalesUsers' => $filterSalesUsers,
+            'businessUnits'    => $businessUnits,
             'isManagerOrAdmin' => $isManagerOrAdmin,
             'stages'           => Lead::STAGES,
             'sources'          => Lead::SOURCES,

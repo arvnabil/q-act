@@ -240,6 +240,7 @@ export async function exportReportPpt({
   const scopeTexts = [
     { text: 'Cakupan Laporan:\n', options: { bold: true, color: COLORS.primaryDark, fontSize: 13 } },
     { text: `• Filter Sales: ${filterSalesName}\n`, options: { color: COLORS.darkText, fontSize: 11 } },
+    { text: `• Business Unit: ${filterBuName}\n`, options: { color: COLORS.darkText, fontSize: 11 } },
     { text: `• Filter Tahap: ${filterStageName}\n`, options: { color: COLORS.darkText, fontSize: 11 } },
   ];
 

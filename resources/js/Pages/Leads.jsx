@@ -788,7 +788,7 @@ function PipelineSettingsModal({ open, onClose, settings, stages, stageCounts = 
 
 // â”€â”€â”€ Main Page â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-export default function Leads({ grouped, stats, stageCounts = {}, salesUsers, filterSalesUsers = [], filters, isManagerOrAdmin, stages, sources, customers, pipelineSettings }) {
+export default function Leads({ grouped, stats, stageCounts = {}, salesUsers, filterSalesUsers = [], businessUnits = [], filters, isManagerOrAdmin, stages, sources, customers, pipelineSettings }) {
     const { auth } = usePage().props;
     const currentUser = auth?.user;
 
@@ -796,18 +796,27 @@ export default function Leads({ grouped, stats, stageCounts = {}, salesUsers, fi
     const [search, setSearch] = useState(filters?.search || '');
     const [filterStage, setFilterStage] = useState(filters?.stage || '');
     const [filterSales, setFilterSales] = useState(filters?.sales_id || '');
+    const [filterBu, setFilterBu] = useState(filters?.bu_id || '');
     const [isFiltering, setIsFiltering] = useState(false);
     const filterTimer = useRef(null);
     const filterCancel = useRef(null);
     const filterRequest = useRef(0);
-    const hasActiveFilters = Boolean(filters?.search || filters?.stage || filters?.sales_id);
+    const hasActiveFilters = Boolean(filters?.search || filters?.stage || filters?.sales_id || filters?.bu_id);
+
+    const displayedSalesUsers = filterBu
+        ? filterSalesUsers.filter(u => {
+            const bu = businessUnits.find(b => String(b.id) === String(filterBu));
+            return bu?.member_ids?.map(String).includes(String(u.id));
+        })
+        : filterSalesUsers;
 
     useEffect(() => {
         clearTimeout(filterTimer.current);
         setSearch(filters?.search || '');
         setFilterStage(filters?.stage || '');
         setFilterSales(filters?.sales_id || '');
-    }, [filters?.search, filters?.stage, filters?.sales_id]);
+        setFilterBu(filters?.bu_id || '');
+    }, [filters?.search, filters?.stage, filters?.sales_id, filters?.bu_id]);
 
     useEffect(() => () => {
         clearTimeout(filterTimer.current);
@@ -912,10 +921,10 @@ export default function Leads({ grouped, stats, stageCounts = {}, salesUsers, fi
             const first = Math.min(totalStages, Math.floor(scrollLeft / colWidth) + 1);
             const count = Math.max(1, Math.round(clientWidth / colWidth));
             const last = Math.min(totalStages, first + count - 1);
-            setVisibleRange(`Tahap ${first}â€“${last} dari ${totalStages}`);
+            setVisibleRange(`Tahap ${first}-${last} dari ${totalStages}`);
         } else {
             setScrollProgress(0);
-            setVisibleRange(totalStages ? `Tahap 1â€“${totalStages} dari ${totalStages}` : 'Tidak ada stage');
+            setVisibleRange(totalStages ? `Tahap 1-${totalStages} dari ${totalStages}` : 'Tidak ada stage');
         }
     };
 
@@ -942,6 +951,7 @@ export default function Leads({ grouped, stats, stageCounts = {}, salesUsers, fi
             search: next.search.trim() || undefined,
             stage: next.stage || undefined,
             sales_id: next.sales_id || undefined,
+            bu_id: next.bu_id || undefined,
         }, {
             preserveState: true,
             preserveScroll: true,
@@ -959,12 +969,13 @@ export default function Leads({ grouped, stats, stageCounts = {}, salesUsers, fi
         else visit();
     }, []);
 
-    const applyFilters = () => submitFilters({ search, stage: filterStage, sales_id: filterSales });
+    const applyFilters = () => submitFilters({ search, stage: filterStage, sales_id: filterSales, bu_id: filterBu });
     const resetFilters = () => {
         setSearch('');
         setFilterStage('');
         setFilterSales('');
-        submitFilters({ search: '', stage: '', sales_id: '' });
+        setFilterBu('');
+        submitFilters({ search: '', stage: '', sales_id: '', bu_id: '' });
     };
 
     const handleStageChange = (lead, newStage) => {
@@ -1015,6 +1026,7 @@ export default function Leads({ grouped, stats, stageCounts = {}, salesUsers, fi
         try {
             const allLeads = Object.values(localGrouped).flat();
             const salesName = filterSalesUsers.find(u => String(u.id) === String(filterSales))?.name || (filterSales ? (`Sales #${filterSales}`) : 'Semua Sales');
+            const buName = businessUnits.find(b => String(b.id) === String(filterBu))?.name || (filterBu ? 'Business Unit' : 'Semua Business Unit');
             const stageMeta = localSettings?.stages || [];
             const stageName = stageMeta.find(s => s.key === filterStage)?.name || (filterStage ? filterStage : 'Semua Tahap');
             await exportReportPpt({
@@ -1022,6 +1034,7 @@ export default function Leads({ grouped, stats, stageCounts = {}, salesUsers, fi
                 stages: stageMeta,
                 filterSalesName: salesName,
                 filterStageName: stageName,
+                filterBuName: buName,
                 searchKeyword: filters?.search || '',
                 userName: currentUser?.name || 'Manager',
             });
@@ -1172,11 +1185,37 @@ export default function Leads({ grouped, stats, stageCounts = {}, salesUsers, fi
                             value={search}
                             onChange={e => {
                                 setSearch(e.target.value);
-                                submitFilters({ search: e.target.value, stage: filterStage, sales_id: filterSales }, 350);
+                                submitFilters({ search: e.target.value, stage: filterStage, sales_id: filterSales, bu_id: filterBu }, 350);
                             }}
                             onKeyDown={e => e.key === 'Enter' && applyFilters()}
                         />
                     </div>
+
+                    {/* Business Unit filter */}
+                    {businessUnits && businessUnits.length > 0 && (
+                        <select
+                            className="border border-surface-200 rounded-lg px-3 py-2 text-sm text-surface-700 focus:outline-none focus:ring-2 focus:ring-brand-500 max-w-[200px]"
+                            aria-label="Filter Business Unit"
+                            value={filterBu}
+                            onChange={e => {
+                                const nextBu = e.target.value;
+                                setFilterBu(nextBu);
+                                let nextSales = filterSales;
+                                if (nextBu) {
+                                    const bu = businessUnits.find(b => String(b.id) === String(nextBu));
+                                    if (filterSales && !bu?.member_ids?.map(String).includes(String(filterSales))) {
+                                        nextSales = '';
+                                        setFilterSales('');
+                                    }
+                                }
+                                submitFilters({ search, stage: filterStage, sales_id: nextSales, bu_id: nextBu });
+                            }}>
+                            <option value="">Semua Business Unit</option>
+                            {businessUnits.map(b => (
+                                <option key={b.id} value={b.id}>{b.name}</option>
+                            ))}
+                        </select>
+                    )}
 
                     {/* Stage filter */}
                     <select
@@ -1185,24 +1224,24 @@ export default function Leads({ grouped, stats, stageCounts = {}, salesUsers, fi
                         value={filterStage}
                         onChange={e => {
                             setFilterStage(e.target.value);
-                            submitFilters({ search, stage: e.target.value, sales_id: filterSales });
+                            submitFilters({ search, stage: e.target.value, sales_id: filterSales, bu_id: filterBu });
                         }}>
                         <option value="">Semua Stage</option>
                         {activeStagesList.map(s => <option key={s.key} value={s.key}>{s.name || stageMetaMap[s.key]?.label || s.key}</option>)}
                     </select>
 
-                    {/* Only offer owners within the user's existing visibility scope. */}
-                    {filterSalesUsers.length > 1 && (
+                    {/* Only offer owners within the user's existing visibility scope / selected BU. */}
+                    {displayedSalesUsers.length > 0 && (
                         <select
                             className="border border-surface-200 rounded-lg px-3 py-2 text-sm text-surface-700 focus:outline-none focus:ring-2 focus:ring-brand-500"
                             aria-label="Filter pemilik lead"
                             value={filterSales}
                             onChange={e => {
                                 setFilterSales(e.target.value);
-                                submitFilters({ search, stage: filterStage, sales_id: e.target.value });
+                                submitFilters({ search, stage: filterStage, sales_id: e.target.value, bu_id: filterBu });
                             }}>
                             <option value="">Semua pemilik lead</option>
-                            {filterSalesUsers.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+                            {displayedSalesUsers.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
                         </select>
                     )}
 
@@ -1211,8 +1250,8 @@ export default function Leads({ grouped, stats, stageCounts = {}, salesUsers, fi
                         {isFiltering ? <Loader2 className="w-4 h-4 animate-spin" /> : <Filter className="w-4 h-4" />}
                         Terapkan
                     </button>
-                    {(search || filterStage || filterSales || hasActiveFilters) && <button type="button" onClick={resetFilters} className="rounded-lg px-3 py-2 text-xs font-semibold text-surface-500 hover:bg-surface-100">Reset filter</button>}
-                    <span role="status" className="text-xs text-surface-500">{isFiltering ? 'Memuat hasilâ€¦' : `${totalLeadsCount} lead ditemukan`}</span>
+                    {(search || filterStage || filterSales || filterBu || hasActiveFilters) && <button type="button" onClick={resetFilters} className="rounded-lg px-3 py-2 text-xs font-semibold text-surface-500 hover:bg-surface-100">Reset filter</button>}
+                    <span role="status" className="text-xs text-surface-500">{isFiltering ? 'Memuat hasil...' : `${totalLeadsCount} lead ditemukan`}</span>
 
                     {/* View toggle */}
                     <div className="ml-auto flex items-center border border-surface-200 rounded-lg overflow-hidden">
