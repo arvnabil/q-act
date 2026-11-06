@@ -92,8 +92,10 @@ const formatVisitSchedule = (v) => {
         const startStr = start.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
         if (v.end_at) {
             const end = new Date(v.end_at);
-            const endStr = end.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
-            return startStr === endStr ? `${startStr} (Seharian)` : `${startStr} – ${endStr} (Seharian)`;
+            if (end >= start) {
+                const endStr = end.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
+                return startStr === endStr ? `${startStr} (Seharian)` : `${startStr} – ${endStr} (Seharian)`;
+            }
         }
         return `${startStr} (Seharian)`;
     }

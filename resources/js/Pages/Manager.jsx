@@ -7,6 +7,7 @@ import {
 import { format, parseISO, isValid } from 'date-fns';
 import { id as idLocale } from 'date-fns/locale';
 import Pagination from '@/Components/Pagination';
+import JSZip from 'jszip';
 
 const PAGE_SIZE = 10;
 
@@ -68,6 +69,26 @@ const reportStatusLabels = {
   superseded: 'Superseded',
   revision_draft: 'Revision Draft',
 };
+
+const pptxXmlEscape = (value) => String(value ?? '')
+  .replace(/&/g, '&amp;')
+  .replace(/</g, '&lt;')
+  .replace(/>/g, '&gt;')
+  .replace(/"/g, '&quot;')
+  .replace(/'/g, '&apos;');
+
+const pptxEmu = (inches) => Math.round(inches * 914400);
+
+const pptxRun = (text, { size = 18, color = '172033', bold = false } = {}) =>
+  `<a:r><a:rPr lang="id-ID" sz="${size * 100}"${bold ? ' b="1"' : ''}><a:solidFill><a:srgbClr val="${color}"/></a:solidFill><a:latin typeface="Aptos"/></a:rPr><a:t>${pptxXmlEscape(text)}</a:t></a:r>`;
+
+const pptxTextBox = ({ id, x, y, w, h, text, size = 18, color = '172033', bold = false, align = 'l' }) =>
+  `<p:sp><p:nvSpPr><p:cNvPr id="${id}" name="Text ${id}"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm><a:off x="${pptxEmu(x)}" y="${pptxEmu(y)}"/><a:ext cx="${pptxEmu(w)}" cy="${pptxEmu(h)}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:noFill/><a:ln><a:noFill/></a:ln></p:spPr><p:txBody><a:bodyPr wrap="square"/><a:lstStyle/><a:p><a:pPr algn="${align}"/>${pptxRun(text, { size, color, bold })}<a:endParaRPr lang="id-ID"/></a:p></p:txBody></p:sp>`;
+
+const pptxRect = ({ id, x, y, w, h, fill = 'FFFFFF', line = fill, radius = false }) =>
+  `<p:sp><p:nvSpPr><p:cNvPr id="${id}" name="Shape ${id}"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm><a:off x="${pptxEmu(x)}" y="${pptxEmu(y)}"/><a:ext cx="${pptxEmu(w)}" cy="${pptxEmu(h)}"/></a:xfrm><a:prstGeom prst="${radius ? 'roundRect' : 'rect'}"><a:avLst/></a:prstGeom><a:solidFill><a:srgbClr val="${fill}"/></a:solidFill><a:ln><a:solidFill><a:srgbClr val="${line}"/></a:solidFill></a:ln></p:spPr><p:txBody><a:bodyPr/><a:lstStyle/><a:p><a:endParaRPr/></a:p></p:txBody></p:sp>`;
+
+const pptxSlide = (content) => `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><p:sld xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"><p:cSld><p:spTree><p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr><p:grpSpPr/>${content}</p:spTree></p:cSld><p:clrMapOvr><a:masterClrMapping/></p:clrMapOvr></p:sld>`;
 
 export default function Manager({ 
   activeQuotations = [], 
@@ -155,7 +176,7 @@ export default function Manager({
 
   const totalNilaiQuotation = filtered.reduce((sum, q) => sum + calcGrandTotal(q), 0);
 
-  const handleExportReport = () => {
+  const handleLegacyExportReport = () => {
     const generatedAt = format(new Date(), 'd MMMM yyyy HH:mm', { locale: idLocale });
     const dateStamp = format(new Date(), 'yyyy-MM-dd');
     const statusLabel = STATUS_TABS.find((tab) => tab.key === filterStatus)?.label || 'Semua';

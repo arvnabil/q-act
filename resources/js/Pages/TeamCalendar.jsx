@@ -128,7 +128,10 @@ export default function TeamCalendar({
         filteredVisits.forEach(v => {
             if (!v.scheduled_at) return;
             const startKey = calendarDateKey(v.scheduled_at);
-            const endKey = v.end_at ? calendarDateKey(v.end_at) : startKey;
+            let endKey = v.end_at ? calendarDateKey(v.end_at) : startKey;
+            if (endKey < startKey) {
+                endKey = startKey;
+            }
             const cur = new Date(v.scheduled_at);
             cur.setHours(0, 0, 0, 0);
             while (true) {
