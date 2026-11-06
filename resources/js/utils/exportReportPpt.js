@@ -118,7 +118,7 @@ export async function exportReportPpt({
     ? Math.round((dealLeads.length / (dealLeads.length + hotLeads.length)) * 100)
     : winRate;
 
-  const footerText = `PT. ACTiV Teknologi Solusi · Qsales Report · ${monthYear}`;
+  const footerText = `PT Alfa Cipta Teknologi Virtual · Qsales Report · ${monthYear}`;
 
   // Helper for consistent slide footer
   const addFooter = (slide, pageNum) => {
@@ -216,7 +216,7 @@ export async function exportReportPpt({
   });
 
   // Subtitle
-  slide1.addText(`PT. ACTiV Teknologi Solusi · Periode ${monthYear}`, {
+  slide1.addText(`PT Alfa Cipta Teknologi Virtual · Periode ${monthYear}`, {
     x: 0.8,
     y: 3.75,
     w: 10.0,
