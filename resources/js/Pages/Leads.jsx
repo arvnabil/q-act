@@ -7,10 +7,12 @@ import { formatRupiah, formatCompactRupiah } from '@/utils/money';
 import {
     TrendingUp, Plus, Search, Filter, LayoutGrid, List, X,
     ChevronDown, ChevronLeft, ChevronRight, Building2, User, ArrowRight, MoreHorizontal,
-    FileText, Banknote, Clock, Tag, AlertTriangle, Settings, SlidersHorizontal, Palette, Loader2, Trash2, ArrowUp, ArrowDown
+    FileText, Banknote, Clock, Tag, AlertTriangle, Settings, SlidersHorizontal, Palette, Loader2, Trash2, ArrowUp, ArrowDown,
+    Presentation
 } from 'lucide-react';
+import { exportReportPpt } from '@/utils/exportReportPpt';
 
-// ─── Constants ──────────────────────────────────────────────────────────────────
+// â”€â”€â”€ Constants â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 const STAGE_META = {
     lead_masuk:          { label: 'Lead Masuk',          color: 'bg-surface-100 text-surface-600',  dot: 'bg-surface-400',  border: 'border-surface-200' },
@@ -52,7 +54,7 @@ const initials = (name) => {
     return name.split(' ').slice(0, 2).map(w => w[0]).join('').toUpperCase();
 };
 
-// ─── Stage Badge ─────────────────────────────────────────────────────────────────
+// â”€â”€â”€ Stage Badge â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function StageBadge({ stage, stageMetaMap }) {
     const meta = stageMetaMap?.[stage] || STAGE_META[stage] || { label: stage, color: 'bg-surface-100 text-surface-600', dot: 'bg-surface-400' };
@@ -74,7 +76,7 @@ function StageBadge({ stage, stageMetaMap }) {
     );
 }
 
-// ─── Lead Card ───────────────────────────────────────────────────────────────────
+// â”€â”€â”€ Lead Card â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 const ACTIVE_STAGE_KEYS = ['lead_masuk', 'follow_up', 'lead_qualification', 'negotiation', 'win', 'lost', 'selesai_terbayar'];
 
@@ -189,7 +191,7 @@ function LeadCard({ lead, activeStagesList, stageMetaMap, onStageChange, onViewD
     );
 }
 
-// ─── Kanban Column ────────────────────────────────────────────────────────────────
+// â”€â”€â”€ Kanban Column â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function KanbanColumn({ stage, stageInfo, meta: customMeta, leads, onStageChange, onViewDetail, onAddLead, onDropCard, activeStagesList, stageMetaMap }) {
     const meta = customMeta || STAGE_META[stage] || { label: stage, dot: 'bg-surface-400', border: 'border-surface-200' };
@@ -291,7 +293,7 @@ function KanbanColumn({ stage, stageInfo, meta: customMeta, leads, onStageChange
     );
 }
 
-// ─── Lead Form Modal ──────────────────────────────────────────────────────────────
+// â”€â”€â”€ Lead Form Modal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function LeadFormModal({ open, onClose, defaultStage, customers, salesUsers, sources, stages, activeStagesList, isManagerOrAdmin, currentUser }) {
     const permissions = usePage().props.auth?.permissions || [];
@@ -382,7 +384,7 @@ function LeadFormModal({ open, onClose, defaultStage, customers, salesUsers, sou
                                     <label className="block text-xs font-semibold text-surface-600">PIC
                                         <select className={`${inputClass} mt-1.5`} value={form.pic_id} onChange={e => { const p = selectedCustomer?.pics?.find(p => String(p.id) === e.target.value); setForm(f => ({ ...f, pic_id: p?.id || '', pic_name: p?.name || '', pic_phone: p?.phone || '', customer_phone: p?.phone || '', customer_email: p?.email || '' })); }}>
                                             <option value="">{selectedCustomer?.pics?.length ? 'Tanpa PIC' : 'Belum ada PIC'}</option>
-                                            {selectedCustomer?.pics?.map(p => <option key={p.id} value={p.id}>{p.name}{p.is_primary ? ' (Utama)' : ''}{[p.phone, p.email].filter(Boolean).length > 0 ? ` — ${[p.phone, p.email].filter(Boolean).join(' / ')}` : ''}</option>)}
+                                            {selectedCustomer?.pics?.map(p => <option key={p.id} value={p.id}>{p.name}{p.is_primary ? ' (Utama)' : ''}{[p.phone, p.email].filter(Boolean).length > 0 ? ` â€” ${[p.phone, p.email].filter(Boolean).join(' / ')}` : ''}</option>)}
                                         </select>
                                     </label>
                                 )}
@@ -468,7 +470,7 @@ function LeadFormModal({ open, onClose, defaultStage, customers, salesUsers, sou
     );
 }
 
-// ─── List View ────────────────────────────────────────────────────────────────────
+// â”€â”€â”€ List View â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function ListView({ grouped, stageMetaMap, onStageChange, onViewDetail }) {
     const allLeads = Object.values(grouped).flat();
@@ -504,14 +506,14 @@ function ListView({ grouped, stageMetaMap, onStageChange, onViewDetail }) {
                                     </div>
                                 </td>
                                 <td className="px-4 py-3">
-                                    <span className="text-surface-600 text-sm">{lead.customer?.name || lead.customer_name || '—'}</span>
+                                    <span className="text-surface-600 text-sm">{lead.customer?.name || lead.customer_name || 'â€”'}</span>
                                 </td>
                                 <td className="px-4 py-3">
                                     <div className="flex items-center gap-2">
                                         <div className="w-6 h-6 rounded-full bg-brand-100 text-brand-700 text-[10px] font-bold flex items-center justify-center">
                                             {initials(lead.sales?.name)}
                                         </div>
-                                        <span className="text-sm text-surface-600 truncate max-w-[80px]">{lead.sales?.name || '—'}</span>
+                                        <span className="text-sm text-surface-600 truncate max-w-[80px]">{lead.sales?.name || 'â€”'}</span>
                                     </div>
                                 </td>
                                 <td className="px-4 py-3"><StageBadge stage={lead.stage} stageMetaMap={stageMetaMap} /></td>
@@ -528,7 +530,7 @@ function ListView({ grouped, stageMetaMap, onStageChange, onViewDetail }) {
                                     {lead.quotation ? (
                                         <span className="inline-flex whitespace-nowrap text-xs text-brand-700 font-semibold bg-brand-50 border border-brand-100 px-2.5 py-1 rounded-full">Ada Quotation</span>
                                     ) : (
-                                        <span className="text-xs text-surface-300">—</span>
+                                        <span className="text-xs text-surface-300">â€”</span>
                                     )}
                                 </td>
                             </tr>
@@ -549,9 +551,9 @@ function ListView({ grouped, stageMetaMap, onStageChange, onViewDetail }) {
     );
 }
 
-// ─── Pipeline Settings Modal ──────────────────────────────────────────────────────
+// â”€â”€â”€ Pipeline Settings Modal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-function PipelineSettingsModal({ open, onClose, settings, stages, stageCounts = {}, onSave }) {
+function PipelineSettingsModal({ open, onClose, settings, stages, stageCounts = {}, onSave, onExportPpt, isExportingPpt }) {
     const [stagesList, setStagesList] = useState(settings?.stages || []);
     const [fStage1, setFStage1] = useState(settings?.featured_stage_1 || 'negotiation');
     const [fStage2, setFStage2] = useState(settings?.featured_stage_2 || 'win');
@@ -742,7 +744,7 @@ function PipelineSettingsModal({ open, onClose, settings, stages, stageCounts = 
                     {saveError && <p role="alert" className="text-sm text-red-600">{saveError}</p>}
                     {removing && <div role="dialog" aria-modal="true" aria-label="Hapus tahap pipeline" className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4">
                         <div className="w-full max-w-md space-y-4 rounded-2xl bg-white p-6 shadow-xl">
-                            <h3 className="text-lg font-bold">Hapus tahap “{removing.name || 'Tanpa nama'}”</h3>
+                            <h3 className="text-lg font-bold">Hapus tahap â€œ{removing.name || 'Tanpa nama'}â€</h3>
                             <p className="text-sm text-surface-600">{countFor(removing.key)} lead termasuk arsip. {countFor(removing.key) ? 'Pilih tahap tujuan untuk seluruh lead.' : 'Tahap kosong ini akan dihapus.'}</p>
                             <label className="block text-sm font-semibold">Pindahkan ke<select value={destination} onChange={e => setDestination(e.target.value)} className="mt-2 w-full rounded-lg border-surface-200"><option value="">Pilih tahap tujuan</option>{stagesList.filter(s => s.key !== removing.key).map(s => <option key={s.key} value={s.key}>{s.name || 'Tahap baru'}</option>)}</select></label>
                             {['deal', 'lost'].includes(stagesList.find(s => s.key === destination)?.type) && <p className="rounded-lg bg-amber-50 p-3 text-sm text-amber-800">Tujuan bertipe {stagesList.find(s => s.key === destination)?.type === 'deal' ? 'Deal: lead akan dihitung sebagai menang' : 'Lost: lead akan dihitung sebagai kalah'} pada laporan.</p>}
@@ -751,7 +753,17 @@ function PipelineSettingsModal({ open, onClose, settings, stages, stageCounts = 
                         </div>
                     </div>}
                     {/* Footer */}
-                    <div className="flex items-center justify-end gap-2 pt-3 border-t border-surface-200">
+                    <div className="flex items-center justify-between gap-2 pt-3 border-t border-surface-200">
+                        <button
+                            type="button"
+                            onClick={onExportPpt}
+                            disabled={isExportingPpt}
+                            className="flex items-center gap-1.5 px-3.5 py-2 border border-brand-200 hover:bg-brand-50 text-brand-700 text-sm font-semibold rounded-xl transition-colors disabled:opacity-60"
+                        >
+                            {isExportingPpt ? <Loader2 className="w-4 h-4 animate-spin" /> : <Presentation className="w-4 h-4" />}
+                            Export Laporan PPT
+                        </button>
+                        <div className="flex items-center gap-2">
                         <button
                             type="button"
                             onClick={onClose}
@@ -766,6 +778,7 @@ function PipelineSettingsModal({ open, onClose, settings, stages, stageCounts = 
                         >
                             {saving ? 'Menyimpan...' : 'Simpan Pengaturan'}
                         </button>
+                        </div>
                     </div>
                 </form>
             </div>
@@ -773,7 +786,7 @@ function PipelineSettingsModal({ open, onClose, settings, stages, stageCounts = 
     );
 }
 
-// ─── Main Page ───────────────────────────────────────────────────────────────────
+// â”€â”€â”€ Main Page â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export default function Leads({ grouped, stats, stageCounts = {}, salesUsers, filterSalesUsers = [], filters, isManagerOrAdmin, stages, sources, customers, pipelineSettings }) {
     const { auth } = usePage().props;
@@ -804,6 +817,7 @@ export default function Leads({ grouped, stats, stageCounts = {}, salesUsers, fi
     const [showForm, setShowForm] = useState(false);
     const [defaultFormStage, setDefaultFormStage] = useState('lead_masuk');
     const [showSettingsModal, setShowSettingsModal] = useState(false);
+    const [isExportingPpt, setIsExportingPpt] = useState(false);
 
     const [localGrouped, setLocalGrouped] = useState(grouped);
     const [localStats, setLocalStats] = useState(stats);
@@ -885,7 +899,7 @@ export default function Leads({ grouped, stats, stageCounts = {}, salesUsers, fi
 
     const kanbanRef = useRef(null);
     const [scrollProgress, setScrollProgress] = useState(0);
-    const [visibleRange, setVisibleRange] = useState('Tahap 1–4 dari 7');
+    const [visibleRange, setVisibleRange] = useState('Tahap 1â€“4 dari 7');
 
     const handleKanbanScroll = () => {
         if (!kanbanRef.current) return;
@@ -898,10 +912,10 @@ export default function Leads({ grouped, stats, stageCounts = {}, salesUsers, fi
             const first = Math.min(totalStages, Math.floor(scrollLeft / colWidth) + 1);
             const count = Math.max(1, Math.round(clientWidth / colWidth));
             const last = Math.min(totalStages, first + count - 1);
-            setVisibleRange(`Tahap ${first}–${last} dari ${totalStages}`);
+            setVisibleRange(`Tahap ${first}â€“${last} dari ${totalStages}`);
         } else {
             setScrollProgress(0);
-            setVisibleRange(totalStages ? `Tahap 1–${totalStages} dari ${totalStages}` : 'Tidak ada stage');
+            setVisibleRange(totalStages ? `Tahap 1â€“${totalStages} dari ${totalStages}` : 'Tidak ada stage');
         }
     };
 
@@ -994,6 +1008,32 @@ export default function Leads({ grouped, stats, stageCounts = {}, salesUsers, fi
         router.visit(route('leads.show', lead.id));
     };
 
+    const handleExportPpt = async () => {
+        if (isExportingPpt) return;
+        setIsExportingPpt(true);
+        const toastId = toast.loading('Menyiapkan laporan PPT...');
+        try {
+            const allLeads = Object.values(localGrouped).flat();
+            const salesName = filterSalesUsers.find(u => String(u.id) === String(filterSales))?.name || (filterSales ? (`Sales #${filterSales}`) : 'Semua Sales');
+            const stageMeta = localSettings?.stages || [];
+            const stageName = stageMeta.find(s => s.key === filterStage)?.name || (filterStage ? filterStage : 'Semua Tahap');
+            await exportReportPpt({
+                leads: allLeads,
+                stages: stageMeta,
+                filterSalesName: salesName,
+                filterStageName: stageName,
+                searchKeyword: filters?.search || '',
+                userName: currentUser?.name || 'Manager',
+            });
+            toast.success('Laporan PPT berhasil diunduh!', { id: toastId });
+        } catch (err) {
+            console.error('PPT export error:', err);
+            toast.error('Gagal mengekspor laporan PPT.', { id: toastId });
+        } finally {
+            setIsExportingPpt(false);
+        }
+    };
+
     const handleAddLead = (stage = null) => {
         setDefaultFormStage(stage || activeStagesList[0]?.key || 'lead_masuk');
         setShowForm(true);
@@ -1027,6 +1067,14 @@ export default function Leads({ grouped, stats, stageCounts = {}, salesUsers, fi
                                     Pengaturan Pipeline
                                 </button>
                             )}
+                            <button
+                                onClick={handleExportPpt}
+                                disabled={isExportingPpt}
+                                className="flex items-center gap-1.5 px-3.5 py-2 border border-brand-200 hover:bg-brand-50 text-brand-700 text-sm font-semibold rounded-xl transition-colors disabled:opacity-60"
+                                title="Export Laporan PPT">
+                                {isExportingPpt ? <Loader2 className="w-4 h-4 animate-spin" /> : <Presentation className="w-4 h-4" />}
+                                Export PPT
+                            </button>
                             <button
                                 onClick={() => handleAddLead()}
                                 className="flex items-center gap-2 px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white text-sm font-semibold rounded-xl transition-colors">
@@ -1164,7 +1212,7 @@ export default function Leads({ grouped, stats, stageCounts = {}, salesUsers, fi
                         Terapkan
                     </button>
                     {(search || filterStage || filterSales || hasActiveFilters) && <button type="button" onClick={resetFilters} className="rounded-lg px-3 py-2 text-xs font-semibold text-surface-500 hover:bg-surface-100">Reset filter</button>}
-                    <span role="status" className="text-xs text-surface-500">{isFiltering ? 'Memuat hasil…' : `${totalLeadsCount} lead ditemukan`}</span>
+                    <span role="status" className="text-xs text-surface-500">{isFiltering ? 'Memuat hasilâ€¦' : `${totalLeadsCount} lead ditemukan`}</span>
 
                     {/* View toggle */}
                     <div className="ml-auto flex items-center border border-surface-200 rounded-lg overflow-hidden">
@@ -1287,9 +1335,21 @@ export default function Leads({ grouped, stats, stageCounts = {}, salesUsers, fi
                         setLocalSettings(newSettings);
                         router.reload({ only: ['grouped', 'stats', 'pipelineSettings', 'stageCounts'] });
                     }}
+                    onExportPpt={handleExportPpt}
+                    isExportingPpt={isExportingPpt}
                 />
             )}
         </AuthenticatedLayout>
     );
 }
+
+
+
+
+
+
+
+
+
+
 
