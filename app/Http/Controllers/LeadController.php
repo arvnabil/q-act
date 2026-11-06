@@ -324,6 +324,9 @@ class LeadController extends Controller
 
     public function storePic(Request $request, Lead $lead)
     {
+        WorkflowAccess::lead($request->user(), $lead);
+        abort_unless(WorkflowAccess::canManage($request->user()), 403);
+
         $validated = $request->validate([
             'customer_pic_id' => 'nullable|exists:customer_pics,id',
             'name'            => 'required|string|max:255',
@@ -346,8 +349,11 @@ class LeadController extends Controller
         return back()->with('message', 'PIC berhasil ditambahkan ke lead.');
     }
 
-    public function destroyPic(Lead $lead, LeadPic $pic)
+    public function destroyPic(Request $request, Lead $lead, LeadPic $pic)
     {
+        WorkflowAccess::lead($request->user(), $lead);
+        abort_unless(WorkflowAccess::canManage($request->user()), 403);
+
         if ($pic->lead_id === $lead->id) {
             $pic->delete();
         }
@@ -389,6 +395,9 @@ class LeadController extends Controller
 
     public function updateStage(Request $request, Lead $lead)
     {
+        WorkflowAccess::lead($request->user(), $lead);
+        abort_unless(WorkflowAccess::canManage($request->user()), 403);
+
         $data = $request->validate([
             'stage'       => 'required|string|in:' . implode(',', $this->getAllowedStageKeys()),
             'lost_reason' => 'nullable|string|max:500',
@@ -445,8 +454,11 @@ class LeadController extends Controller
 
     // ─── Destroy (Archive) ───────────────────────────────────────────────────────
 
-    public function destroy(Lead $lead)
+    public function destroy(Request $request, Lead $lead)
     {
+        WorkflowAccess::lead($request->user(), $lead);
+        abort_unless(WorkflowAccess::canManage($request->user()), 403);
+
         $lead->update(['is_archived' => true, 'updated_by' => Auth::id()]);
 
         return back()->with('message', 'Lead diarsipkan.');
@@ -1148,17 +1160,40 @@ class LeadController extends Controller
         $event = $request->input('event');
         $payload = $request->input('payload');
 
+        $secretSetting = SystemSetting::find('zoom_credentials')?->value ?? [];
+        $secret = $secretSetting['webhook_secret_token'] ?? $secretSetting['client_secret'] ?? '';
+
         // 1. Zoom URL Validation Challenge
         if ($event === 'endpoint.url_validation') {
             $plainToken = $payload['plainToken'] ?? '';
-            $secretSetting = SystemSetting::find('zoom_credentials')?->value ?? [];
-            $secret = $secretSetting['webhook_secret_token'] ?? $secretSetting['client_secret'] ?? '';
             $encryptedToken = hash_hmac('sha256', $plainToken, $secret);
 
             return response()->json([
                 'plainToken'     => $plainToken,
                 'encryptedToken' => $encryptedToken,
             ]);
+        }
+
+        // Verify Zoom HMAC signature if webhook secret is configured
+        if ($secret) {
+            $timestamp = $request->header('x-zm-request-timestamp');
+            $signature = $request->header('x-zm-signature');
+
+            if (!$timestamp || !$signature) {
+                return response()->json(['message' => 'Missing signature headers.'], 401);
+            }
+
+            // Replay protection: check timestamp is within 5 minutes
+            if (abs(time() - (int) $timestamp) > 300) {
+                return response()->json(['message' => 'Request timestamp expired.'], 401);
+            }
+
+            $message = 'v0:' . $timestamp . ':' . $request->getContent();
+            $expectedSignature = 'v0=' . hash_hmac('sha256', $message, $secret);
+
+            if (!hash_equals($expectedSignature, (string) $signature)) {
+                return response()->json(['message' => 'Invalid signature.'], 401);
+            }
         }
 
         // 2. Meeting Ended Event

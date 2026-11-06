@@ -359,7 +359,7 @@ class SalesOrderController extends Controller
         $salesOrder->update([
             'total_item_value' => $totalItemVal,
             'total_cost' => $totalCost,
-            'grand_total' => $totalItemVal,
+            'grand_total' => $totalItemVal + $totalCost,
         ]);
 
         return back()->with('message', 'Biaya tambahan (cost) berhasil ditambahkan.');
