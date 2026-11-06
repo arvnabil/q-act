@@ -1,4 +1,3 @@
-import pptxgen from 'pptxgenjs';
 import { format, parseISO, isValid } from 'date-fns';
 import { id as idLocale } from 'date-fns/locale';
 
@@ -48,7 +47,9 @@ export async function exportReportPpt({
   filterBuName = 'Semua business unit',
   userName = 'Manager',
 }) {
-  const pptx = new pptxgen();
+  const pptxModule = await import('pptxgenjs');
+  const PptxGen = pptxModule.default || pptxModule;
+  const pptx = new (PptxGen.default || PptxGen)();
   pptx.layout = 'LAYOUT_WIDE'; // 13.33 x 7.5 inches (16:9)
 
   const dateNow = new Date();
@@ -656,3 +657,4 @@ export async function exportReportPpt({
   const fileName = `Qsales-Manager-Report-${dateStamp}.pptx`;
   await pptx.writeFile({ fileName });
 }
+
