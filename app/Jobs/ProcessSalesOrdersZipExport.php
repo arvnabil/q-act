@@ -2,6 +2,7 @@
 
 namespace App\Jobs;
 
+use App\Mail\ExportReadyNotification;
 use App\Models\ExportJob;
 use App\Models\SalesOrder;
 use App\Services\SalesOrderExcelService;
@@ -12,6 +13,7 @@ use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
 use ZipArchive;
 
@@ -28,7 +30,7 @@ class ProcessSalesOrdersZipExport implements ShouldQueue
 
     public function handle(SalesOrderExcelService $excelService): void
     {
-        $exportJob = ExportJob::find($this->exportJobId);
+        $exportJob = ExportJob::with('user')->find($this->exportJobId);
         if (!$exportJob) return;
 
         $exportJob->update([
@@ -106,6 +108,19 @@ class ProcessSalesOrdersZipExport implements ShouldQueue
                 'completed_at' => Carbon::now(),
                 'expires_at' => Carbon::now()->addDays(7), // Available for 7 days
             ]);
+
+            // Send notification email to the user requesting the export
+            if ($exportJob->user && $exportJob->user->email) {
+                try {
+                    $downloadUrl = route('downloads.download', $exportJob->id);
+                    Mail::to($exportJob->user->email)->send(
+                        new ExportReadyNotification($exportJob, $exportJob->user, $downloadUrl)
+                    );
+                    Log::info("Email notifikasi ekspor berhasil dikirim ke: {$exportJob->user->email}");
+                } catch (\Throwable $mailErr) {
+                    Log::warning("Gagal mengirim email notifikasi ekspor ke {$exportJob->user->email}: " . $mailErr->getMessage());
+                }
+            }
 
         } catch (\Throwable $e) {
             Log::error("ProcessSalesOrdersZipExport Error: " . $e->getMessage(), [
