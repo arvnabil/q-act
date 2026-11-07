@@ -12,6 +12,10 @@ class SalesOrderCost extends Model
 
     protected $guarded = [];
 
+    protected $casts = [
+        'cost_date' => 'date',
+    ];
+
     public function category(): BelongsTo
     {
         return $this->belongsTo(CostCategory::class, 'cost_category_id');

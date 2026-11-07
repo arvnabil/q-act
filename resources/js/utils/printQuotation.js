@@ -218,7 +218,7 @@ export function generateQuotationHTML(q, withImage = false, bankAccount = null, 
   const rawTerms = q.terms && Array.isArray(q.terms) && q.terms.length > 0 ? q.terms : [];
   const termsList = rawTerms.map(term => translateTerm(term, lang)).filter(Boolean);
   const picObj = q.pic || q.customer?.pics?.find(p => p.is_primary) || q.customer?.pics?.[0] || null;
-  const creatorObj = q.creator || q.sales || null;
+  const creatorObj = q.sales || q.creator || null; // prioritize sales PIC over creator (Presales)
   const bankName = bankAccount?.bank_name || 'BCA';
   const bankNum = bankAccount?.account_number || '6044447899';
   const bankHolder = bankAccount?.account_name || 'PT ALFA CIPTA TEKNOLOGI VIRTUAL';

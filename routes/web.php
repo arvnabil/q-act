@@ -110,6 +110,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('/sales-orders/{salesOrder}/purchase-order-metadata', [SalesOrderController::class, 'updatePurchaseOrderMetadata'])->name('sales-orders.purchase-order-metadata');
     Route::delete('/sales-orders/{salesOrder}', [SalesOrderController::class, 'destroy'])->name('sales-orders.destroy');
     Route::post('/sales-orders/{salesOrder}/costs', [SalesOrderController::class, 'storeCost'])->name('sales-orders.costs.store');
+    Route::post('/sales-orders/{salesOrder}/costs/{cost}', [SalesOrderController::class, 'updateCost'])->name('sales-orders.costs.update');
     Route::delete('/sales-orders/{salesOrder}/costs/{cost}', [SalesOrderController::class, 'destroyCost'])->name('sales-orders.costs.destroy');
     Route::post('/sales-orders/{salesOrder}/status', [SalesOrderController::class, 'updateStatus'])->name('sales-orders.status.update');
 

@@ -65,7 +65,7 @@ class WorkflowController extends Controller
             'calendarConfigured' => app(GoogleCalendarService::class)->isConfigured(),
             'zoomConfigured' => app(ZoomService::class)->isConfigured() && (bool) $request->user()->has_zoom_license,
             'pics' => $pics,
-            'suggestedTitle' => $quotation ? 'Lead '.($quotation->customer?->name ?: $quotation->id) : $lead?->title,
+            'suggestedTitle' => $quotation ? ($quotation->customer?->name ?: $quotation->id) : $lead?->title,
         ];
     }
 
@@ -92,8 +92,12 @@ class WorkflowController extends Controller
             $lead = null;
         }
         $payload = $this->payload($request, $lead, LeadVisit::whereIn('quotation_id', $visibleIds), $quotation);
+        $payload['grandTotal'] = (float) $quotation->grand_total;
         $payload['candidates'] = $this->matchingLeads($request->user(), $quotation)
             ->orderByDesc('updated_at')->limit(20)->get(['id', 'title', 'lead_code']);
+        $payload['allLeads'] = WorkflowAccess::leads($request->user())->active()
+            ->select('id', 'title', 'lead_code', 'customer_id')
+            ->orderBy('title')->limit(100)->get();
         $payload['otherQuotations'] = DocumentVisibility::apply(Quotation::query(), $request->user(), 'quotations')
             ->where('customer_id', $quotation->customer_id)->whereNull('parent_quotation_id')->whereNull('lead_id')
             ->whereNotIn('id', $ids)->orderByDesc('date')->limit(50)->get(['id', 'date', 'status']);
@@ -147,7 +151,7 @@ class WorkflowController extends Controller
             }
             if (! $lead) {
                 $stages = collect(SystemSetting::find('lead_pipeline_settings')?->value['stages'] ?? []);
-                $lead = Lead::create(['lead_code' => LeadCode::next(), 'title' => ($data['title'] ?? null) ?: 'Lead '.($root->customer?->name ?: $root->id),
+                $lead = Lead::create(['lead_code' => LeadCode::next(), 'title' => ($data['title'] ?? null) ?: ($root->customer?->name ?: $root->id),
                     'customer_id' => $root->customer_id, 'sales_id' => $root->sales_id ?: $root->created_by,
                     'bu_id' => $root->bu_id, 'created_by' => $request->user()->id,
                     'stage' => $stages->firstWhere('type', 'normal')['key'] ?? 'lead_masuk',

@@ -1,10 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import ReactDOM from 'react-dom';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head, Link, router, usePage } from '@inertiajs/react';
 import {
     ArrowLeft, Plus, Trash2, Loader2, FileText, CheckCircle2, Box,
-    Printer, Tag, FolderPlus, Pencil, Check, X, FileSpreadsheet, UploadCloud
+    Printer, Tag, FolderPlus, Pencil, Check, X, FileSpreadsheet, UploadCloud, Paperclip
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { printSimulasiSO, exportSimulasiSOExcel } from '@/utils/printSimulasiSO';
@@ -27,7 +27,18 @@ export default function SalesOrderDetail({ so, costCategories = [], isFinance })
     const [selectedCategory, setSelectedCategory] = useState(costCategories[0]?.name || 'Others / Shipping/ Import');
     const [newCostDesc, setNewCostDesc] = useState('');
     const [newCostAmt, setNewCostAmt] = useState('');
+    const [newCostDate, setNewCostDate] = useState(new Date().toISOString().split('T')[0]);
+    const [newCostFile, setNewCostFile] = useState(null);
+    const costFileRef = useRef(null);
     const [isSubmittingCost, setIsSubmittingCost] = useState(false);
+    // Modal state for editing cost
+    const [editingCost, setEditingCost] = useState(null);
+    const [editCostCategory, setEditCostCategory] = useState('');
+    const [editCostDesc, setEditCostDesc] = useState('');
+    const [editCostAmt, setEditCostAmt] = useState('');
+    const [editCostDate, setEditCostDate] = useState('');
+    const [editCostFile, setEditCostFile] = useState(null);
+    const [isUpdatingCost, setIsUpdatingCost] = useState(false);
     const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
     const [activeDetailTab, setActiveDetailTab] = useState('info');
     const [showSoTimeline, setShowSoTimeline] = useState(false);
@@ -185,17 +196,24 @@ export default function SalesOrderDetail({ so, costCategories = [], isFinance })
 
         const catObj = categories.find(c => c.name === selectedCategory);
 
+        const fd = new FormData();
+        fd.append('cost_category_id', catObj ? catObj.id : '');
+        fd.append('category_name', selectedCategory);
+        fd.append('description', newCostDesc.trim());
+        fd.append('amount', amt);
+        fd.append('cost_date', newCostDate || '');
+        if (newCostFile) fd.append('attachment', newCostFile);
+
         setIsSubmittingCost(true);
-        router.post(route('sales-orders.costs.store', so.id), {
-            cost_category_id: catObj ? catObj.id : null,
-            category_name: selectedCategory,
-            description: newCostDesc.trim(),
-            amount: amt,
-        }, {
+        router.post(route('sales-orders.costs.store', so.id), fd, {
+            forceFormData: true,
             preserveScroll: true,
             onSuccess: () => {
                 setNewCostDesc('');
                 setNewCostAmt('');
+                setNewCostDate(new Date().toISOString().split('T')[0]);
+                setNewCostFile(null);
+                if (costFileRef.current) costFileRef.current.value = '';
             },
             onError: (errs) => Object.values(errs).forEach(m => toast.error(m)),
             onFinish: () => setIsSubmittingCost(false),
@@ -207,6 +225,47 @@ export default function SalesOrderDetail({ so, costCategories = [], isFinance })
         router.delete(route('sales-orders.costs.destroy', [so.id, costId]), {
             preserveScroll: true,
             onError: (errs) => Object.values(errs).forEach(m => toast.error(m)),
+        });
+    };
+
+    const handleStartEditCost = (cost) => {
+        setEditingCost(cost);
+        setEditCostCategory(cost.category_name || cost.category?.name || categories[0]?.name || '');
+        setEditCostDesc(cost.description || '');
+        setEditCostAmt(String(cost.amount || ''));
+        setEditCostDate(cost.cost_date ? String(cost.cost_date).split('T')[0] : '');
+        setEditCostFile(null);
+    };
+
+    const handleSaveEditCost = (e) => {
+        e?.preventDefault();
+        if (!editCostDesc.trim()) { toast.error('Deskripsi cost tidak boleh kosong'); return; }
+        const normalizedAmount = String(editCostAmt).includes(',')
+            ? String(editCostAmt).replace(/\./g, '').replace(',', '.')
+            : String(editCostAmt).replace(/\.(?=\d{3}(?:\D|$))/g, '');
+        const amt = Number(normalizedAmount);
+        if (!amt || amt <= 0) { toast.error('Nominal cost tidak valid'); return; }
+
+        const catObj = categories.find(c => c.name === editCostCategory);
+
+        const fd = new FormData();
+        fd.append('cost_category_id', catObj ? catObj.id : '');
+        fd.append('category_name', editCostCategory);
+        fd.append('description', editCostDesc.trim());
+        fd.append('amount', amt);
+        fd.append('cost_date', editCostDate || '');
+        if (editCostFile) fd.append('attachment', editCostFile);
+
+        setIsUpdatingCost(true);
+        router.post(route('sales-orders.costs.update', [so.id, editingCost.id]), fd, {
+            forceFormData: true,
+            preserveScroll: true,
+            onSuccess: () => {
+                setEditingCost(null);
+                toast.success('Biaya tambahan berhasil diperbarui!');
+            },
+            onError: (errs) => Object.values(errs).forEach(m => toast.error(m)),
+            onFinish: () => setIsUpdatingCost(false),
         });
     };
 
@@ -616,6 +675,8 @@ export default function SalesOrderDetail({ so, costCategories = [], isFinance })
                                 <tr className="bg-surface-50/50 border-b border-surface-200">
                                     <th className="py-3 px-6 text-xs font-bold text-surface-500 uppercase tracking-wider w-64">Kategori Biaya</th>
                                     <th className="py-3 px-6 text-xs font-bold text-surface-500 uppercase tracking-wider">Deskripsi</th>
+                                    <th className="py-3 px-4 text-xs font-bold text-surface-500 uppercase tracking-wider w-32">Tanggal</th>
+                                    <th className="py-3 px-4 text-xs font-bold text-surface-500 uppercase tracking-wider w-24">Lampiran</th>
                                     <th className="py-3 px-6 text-right text-xs font-bold text-surface-500 uppercase tracking-wider w-48">Nominal (Pengurang Margin)</th>
                                     <th className="py-3 px-6 text-center text-xs font-bold text-surface-500 uppercase tracking-wider w-20">Aksi</th>
                                 </tr>
@@ -630,17 +691,42 @@ export default function SalesOrderDetail({ so, costCategories = [], isFinance })
                                             </span>
                                         </td>
                                         <td className="py-3 px-6 text-sm text-surface-800">{c.description}</td>
+                                        <td className="py-3 px-4 text-sm text-surface-500">
+                                            {c.cost_date ? formatDate(c.cost_date) : <span className="text-surface-300">—</span>}
+                                        </td>
+                                        <td className="py-3 px-4 text-sm">
+                                            {c.attachment_path ? (
+                                                <a
+                                                    href={`/storage/${c.attachment_path}`}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    className="inline-flex items-center gap-1 text-xs text-brand-600 hover:text-brand-800 hover:underline"
+                                                >
+                                                    <Paperclip className="w-3 h-3" />
+                                                    Lihat
+                                                </a>
+                                            ) : <span className="text-surface-300 text-xs">—</span>}
+                                        </td>
                                         <td className="py-3 px-6 text-right text-sm font-bold text-red-600">
                                             - {formatCurrency(c.amount)}
                                         </td>
                                         <td className="py-3 px-6 text-center">
-                                            <button
-                                                onClick={() => handleRemoveCost(c.id)}
-                                                className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
-                                                title="Hapus Cost"
-                                            >
-                                                <Trash2 className="w-4 h-4" />
-                                            </button>
+                                            <div className="flex items-center justify-center gap-1">
+                                                <button
+                                                    onClick={() => handleStartEditCost(c)}
+                                                    className="p-1.5 text-surface-400 hover:text-brand-600 hover:bg-brand-50 rounded-lg transition-colors cursor-pointer"
+                                                    title="Edit Cost"
+                                                >
+                                                    <Pencil className="w-4 h-4" />
+                                                </button>
+                                                <button
+                                                    onClick={() => handleRemoveCost(c.id)}
+                                                    className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
+                                                    title="Hapus Cost"
+                                                >
+                                                    <Trash2 className="w-4 h-4" />
+                                                </button>
+                                            </div>
                                         </td>
                                     </tr>
                                 ))}
@@ -673,6 +759,27 @@ export default function SalesOrderDetail({ so, costCategories = [], isFinance })
                                             value={newCostDesc}
                                             onChange={e => setNewCostDesc(e.target.value)}
                                         />
+                                    </td>
+                                    <td className="py-3 px-4">
+                                        <input
+                                            type="date"
+                                            value={newCostDate}
+                                            onChange={e => setNewCostDate(e.target.value)}
+                                            className="w-full text-sm bg-white border border-surface-300 rounded-lg px-2 py-2.5 focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500 outline-none transition-all"
+                                        />
+                                    </td>
+                                    <td className="py-3 px-4">
+                                        <label className="flex items-center gap-1.5 cursor-pointer border border-dashed border-surface-300 rounded-lg px-2 py-2 text-xs text-surface-500 hover:border-brand-400 hover:text-brand-600 transition-colors w-full truncate">
+                                            <Paperclip className="w-3.5 h-3.5 flex-shrink-0" />
+                                            <span className="truncate">{newCostFile ? newCostFile.name : 'Lampiran'}</span>
+                                            <input
+                                                ref={costFileRef}
+                                                type="file"
+                                                accept=".png,.jpg,.jpeg,.pdf"
+                                                className="hidden"
+                                                onChange={e => setNewCostFile(e.target.files?.[0] || null)}
+                                            />
+                                        </label>
                                     </td>
                                     <td className="py-3 px-6">
                                         <div className="flex items-center gap-1 w-full bg-white border border-surface-300 rounded-lg px-3 py-2.5 focus-within:ring-2 focus-within:ring-brand-500/30 focus-within:border-brand-500 transition-all">
@@ -847,6 +954,105 @@ export default function SalesOrderDetail({ so, costCategories = [], isFinance })
                                     >
                                         {isSubmittingCategory ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
                                         <span>Tambah</span>
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                )}
+                {/* Modal Edit Cost */}
+                {editingCost && (
+                    <div className="fixed inset-0 bg-surface-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+                        <div className="bg-white rounded-2xl shadow-xl border border-surface-200 w-full max-w-md overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+                            <div className="px-6 py-4 border-b border-surface-100 flex items-center justify-between">
+                                <h3 className="text-sm font-bold text-surface-900 flex items-center gap-2">
+                                    <Pencil className="w-4 h-4 text-brand-600" />
+                                    Edit Biaya Tambahan (COGS)
+                                </h3>
+                                <button
+                                    onClick={() => setEditingCost(null)}
+                                    className="p-1 text-surface-400 hover:text-surface-600 rounded-lg hover:bg-surface-100 transition-colors cursor-pointer"
+                                >
+                                    <X className="w-4 h-4" />
+                                </button>
+                            </div>
+                            <form onSubmit={handleSaveEditCost} className="p-6 space-y-4">
+                                <div>
+                                    <label className="block text-xs font-bold text-surface-600 uppercase tracking-wider mb-1.5">Kategori Biaya</label>
+                                    <select
+                                        className="w-full text-sm bg-white border border-surface-300 rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500 outline-none"
+                                        value={editCostCategory}
+                                        onChange={e => setEditCostCategory(e.target.value)}
+                                    >
+                                        {categories.map(cat => (
+                                            <option key={cat.id || cat.name} value={cat.name}>{cat.name}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold text-surface-600 uppercase tracking-wider mb-1.5">Deskripsi Rincian *</label>
+                                    <input
+                                        type="text"
+                                        required
+                                        className="w-full text-sm bg-white border border-surface-300 rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500 outline-none"
+                                        value={editCostDesc}
+                                        onChange={e => setEditCostDesc(e.target.value)}
+                                    />
+                                </div>
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div>
+                                        <label className="block text-xs font-bold text-surface-600 uppercase tracking-wider mb-1.5">Tanggal Biaya</label>
+                                        <input
+                                            type="date"
+                                            className="w-full text-sm bg-white border border-surface-300 rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500 outline-none"
+                                            value={editCostDate}
+                                            onChange={e => setEditCostDate(e.target.value)}
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-bold text-surface-600 uppercase tracking-wider mb-1.5">Nominal (Rp) *</label>
+                                        <input
+                                            type="text"
+                                            required
+                                            inputMode="decimal"
+                                            className="w-full text-sm text-right font-mono bg-white border border-surface-300 rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500 outline-none"
+                                            value={editCostAmt}
+                                            onChange={e => setEditCostAmt(e.target.value.replace(/[^0-9.,]/g, ''))}
+                                        />
+                                    </div>
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold text-surface-600 uppercase tracking-wider mb-1.5">
+                                        Ganti Lampiran Bukti <span className="text-surface-400 font-normal lowercase">(PNG, JPG, PDF max 2MB)</span>
+                                    </label>
+                                    {editingCost.attachment_path && !editCostFile && (
+                                        <p className="text-xs text-brand-600 mb-2 flex items-center gap-1">
+                                            <Paperclip className="w-3.5 h-3.5" />
+                                            <span>File saat ini terlampir. Unggah baru jika ingin mengganti.</span>
+                                        </p>
+                                    )}
+                                    <input
+                                        type="file"
+                                        accept=".png,.jpg,.jpeg,.pdf"
+                                        onChange={e => setEditCostFile(e.target.files?.[0] || null)}
+                                        className="w-full text-xs text-surface-600 file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-surface-100 file:text-surface-700 hover:file:bg-surface-200 cursor-pointer"
+                                    />
+                                </div>
+                                <div className="flex items-center justify-end gap-3 pt-3 border-t border-surface-100">
+                                    <button
+                                        type="button"
+                                        onClick={() => setEditingCost(null)}
+                                        className="px-4 py-2 text-sm font-semibold text-surface-600 hover:text-surface-800 transition-colors cursor-pointer"
+                                    >
+                                        Batal
+                                    </button>
+                                    <button
+                                        type="submit"
+                                        disabled={isUpdatingCost}
+                                        className="px-5 py-2 text-sm font-bold bg-brand-600 hover:bg-brand-700 text-white rounded-xl shadow-sm transition-colors cursor-pointer disabled:opacity-50 flex items-center gap-1.5"
+                                    >
+                                        {isUpdatingCost && <Loader2 className="w-4 h-4 animate-spin" />}
+                                        <span>Simpan Perubahan</span>
                                     </button>
                                 </div>
                             </form>

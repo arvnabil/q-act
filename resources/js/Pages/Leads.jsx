@@ -8,7 +8,7 @@ import {
     TrendingUp, Plus, Search, Filter, LayoutGrid, List, X,
     ChevronDown, ChevronLeft, ChevronRight, Building2, User, ArrowRight, MoreHorizontal,
     FileText, Banknote, Clock, Tag, AlertTriangle, Settings, SlidersHorizontal, Palette, Loader2, Trash2, ArrowUp, ArrowDown,
-    Presentation
+    Presentation, AlertCircle, HelpCircle
 } from 'lucide-react';
 import { exportReportPpt } from '@/utils/exportReportPpt';
 
@@ -167,6 +167,16 @@ function LeadCard({ lead, activeStagesList, stageMetaMap, onStageChange, onViewD
                 <div className="flex items-center gap-1.5 text-xs text-blue-600">
                     <FileText className="w-3.5 h-3.5 shrink-0" />
                     <span>Quotation terlampir</span>
+                </div>
+            )}
+
+            {/* Alasan Lost */}
+            {(lead.lost_reason || lead.stage === 'lost' || meta.type === 'lost') && (
+                <div className="flex items-start gap-1.5 text-xs text-red-700 bg-red-50 rounded-lg p-2 border border-red-200/80">
+                    <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5 text-red-500" />
+                    <div className="text-[11px] leading-tight">
+                        <span className="font-bold text-red-800">Alasan:</span> {lead.lost_reason || <span className="italic text-red-400">Belum diisi</span>}
+                    </div>
                 </div>
             )}
 
@@ -353,7 +363,7 @@ function LeadFormModal({ open, onClose, defaultStage, customers, salesUsers, sou
                         <h3 className="flex items-center gap-2 text-sm font-bold text-surface-800"><span className="flex h-6 w-6 items-center justify-center rounded-full bg-brand-600 text-xs text-white">1</span>Data Customer</h3>
                         <div className="inline-flex flex-wrap gap-1 rounded-xl bg-surface-100 p-1">
                             {[['existing', 'Pilih yang sudah ada'], ...(canCreateCustomer ? [['new', '+ Customer baru']] : [])].map(([mode, label]) => (
-                                <button type="button" key={mode} onClick={() => { setErrors({}); setForm(f => ({ ...f, title: f.title === `Lead ${f.customer_name}` ? '' : f.title, customer_mode: mode, customer_id: '', customer_name: '', customer_address: '', pic_id: '', pic_mode: mode === 'new' ? 'new' : 'existing', pic_name: '', pic_phone: '', customer_phone: '', customer_email: '' })); }} className={`rounded-lg px-4 py-2 text-sm font-semibold transition-colors ${form.customer_mode === mode ? 'bg-white text-brand-700 shadow-sm' : 'text-surface-500 hover:text-brand-700'}`}>{label}</button>
+                                <button type="button" key={mode} onClick={() => { setErrors({}); setForm(f => ({ ...f, title: f.title === f.customer_name || f.title === `Lead ${f.customer_name}` ? '' : f.title, customer_mode: mode, customer_id: '', customer_name: '', customer_address: '', pic_id: '', pic_mode: mode === 'new' ? 'new' : 'existing', pic_name: '', pic_phone: '', customer_phone: '', customer_email: '' })); }} className={`rounded-lg px-4 py-2 text-sm font-semibold transition-colors ${form.customer_mode === mode ? 'bg-white text-brand-700 shadow-sm' : 'text-surface-500 hover:text-brand-700'}`}>{label}</button>
                             ))}
                         </div>
                         <label className="block text-xs font-semibold text-surface-600">Nama Perusahaan <span className="text-red-500">*</span>
@@ -361,10 +371,10 @@ function LeadFormModal({ open, onClose, defaultStage, customers, salesUsers, sou
                                 <select required className={`${inputClass} mt-1.5`} value={form.customer_id} onChange={e => {
                                     const customer = customers.find(c => String(c.id) === e.target.value);
                                     const pic = customer?.pics?.find(p => p.is_primary) || customer?.pics?.[0];
-                                    setForm(f => ({ ...f, customer_id: customer?.id || '', customer_name: customer?.name || '', customer_address: customer?.address || '', title: !f.title || f.title === `Lead ${f.customer_name}` ? (customer ? `Lead ${customer.name}` : '') : f.title, pic_mode: 'existing', pic_id: pic?.id || '', pic_name: pic?.name || '', pic_phone: pic?.phone || '', customer_phone: pic?.phone || '', customer_email: pic?.email || '' }));
+                                    setForm(f => ({ ...f, customer_id: customer?.id || '', customer_name: customer?.name || '', customer_address: customer?.address || '', title: !f.title || f.title === f.customer_name || f.title === `Lead ${f.customer_name}` ? (customer ? customer.name : '') : f.title, pic_mode: 'existing', pic_id: pic?.id || '', pic_name: pic?.name || '', pic_phone: pic?.phone || '', customer_phone: pic?.phone || '', customer_email: pic?.email || '' }));
                                 }}><option value="">Pilih customer</option>{customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select>
                             ) : (
-                                <input required className={`${inputClass} mt-1.5`} placeholder="Nama perusahaan customer" value={form.customer_name} onChange={e => { const name = e.target.value; setForm(f => ({ ...f, customer_name: name, title: !f.title || f.title === `Lead ${f.customer_name}` ? (name ? `Lead ${name}` : '') : f.title })); }} />
+                                <input required className={`${inputClass} mt-1.5`} placeholder="Nama perusahaan customer" value={form.customer_name} onChange={e => { const name = e.target.value; setForm(f => ({ ...f, customer_name: name, title: !f.title || f.title === f.customer_name || f.title === `Lead ${f.customer_name}` ? (name || '') : f.title })); }} />
                             )}
                         </label>
                         <label className="block text-xs font-semibold text-surface-600">Alamat Lengkap Perusahaan
@@ -752,7 +762,7 @@ function PipelineSettingsModal({ open, onClose, settings, stages, stageCounts = 
                             <div className="flex justify-end gap-3"><button type="button" onClick={() => setRemoving(null)} className="px-3 py-2">Batal</button><button type="button" disabled={countFor(removing.key) > 0 && !destination} onClick={removeStage} className="rounded-lg bg-red-600 px-3 py-2 text-white disabled:opacity-40">{countFor(removing.key) ? 'Pindahkan & Hapus Tahap' : 'Hapus Tahap'}</button></div>
                         </div>
                     </div>}
-                    {/* Footer */}
+            {/* Footer */}
                     <div className="flex items-center justify-between gap-2 pt-3 border-t border-surface-200">
                         <button
                             type="button"
@@ -843,6 +853,13 @@ export default function Leads({ grouped, stats, stageCounts = {}, salesUsers, fi
     };
 
     const [localSettings, setLocalSettings] = useState(pipelineSettings || defaultPipelineSettings);
+
+    // Lost & Terbayar confirmation modals
+    const [lostReasonModal, setLostReasonModal] = useState(false);
+    const [lostReasonText, setLostReasonText] = useState('');
+    const [confirmTerbayarModal, setConfirmTerbayarModal] = useState(false);
+    const [showHelpModal, setShowHelpModal] = useState(false);
+    const [pendingAction, setPendingAction] = useState(null);
 
     useEffect(() => {
         setLocalGrouped(grouped);
@@ -982,9 +999,7 @@ export default function Leads({ grouped, stats, stageCounts = {}, salesUsers, fi
         handleDropCard(lead.id, newStage, lead.stage);
     };
 
-    const handleDropCard = (leadId, targetStage, fromStage) => {
-        if (targetStage === fromStage) return;
-
+    const executeDropCard = (leadId, targetStage, fromStage, extraData = {}) => {
         // Instant optimistic update
         setLocalGrouped(prev => {
             const copy = {};
@@ -1003,7 +1018,7 @@ export default function Leads({ grouped, stats, stageCounts = {}, salesUsers, fi
         });
 
         // Persist to database silently via background AJAX (no Inertia loading bar)
-        axios.patch(route('leads.stage.update', leadId), { stage: targetStage })
+        axios.patch(route('leads.stage.update', leadId), { stage: targetStage, ...extraData })
             .then(() => {
                 toast.success(`Stage dipindahkan ke "${stageMetaMap[targetStage]?.label || STAGE_META[targetStage]?.label || targetStage}"`);
             })
@@ -1014,6 +1029,32 @@ export default function Leads({ grouped, stats, stageCounts = {}, salesUsers, fi
                 setLocalStats(stats);
             });
     };
+
+    const handleDropCard = (leadId, targetStage, fromStage) => {
+        if (targetStage === fromStage) return;
+
+        const stageConfig = (localSettings?.stages || []).find(s => s.key === targetStage);
+        const stageType = stageConfig?.type ?? (
+            ['win', 'selesai_terbayar', 'proyek_deal', 'proyek_selesai'].includes(targetStage) ? 'deal' :
+            ['lost', 'no_deal'].includes(targetStage) ? 'lost' : 'normal'
+        );
+
+        if (stageType === 'lost') {
+            setPendingAction({ leadId, targetStage, fromStage });
+            setLostReasonText('');
+            setLostReasonModal(true);
+            return;
+        }
+
+        if (targetStage === 'selesai_terbayar') {
+            setPendingAction({ leadId, targetStage, fromStage });
+            setConfirmTerbayarModal(true);
+            return;
+        }
+
+        executeDropCard(leadId, targetStage, fromStage);
+    };
+
 
     const handleViewDetail = (lead) => {
         router.visit(route('leads.show', lead.id));
@@ -1072,6 +1113,14 @@ export default function Leads({ grouped, stats, stageCounts = {}, salesUsers, fi
                             </h1>
                         </div>
                         <div className="flex items-center gap-2">
+                            <button
+                                onClick={() => setShowHelpModal(true)}
+                                className="flex items-center gap-1.5 px-3.5 py-2 border border-surface-200 hover:bg-surface-50 text-surface-600 hover:text-brand-600 text-sm font-semibold rounded-xl transition-colors cursor-pointer"
+                                title="Petunjuk & Alur Pipeline"
+                            >
+                                <HelpCircle className="w-4 h-4 text-brand-500" />
+                                <span className="hidden sm:inline">Petunjuk Stage</span>
+                            </button>
                             {isManagerOrAdmin && (
                                 <button
                                     onClick={() => setShowSettingsModal(true)}
@@ -1114,7 +1163,7 @@ export default function Leads({ grouped, stats, stageCounts = {}, salesUsers, fi
                                 <p className="text-lg font-bold text-amber-600">
                                     {localGrouped[curFeatured1]?.length || 0}
                                 </p>
-                                {isManagerOrAdmin && (
+                            {isManagerOrAdmin && (
                                     <select
                                         value={curFeatured1}
                                         onChange={(e) => handleQuickChangeFeatured(1, e.target.value)}
@@ -1141,7 +1190,7 @@ export default function Leads({ grouped, stats, stageCounts = {}, salesUsers, fi
                                 <p className="text-lg font-bold text-brand-600">
                                     {localGrouped[curFeatured2]?.length || 0}
                                 </p>
-                                {isManagerOrAdmin && (
+                            {isManagerOrAdmin && (
                                     <select
                                         value={curFeatured2}
                                         onChange={(e) => handleQuickChangeFeatured(2, e.target.value)}
@@ -1377,6 +1426,183 @@ export default function Leads({ grouped, stats, stageCounts = {}, salesUsers, fi
                     onExportPpt={handleExportPpt}
                     isExportingPpt={isExportingPpt}
                 />
+            )}
+
+            {/* Modal Alasan Lost */}
+            {lostReasonModal && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[99999] p-4">
+                    <div className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-md">
+                        <h3 className="text-lg font-bold text-surface-900 mb-1">Alasan Lead Gugur (Lost)</h3>
+                        <p className="text-sm text-surface-500 mb-4">Mohon isi alasan mengapa lead ini gugur (opsional).</p>
+                        <textarea
+                            autoFocus
+                            value={lostReasonText}
+                            onChange={e => setLostReasonText(e.target.value)}
+                            placeholder="Contoh: Budget tidak mencukupi, customer memilih kompetitor..."
+                            className="w-full border border-surface-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-red-400 resize-none"
+                            rows={4}
+                        />
+                        <div className="flex justify-end gap-3 mt-4">
+                            <button
+                                onClick={() => { setLostReasonModal(false); setPendingAction(null); }}
+                                className="px-4 py-2 text-sm font-medium text-surface-600 hover:text-surface-900 transition-colors cursor-pointer"
+                            >Batal</button>
+                            <button
+                                onClick={() => {
+                                    if (pendingAction) {
+                                        executeDropCard(pendingAction.leadId, pendingAction.targetStage, pendingAction.fromStage, { lost_reason: lostReasonText });
+                                    }
+                                    setLostReasonModal(false);
+                                    setPendingAction(null);
+                                }}
+                                className="px-5 py-2 text-sm font-semibold bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors cursor-pointer"
+                            >Konfirmasi Gugur</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Modal Konfirmasi Terbayar */}
+            {confirmTerbayarModal && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[99999] p-4">
+                    <div className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-md">
+                        <div className="flex items-center gap-3 mb-4">
+                            <div className="w-11 h-11 bg-emerald-100 rounded-full flex items-center justify-center flex-shrink-0">
+                                <span className="text-2xl">✅</span>
+                            </div>
+                            <div>
+                                <h3 className="text-lg font-bold text-surface-900">Konfirmasi Pembayaran</h3>
+                                <p className="text-sm text-surface-500">Pastikan pembayaran telah diterima</p>
+                            </div>
+                        </div>
+                        <p className="text-sm text-surface-700 mb-3">
+                            Apakah Anda yakin lead ini sudah <strong>selesai dan terbayar</strong>?
+                        </p>
+                        <div className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2.5 text-xs text-amber-700 mb-4">
+                            ⚠️ Notifikasi email akan dikirim otomatis ke Tim Finance setelah konfirmasi ini.
+                        </div>
+                        <div className="flex justify-end gap-3">
+                            <button
+                                onClick={() => { setConfirmTerbayarModal(false); setPendingAction(null); }}
+                                className="px-4 py-2 text-sm font-medium text-surface-600 hover:text-surface-900 transition-colors cursor-pointer"
+                            >Batal</button>
+                            <button
+                                onClick={() => {
+                                    if (pendingAction) {
+                                        executeDropCard(pendingAction.leadId, pendingAction.targetStage, pendingAction.fromStage);
+                                    }
+                                    setConfirmTerbayarModal(false);
+                                    setPendingAction(null);
+                                }}
+                                className="px-5 py-2 text-sm font-semibold bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors cursor-pointer"
+                            >Ya, Sudah Terbayar</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+            {/* Modal Petunjuk & Alur Pipeline */}
+            {showHelpModal && (
+                <div className="fixed inset-0 bg-surface-900/50 backdrop-blur-sm flex items-center justify-center z-[99999] p-4">
+                    <div className="bg-white rounded-2xl shadow-2xl border border-surface-200 w-full max-w-2xl max-h-[85vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+                        <div className="px-6 py-4 border-b border-surface-100 flex items-center justify-between bg-surface-50/50">
+                            <div className="flex items-center gap-2.5">
+                                <div className="w-8 h-8 rounded-xl bg-brand-100 flex items-center justify-center text-brand-700">
+                                    <HelpCircle className="w-5 h-5" />
+                                </div>
+                                <div>
+                                    <h3 className="text-base font-bold text-surface-900">Petunjuk & Alur Stage Lead Pipeline</h3>
+                                    <p className="text-xs text-surface-500">Panduan arti setiap tahapan dan integrasi otomatisnya</p>
+                                </div>
+                            </div>
+                            <button
+                                onClick={() => setShowHelpModal(false)}
+                                className="p-1.5 text-surface-400 hover:text-surface-600 rounded-lg hover:bg-surface-100 transition-colors cursor-pointer"
+                            >
+                                <X className="w-5 h-5" />
+                            </button>
+                        </div>
+                        
+                        <div className="p-6 overflow-y-auto space-y-4 text-sm">
+                            <div className="grid grid-cols-1 gap-3">
+                                <div className="p-3.5 rounded-xl border border-surface-200 bg-surface-50/60">
+                                    <div className="flex items-center gap-2 mb-1">
+                                        <span className="w-3 h-3 rounded-full bg-surface-400"></span>
+                                        <span className="font-bold text-surface-900">1. Lead Masuk</span>
+                                    </div>
+                                    <p className="text-xs text-surface-600 leading-relaxed">
+                                        Tahap awal prospek baru masuk ke portal (dari customer lama, penawaran mandiri, atau kontak baru). Belum ada interaksi intensif.
+                                    </p>
+                                </div>
+
+                                <div className="p-3.5 rounded-xl border border-blue-200 bg-blue-50/40">
+                                    <div className="flex items-center gap-2 mb-1">
+                                        <span className="w-3 h-3 rounded-full bg-blue-500"></span>
+                                        <span className="font-bold text-blue-900">2. Follow Up</span>
+                                    </div>
+                                    <p className="text-xs text-blue-800 leading-relaxed">
+                                        Sales mulai menghubungi klien: telepon, WhatsApp, email, atau menjadwalkan kunjungan meeting / demo produk.
+                                    </p>
+                                </div>
+
+                                <div className="p-3.5 rounded-xl border border-amber-200 bg-amber-50/40">
+                                    <div className="flex items-center gap-2 mb-1">
+                                        <span className="w-3 h-3 rounded-full bg-amber-500"></span>
+                                        <span className="font-bold text-amber-900">3. Lead Qualification</span>
+                                    </div>
+                                    <p className="text-xs text-amber-800 leading-relaxed">
+                                        Validasi kebutuhan klien, ketersediaan anggaran (budget), timeline proyek, dan penentu keputusan utama.
+                                    </p>
+                                </div>
+
+                                <div className="p-3.5 rounded-xl border border-teal-200 bg-teal-50/40">
+                                    <div className="flex items-center gap-2 mb-1">
+                                        <span className="w-3 h-3 rounded-full bg-teal-600"></span>
+                                        <span className="font-bold text-teal-900">4. Negotiation</span>
+                                    </div>
+                                    <p className="text-xs text-teal-800 leading-relaxed">
+                                        Penawaran harga (Quotation) telah dikirimkan. Sedang dalam diskusi negosiasi spesifikasi, diskon, dan PO.
+                                    </p>
+                                </div>
+
+                                <div className="p-3.5 rounded-xl border border-emerald-300 bg-emerald-50/60 shadow-sm">
+                                    <div className="flex items-center gap-2 mb-1">
+                                        <span className="text-sm">✅</span>
+                                        <span className="font-bold text-emerald-900">5. Selesai (Terbayar) — Deal Menang</span>
+                                        <span className="ml-auto text-[10px] font-bold uppercase tracking-wider bg-emerald-200 text-emerald-800 px-2 py-0.5 rounded-full">Email Otomatis</span>
+                                    </div>
+                                    <p className="text-xs text-emerald-800 leading-relaxed">
+                                        Klien sudah deal dan pembayaran telah diterima / dikonfirmasi. 
+                                        <strong> Sistem otomatis mengirimkan notifikasi email ke Tim Finance</strong> untuk penyesuaian invoice dan administrasi keuangan.
+                                    </p>
+                                    <div className="mt-2 text-[11px] text-emerald-700 bg-white/80 p-2 rounded-lg border border-emerald-200">
+                                        💡 <em>Jika terjadi salah konfirmasi:</em> Manager/Admin dapat mengembalikan stage, dan sistem otomatis mengirimkan email pembatalan ke Finance.
+                                    </div>
+                                </div>
+
+                                <div className="p-3.5 rounded-xl border border-red-300 bg-red-50/60 shadow-sm">
+                                    <div className="flex items-center gap-2 mb-1">
+                                        <span className="text-sm">❌</span>
+                                        <span className="font-bold text-red-900">6. Lost (Gugur)</span>
+                                        <span className="ml-auto text-[10px] font-bold uppercase tracking-wider bg-red-200 text-red-800 px-2 py-0.5 rounded-full">Wajib Alasan</span>
+                                    </div>
+                                    <p className="text-xs text-red-800 leading-relaxed">
+                                        Prospek dibatalkan atau klien memilih vendor lain. Saat dipindahkan ke Lost, sistem menampilkan <strong>popup input Alasan Gugur</strong> yang langsung ditampilkan pada kartu Kanban dan riwayat aktivitas.
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="px-6 py-3.5 border-t border-surface-100 bg-surface-50 flex items-center justify-between">
+                            <span className="text-xs text-surface-500">Tips: Geser kartu (drag & drop) untuk pindah antar tahap</span>
+                            <button
+                                onClick={() => setShowHelpModal(false)}
+                                className="px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white text-xs font-bold rounded-xl transition-colors cursor-pointer"
+                            >
+                                Tutup Petunjuk
+                            </button>
+                        </div>
+                    </div>
+                </div>
             )}
         </AuthenticatedLayout>
     );

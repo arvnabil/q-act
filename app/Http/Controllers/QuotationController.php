@@ -35,8 +35,16 @@ class QuotationController extends Controller
     // ─── Helper: serialize a Quotation for list view ──────────────────────────
     private function serializeForList(Quotation $q): array
     {
+        $effectiveSales = $q->sales;
+        if ((!$effectiveSales || $effectiveSales->role === 'Presales')) {
+            $bu = $q->businessUnit ?: $q->creator?->businessUnit;
+            if ($bu?->defaultSales) {
+                $effectiveSales = $bu->defaultSales;
+            }
+        }
         return [
             'id' => $q->id,
+            'lead_id' => $q->lead_id,
             'status' => $q->status,
             'po_status' => $q->po_status,
             'po_number' => $q->po_number,
@@ -49,7 +57,7 @@ class QuotationController extends Controller
             'customer' => $q->customer ? ['id' => $q->customer->id, 'name' => $q->customer->name] : null,
             'pic' => $q->pic ? ['id' => $q->pic->id, 'name' => $q->pic->name] : null,
             'creator' => $q->creator ? ['id' => $q->creator->id, 'name' => $q->creator->name] : null,
-            'sales' => $q->sales ? ['id' => $q->sales->id, 'name' => $q->sales->name] : null,
+            'sales' => $effectiveSales ? ['id' => $effectiveSales->id, 'name' => $effectiveSales->name] : null,
             'items' => $q->items->map(fn ($i) => [
                 'id' => $i->id,
                 'qty' => $i->qty,
@@ -67,6 +75,13 @@ class QuotationController extends Controller
     // ─── Helper: serialize full Quotation for edit/detail/show ───────────────
     private function serializeFull(Quotation $q, bool $forPrint = false): array
     {
+        $effectiveSales = $q->sales;
+        if (!$effectiveSales || $effectiveSales->role === 'Presales') {
+            $bu = $q->businessUnit ?: $q->creator?->businessUnit;
+            if ($bu?->defaultSales) {
+                $effectiveSales = $bu->defaultSales;
+            }
+        }
         if (request()->routeIs('quotations.show')) {
             $user = request()->user();
             $q->load([
@@ -265,9 +280,12 @@ class QuotationController extends Controller
                 'email' => $q->sales->email,
                 'mobile' => $q->sales->mobile ?? null,
             ] : null),
-            'sales' => $q->sales ? [
-                'id' => $q->sales->id,
-                'name' => $q->sales->name,
+            'sales' => $effectiveSales ? [
+                'id' => $effectiveSales->id,
+                'name' => $effectiveSales->name,
+                'email' => $effectiveSales->email,
+                'role' => $effectiveSales->role,
+                'mobile' => $effectiveSales->mobile ?? null,
             ] : null,
             'bank_account' => $q->bankAccount ? [
                 'id' => $q->bankAccount->id,
@@ -315,7 +333,7 @@ class QuotationController extends Controller
         $isManagerOrAdmin = in_array($user->role, ['Administrator', 'Sales Manager', 'Manager']);
         $isFinance = $user->role === 'Finance';
 
-        $query = Quotation::with(['customer', 'pic', 'sales', 'creator', 'items.product.brand'])
+        $query = Quotation::with(['customer', 'pic', 'sales', 'creator.businessUnit.defaultSales', 'businessUnit.defaultSales', 'items.product.brand'])
             ->whereNull('deleted_at')
             ->where('is_deleted', false);
         // Split quotations are accessed from their parent quotation detail.
@@ -328,9 +346,15 @@ class QuotationController extends Controller
 
         $quotations = $query->orderByDesc('created_at')->get()->map(fn ($q) => $this->serializeForList($q));
 
+        $availableLeads = \App\Services\WorkflowAccess::leads($user)->active()
+            ->select('id', 'title', 'lead_code', 'customer_id')
+            ->orderBy('title')
+            ->get();
+
         return Inertia::render('Quotations', [
             'quotations' => $quotations,
             'isFinance' => $isFinance,
+            'availableLeads' => $availableLeads,
         ]);
     }
 
@@ -380,11 +404,26 @@ class QuotationController extends Controller
         $leadId = $request->query('lead_id');
         $prefilledLead = $leadId ? \App\Services\WorkflowAccess::leads($user)->with('customer.pics')->findOrFail($leadId) : null;
 
+        $defaultSalesId = null;
+        $buSalesUsers = [];
+        if ($user->role === 'Presales' && $user->businessUnit) {
+            $defaultSalesId = $user->businessUnit->default_sales_id;
+            $memberUserIds = \App\Models\BusinessUnitMember::where('business_unit_id', $user->businessUnit->id)->pluck('user_id');
+            $buSalesUsers = \App\Models\User::whereIn('id', $memberUserIds)
+                ->whereIn('role', ['Sales', 'Sales Manager', 'Manager'])
+                ->where('is_active', true)
+                ->orderBy('name')
+                ->get(['id', 'name', 'role'])
+                ->toArray();
+        }
+
         return Inertia::render('QuotationCreate', [
             'customers' => $customers,
             'bankAccounts' => $bankAccounts,
             'leads' => $leads,
             'prefilledLead' => $prefilledLead,
+            'defaultSalesId' => $defaultSalesId,
+            'buSalesUsers' => $buSalesUsers,
             'currentUser' => [
                 'id' => $user->id,
                 'name' => $user->name,
@@ -405,6 +444,7 @@ class QuotationController extends Controller
     {
         $request->validate([
             'lead_id' => 'nullable|uuid|exists:leads,id',
+            'sales_id' => 'nullable|uuid|exists:users,id',
             'customer_id' => 'required_without:new_customer_name|nullable|string|exists:customers,id',
             'pic_id' => 'nullable|string',
             'expiry_days' => 'nullable|integer|min:1|max:365',
@@ -481,6 +521,15 @@ class QuotationController extends Controller
 
         $id = $this->generateQuotationId($prefixCode);
 
+        $quotationSalesId = $user->id;
+        if ($user->role === 'Presales') {
+            if ($request->filled('sales_id')) {
+                $quotationSalesId = $request->input('sales_id');
+            } elseif ($user->businessUnit?->default_sales_id) {
+                $quotationSalesId = $user->businessUnit->default_sales_id;
+            }
+        }
+
         $quotation = Quotation::create([
             'id' => $id,
             'lead_id' => $request->input('lead_id') ?: null,
@@ -489,7 +538,7 @@ class QuotationController extends Controller
             'notes' => $request->notes,
             'status' => 'created',
             'created_by' => $user->id,
-            'sales_id' => $user->id,
+            'sales_id' => $quotationSalesId,
             'bu_id' => $buId ?? null,
             'date' => now()->toDateString(),
             'expired' => now()->addDays($expiryDays)->toDateString(),
@@ -548,7 +597,7 @@ class QuotationController extends Controller
                 ->with('message', 'Quotation tersebut sudah berada di Sampah.');
         }
 
-        $quotation->load(['customer.pics', 'pic', 'sales', 'creator', 'items.product.brand', 'bankAccount', 'parentQuotation', 'revisions', 'salesOrders', 'purchaseOrders', 'changeRequests.requester', 'changeRequests.approver', 'lead']);
+        $quotation->load(['customer.pics', 'pic', 'sales', 'creator.businessUnit.defaultSales', 'businessUnit.defaultSales', 'items.product.brand', 'bankAccount', 'parentQuotation', 'revisions', 'salesOrders', 'purchaseOrders', 'changeRequests.requester', 'changeRequests.approver', 'lead']);
 
         $rootQuotationId = ($quotation->relation_type ?? 'main') === 'split' && $quotation->parent_quotation_id
             ? $quotation->parent_quotation_id
@@ -717,6 +766,7 @@ class QuotationController extends Controller
         $data = $request->validate([
             'customer_id' => 'sometimes|string|exists:customers,id',
             'lead_id' => 'nullable|uuid|exists:leads,id',
+            'sales_id' => 'nullable|uuid|exists:users,id',
             'pic_id' => 'nullable|string',
             'notes' => 'nullable|string',
             'status' => 'sometimes|in:created,revision_draft,sent,approved,rejected,expired,cancelled,superseded',

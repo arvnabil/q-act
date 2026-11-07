@@ -26,14 +26,26 @@ const formatDateTime = (d) => {
 };
 
 const VISIT_TYPES = {
-    installation: { label: 'Instalasi', color: 'bg-indigo-100 text-indigo-700' },
-    maintenance: { label: 'Maintenance', color: 'bg-orange-100 text-orange-700' },
-    leave: { label: 'Cuti', color: 'bg-rose-100 text-rose-700' },
+    internal_meeting: { label: 'Meeting Internal', color: 'bg-emerald-100 text-emerald-800 border border-emerald-200' },
     visit:        { label: 'Kunjungan',   color: 'bg-blue-100 text-blue-700' },
     follow_up:    { label: 'Follow-up',   color: 'bg-amber-100 text-amber-700' },
     demo:         { label: 'Demo',        color: 'bg-violet-100 text-violet-700' },
     presentation: { label: 'Presentasi', color: 'bg-brand-100 text-brand-700' },
+    installation: { label: 'Instalasi', color: 'bg-indigo-100 text-indigo-700' },
+    maintenance:  { label: 'Maintenance', color: 'bg-orange-100 text-orange-700' },
+    leave:        { label: 'Cuti', color: 'bg-rose-100 text-rose-700' },
     other:        { label: 'Lainnya',     color: 'bg-surface-100 text-surface-600' },
+};
+
+const getUserRoleLabel = (user) => {
+    if (!user) return 'Petugas';
+    const r = (user.role || '').toLowerCase();
+    if (r.includes('manager')) return 'Manager';
+    if (r.includes('admin')) return 'Administrator';
+    if (r.includes('presales')) return 'Presales';
+    if (r.includes('finance')) return 'Finance';
+    if (r.includes('sales')) return 'Petugas Sales';
+    return user.role || 'Petugas';
 };
 
 // ─── Visit Type Badge ─────────────────────────────────────────────────────────────
@@ -138,11 +150,19 @@ function VisitTable({ visits, onCheckIn, zoomConfigured, onDeleteVisit, onCreate
                                 <td className="px-4 py-3"><VisitTypeBadge type={visit.visit_type} /></td>
                                 <td className="px-4 py-3">
                                     <p className="text-sm text-surface-700 font-medium">{visit.subject}</p>
-                                    {visit.notes && <p className="text-xs text-surface-400 mt-0.5 line-clamp-1">{visit.notes}</p>}
+                                    <div className="flex items-center gap-2 text-xs text-surface-400 mt-0.5 flex-wrap">
+                                        {visit.user && (
+                                            <span className="inline-flex items-center gap-1 text-[11px] text-surface-600 font-medium">
+                                                <User className="w-3 h-3 text-surface-400 shrink-0" />
+                                                {getUserRoleLabel(visit.user)}: {visit.user.name}
+                                            </span>
+                                        )}
+                                        {visit.notes && <span className="line-clamp-1 text-surface-400">· {visit.notes}</span>}
+                                    </div>
                                 </td>
                                 <td className="px-4 py-3">
                                     <p className="text-sm text-surface-700">
-                                        {visit.is_all_day && visit.end_at && formatDate(visit.scheduled_at) !== formatDate(visit.end_at)
+                                        {visit.end_at && formatDate(visit.scheduled_at) !== formatDate(visit.end_at)
                                             ? `${formatDate(visit.scheduled_at)} – ${formatDate(visit.end_at)}`
                                             : formatDate(visit.scheduled_at)}
                                     </p>
@@ -202,10 +222,17 @@ function VisitTable({ visits, onCheckIn, zoomConfigured, onDeleteVisit, onCreate
                                             Selesai {formatTime(visit.checked_in_at)}
                                         </span>
                                     ) : isPast ? (
-                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-red-100 text-red-600">
-                                            <AlertCircle className="w-3 h-3" />
-                                            Terlewat
-                                        </span>
+                                        visit.visit_type === 'internal_meeting' ? (
+                                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-surface-100 text-surface-600">
+                                                <Clock className="w-3 h-3" />
+                                                Jadwal Lampau
+                                            </span>
+                                        ) : (
+                                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-red-100 text-red-600">
+                                                <AlertCircle className="w-3 h-3" />
+                                                Terlewat
+                                            </span>
+                                        )
                                     ) : (
                                         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-blue-100 text-blue-700">
                                             <Clock className="w-3 h-3" />
@@ -635,7 +662,7 @@ export default function LeadVisits({
     const today = new Date().toDateString();
     const filteredVisits = visits.filter(v => {
         const d = new Date(v.scheduled_at);
-        if (tab === 'visit')     return ['visit', 'demo', 'presentation', 'installation', 'maintenance', 'leave', 'other'].includes(v.visit_type);
+        if (tab === 'visit')     return ['visit', 'demo', 'presentation', 'installation', 'maintenance', 'leave', 'internal_meeting', 'other'].includes(v.visit_type);
         if (tab === 'follow_up') return v.visit_type === 'follow_up';
         if (tab === 'history')   return !!v.checked_in_at;
         return true;
@@ -703,7 +730,7 @@ export default function LeadVisits({
                         {/* Main tabs */}
                         <div className="flex border-b border-surface-200 px-4 pt-3 gap-1">
                             {[
-                                { key: 'visit', label: 'Visit', icon: MapPin, count: visits.filter(v => ['visit','demo','presentation','other'].includes(v.visit_type)).length },
+                                { key: 'visit', label: 'Visit', icon: MapPin, count: visits.filter(v => ['visit','demo','presentation','installation','maintenance','leave','internal_meeting','other'].includes(v.visit_type)).length },
                                 { key: 'follow_up', label: 'Follow-up', icon: ClipboardList, count: visits.filter(v => v.visit_type === 'follow_up').length },
                                 { key: 'history', label: 'Riwayat Selesai', icon: History, count: visits.filter(v => v.checked_in_at).length },
                             ].map(t => (

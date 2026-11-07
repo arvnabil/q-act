@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasManyThrough;
 use Illuminate\Support\Str;
@@ -12,7 +13,7 @@ class BusinessUnit extends Model
     protected $keyType = 'string';
     public $incrementing = false;
 
-    protected $fillable = ['id', 'name', 'code', 'color', 'description', 'is_active'];
+    protected $fillable = ['id', 'name', 'code', 'color', 'description', 'is_active', 'default_sales_id'];
 
     protected $casts = ['is_active' => 'boolean'];
 
@@ -40,5 +41,10 @@ class BusinessUnit extends Model
     public function quotations(): HasMany
     {
         return $this->hasMany(Quotation::class, 'bu_id');
+    }
+
+    public function defaultSales(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'default_sales_id');
     }
 }

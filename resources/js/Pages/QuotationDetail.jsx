@@ -460,9 +460,15 @@ export default function QuotationDetail({ quotation, printDocuments = [], bankAc
                         </div>
 
                         <div className="p-5">
-                            <div className="text-[11px] font-bold text-surface-400 uppercase tracking-wider mb-2">Sales</div>
-                            <div className="text-sm font-bold text-surface-900">{quotation.creator?.name || 'Sales'}</div>
-                            <div className="text-xs text-surface-500">PT. Alfa Cipta Teknologi Virtual</div>
+                            <div className="text-[11px] font-bold text-surface-400 uppercase tracking-wider mb-2">Sales PIC</div>
+                            <div className="text-sm font-bold text-surface-900">{quotation.sales?.name || quotation.creator?.name || 'Sales'}</div>
+                            <div className="text-xs text-surface-400 mt-0.5">PT. Alfa Cipta Teknologi Virtual</div>
+                            {quotation.creator && (
+                                <div className="mt-3 pt-2.5 border-t border-surface-100 flex items-center justify-between text-xs">
+                                    <span className="text-surface-400">Pembuat:</span>
+                                    <span className="font-semibold text-surface-700">{quotation.creator.name}</span>
+                                </div>
+                            )}
                         </div>
 
                         <div className="p-5">

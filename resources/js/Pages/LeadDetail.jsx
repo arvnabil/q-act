@@ -693,7 +693,7 @@ function VisitsTab({ visits = [], leadId, onOpenSchedule, googleCalendarConfigur
                                     </td>
                                     <td className="px-4 py-3">
                                         <span className="capitalize px-2 py-0.5 bg-surface-100 text-surface-700 rounded text-[10px] font-semibold">
-                                            {v.visit_type}
+                                            {v.visit_type === 'internal_meeting' ? 'Meeting Internal' : v.visit_type === 'follow_up' ? 'Follow-up' : v.visit_type}
                                         </span>
                                     </td>
                                     <td className="px-4 py-3 text-surface-600 whitespace-nowrap">
@@ -1008,6 +1008,7 @@ function ScheduleVisitModal({ open, onClose, lead, customerPics = [], googleCale
                         >
                             <option value="visit">Visit Lapangan</option>
                             <option value="follow_up">Follow Up</option>
+                            <option value="internal_meeting">Meeting Internal</option>
                             <option value="demo">Demo Produk</option>
                             <option value="presentation">Presentasi / Pitching</option><option value="installation">Instalasi</option><option value="maintenance">Maintenance</option><option value="leave">Cuti</option>
                             <option value="other">Lainnya</option>
@@ -1380,6 +1381,15 @@ export default function LeadDetail({
     const [currentStage, setCurrentStage] = useState(lead.stage);
     const [activities, setActivities] = useState(lead.activities || []);
 
+    // Lost reason modal
+    const [lostReasonModal, setLostReasonModal] = useState(false);
+    const [lostReasonText, setLostReasonText] = useState('');
+    const [pendingLostStage, setPendingLostStage] = useState(null);
+
+    // Confirm terbayar modal
+    const [confirmTerbayarModal, setConfirmTerbayarModal] = useState(false);
+    const [pendingTerbayarStage, setPendingTerbayarStage] = useState(null);
+
     // Build stage meta with updated custom labels and colors
     const stageMetaMap = { ...STAGE_META };
     (pipelineSettings?.stages || []).forEach(st => {
@@ -1401,8 +1411,7 @@ export default function LeadDetail({
     useEffect(() => { setCurrentStage(lead.stage); }, [lead.stage]);
     useEffect(() => { setActivities(lead.activities || []); }, [lead.activities]);
 
-    const handleStageChange = async (newStage) => {
-        if (newStage === currentStage) { setChangingStage(false); return; }
+    const submitStageChange = async (newStage, extraData = {}) => {
         const oldStage = currentStage;
         setCurrentStage(newStage);
         setChangingStage(false);
@@ -1416,13 +1425,41 @@ export default function LeadDetail({
         };
         setActivities(prev => [optimistic, ...prev]);
         try {
-            await axios.patch(route('leads.stage.update', lead.id), { stage: newStage });
+            await axios.patch(route('leads.stage.update', lead.id), { stage: newStage, ...extraData });
             toast.success(`Stage diubah ke "${stageMetaMap[newStage]?.label || newStage}"`);
         } catch {
             toast.error('Gagal mengubah stage lead.');
             setCurrentStage(oldStage);
             setActivities(lead.activities || []);
         }
+    };
+
+    const handleStageChange = async (newStage) => {
+        if (newStage === currentStage) { setChangingStage(false); return; }
+
+        // Determine stage type from pipeline settings
+        const stageConfig = (pipelineSettings?.stages || []).find(s => s.key === newStage);
+        const stageType = stageConfig?.type ?? (
+            ['win', 'selesai_terbayar', 'proyek_deal', 'proyek_selesai'].includes(newStage) ? 'deal' :
+            ['lost', 'no_deal'].includes(newStage) ? 'lost' : 'normal'
+        );
+
+        if (stageType === 'lost') {
+            setPendingLostStage(newStage);
+            setLostReasonText('');
+            setLostReasonModal(true);
+            setChangingStage(false);
+            return;
+        }
+
+        if (newStage === 'selesai_terbayar') {
+            setPendingTerbayarStage(newStage);
+            setConfirmTerbayarModal(true);
+            setChangingStage(false);
+            return;
+        }
+
+        await submitStageChange(newStage);
     };
 
     const handleArchive = () => {
@@ -1489,6 +1526,22 @@ export default function LeadDetail({
                                 <p className="text-brand-600 font-bold mt-0.5 text-sm">
                                     Estimasi Nilai: {formatRupiah(lead.estimated_value)} <span className="text-xs text-brand-500 font-normal">({formatCompactRupiah(lead.estimated_value)})</span>
                                 </p>
+                            )}
+                            {(lead.lost_reason || currentStage === 'lost') && (
+                                <div className="mt-2 inline-flex items-center gap-2 px-3 py-1.5 bg-red-50 text-red-700 border border-red-200 rounded-lg text-xs font-medium">
+                                    <AlertCircle className="w-3.5 h-3.5 text-red-500 shrink-0" />
+                                    <span><strong>Alasan Lost:</strong> {lead.lost_reason || <span className="italic text-red-400">Belum diisi</span>}</span>
+                                    <button
+                                        onClick={() => {
+                                            setPendingLostStage(currentStage);
+                                            setLostReasonText(lead.lost_reason || '');
+                                            setLostReasonModal(true);
+                                        }}
+                                        className="text-red-600 hover:text-red-800 underline text-[11px] ml-1 cursor-pointer font-bold"
+                                    >
+                                        {lead.lost_reason ? 'Edit Alasan' : '+ Isi Alasan'}
+                                    </button>
+                                </div>
                             )}
                         </div>
                         <div className="flex items-center gap-2 flex-wrap">
@@ -1733,6 +1786,78 @@ export default function LeadDetail({
                 lead={lead}
                 customerPics={customerPics}
             />
+
+            {/* Modal Alasan Lost */}
+            {lostReasonModal && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+                    <div className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-md">
+                        <h3 className="text-lg font-bold text-surface-900 mb-1">Alasan Lead Gugur</h3>
+                        <p className="text-sm text-surface-500 mb-4">Mohon isi alasan mengapa lead ini tidak berhasil (opsional namun sangat disarankan).</p>
+                        <textarea
+                            autoFocus
+                            value={lostReasonText}
+                            onChange={e => setLostReasonText(e.target.value)}
+                            placeholder="Contoh: Budget tidak sesuai, customer memilih vendor lain, proyek ditunda..."
+                            className="w-full border border-surface-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-red-400 resize-none"
+                            rows={4}
+                        />
+                        <div className="flex justify-end gap-3 mt-4">
+                            <button
+                                onClick={() => { setLostReasonModal(false); setPendingLostStage(null); }}
+                                className="px-4 py-2 text-sm font-medium text-surface-600 hover:text-surface-900 transition-colors"
+                            >Batal</button>
+                            <button
+                                onClick={() => {
+                                    const stage = pendingLostStage;
+                                    const reason = lostReasonText;
+                                    setLostReasonModal(false);
+                                    setPendingLostStage(null);
+                                    submitStageChange(stage, { lost_reason: reason });
+                                }}
+                                className="px-5 py-2 text-sm font-semibold bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+                            >Konfirmasi Gugur</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Modal Konfirmasi Terbayar */}
+            {confirmTerbayarModal && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+                    <div className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-md">
+                        <div className="flex items-center gap-3 mb-4">
+                            <div className="w-11 h-11 bg-emerald-100 rounded-full flex items-center justify-center flex-shrink-0">
+                                <span className="text-2xl">✅</span>
+                            </div>
+                            <div>
+                                <h3 className="text-lg font-bold text-surface-900">Konfirmasi Pembayaran</h3>
+                                <p className="text-sm text-surface-500">Pastikan pembayaran sudah benar-benar diterima</p>
+                            </div>
+                        </div>
+                        <p className="text-sm text-surface-700 mb-3">
+                            Apakah Anda yakin lead <strong>"{lead.title}"</strong> sudah <strong>selesai dan terbayar</strong>?
+                        </p>
+                        <div className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2.5 text-xs text-amber-700 mb-4">
+                            ⚠️ Email notifikasi akan dikirim ke Tim Finance setelah konfirmasi ini. Jika salah, hubungi Manager untuk membatalkan.
+                        </div>
+                        <div className="flex justify-end gap-3">
+                            <button
+                                onClick={() => { setConfirmTerbayarModal(false); setPendingTerbayarStage(null); }}
+                                className="px-4 py-2 text-sm font-medium text-surface-600 hover:text-surface-900 transition-colors"
+                            >Batal</button>
+                            <button
+                                onClick={() => {
+                                    const stage = pendingTerbayarStage;
+                                    setConfirmTerbayarModal(false);
+                                    setPendingTerbayarStage(null);
+                                    submitStageChange(stage);
+                                }}
+                                className="px-5 py-2 text-sm font-semibold bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors"
+                            >Ya, Sudah Terbayar</button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </AuthenticatedLayout>
     );
 }

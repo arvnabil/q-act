@@ -19,15 +19,17 @@ class BusinessUnitController extends Controller
     {
         $businessUnits = BusinessUnit::with(['members.user', 'members' => function ($query) {
             $query->orderByRaw("FIELD(role_in_bu, 'lead', 'member')");
-        }])->orderBy('name')->get()->map(function ($bu) {
+        }, 'defaultSales'])->orderBy('name')->get()->map(function ($bu) {
             return [
-                'id'          => $bu->id,
-                'name'        => $bu->name,
-                'code'        => $bu->code,
-                'color'       => $bu->color,
-                'description' => $bu->description,
-                'is_active'   => $bu->is_active,
-                'members'     => $bu->members->map(function ($m) {
+                'id'                 => $bu->id,
+                'name'               => $bu->name,
+                'code'               => $bu->code,
+                'color'              => $bu->color,
+                'description'        => $bu->description,
+                'is_active'          => $bu->is_active,
+                'default_sales_id'   => $bu->default_sales_id,
+                'default_sales_name' => $bu->defaultSales?->name,
+                'members'            => $bu->members->map(function ($m) {
                     $u = $m->user;
                     return [
                         'id'         => $m->id,
@@ -90,19 +92,21 @@ class BusinessUnitController extends Controller
         $bu = BusinessUnit::findOrFail($id);
 
         $request->validate([
-            'name'        => 'required|string|max:255',
-            'code'        => 'required|string|max:10|unique:business_units,code,' . $id,
-            'color'       => 'nullable|string|max:20',
-            'description' => 'nullable|string',
-            'is_active'   => 'nullable|boolean',
+            'name'             => 'required|string|max:255',
+            'code'             => 'required|string|max:10|unique:business_units,code,' . $id,
+            'color'            => 'nullable|string|max:20',
+            'description'      => 'nullable|string',
+            'is_active'        => 'nullable|boolean',
+            'default_sales_id' => 'nullable|string|exists:users,id',
         ]);
 
         $bu->update([
-            'name'        => trim($request->name),
-            'code'        => strtoupper(trim($request->code)),
-            'color'       => $request->color ?: $bu->color,
-            'description' => $request->description,
-            'is_active'   => $request->boolean('is_active', true),
+            'name'             => trim($request->name),
+            'code'             => strtoupper(trim($request->code)),
+            'color'            => $request->color ?: $bu->color,
+            'description'      => $request->description,
+            'is_active'        => $request->boolean('is_active', true),
+            'default_sales_id' => $request->input('default_sales_id') ?: null,
         ]);
 
         return back()->with('message', 'Business Unit berhasil diperbarui!');

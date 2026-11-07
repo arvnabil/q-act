@@ -3,9 +3,10 @@ import ReactDOM from 'react-dom';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import Pagination from '@/Components/Pagination';
 import { Head, Link, router, usePage } from '@inertiajs/react';
-import { Search, Eye, Download, Copy, Trash2, Loader2, FileText, Plus, AlertTriangle, ArrowUpDown, ArrowUp, ArrowDown, UploadCloud, X } from 'lucide-react';
+import { Search, Eye, Download, Copy, Trash2, Loader2, FileText, Plus, AlertTriangle, ArrowUpDown, ArrowUp, ArrowDown, UploadCloud, X, Link2 } from 'lucide-react';
 import { formatMoney } from '@/utils/money';
 import { toast } from 'react-hot-toast';
+import axios from 'axios';
 
 const PAGE_SIZE = 8;
 
@@ -16,6 +17,7 @@ const STATUS_TABS = [
     { key: 'approved', label: 'PO'       },
     { key: 'rejected', label: 'Rejected' },
     { key: 'expired',  label: 'Expired'  },
+    { key: 'no_lead',  label: 'Tanpa Lead' },
 ];
 
 const statusClasses = (status) => {
@@ -96,7 +98,7 @@ const ResizableTH = ({ children, defaultWidth, align = 'left', className = '', s
     );
 };
 
-export default function Quotations({ quotations, isFinance }) {
+export default function Quotations({ quotations, isFinance, availableLeads = [] }) {
     const { auth } = usePage().props;
     const { user } = auth;
 
@@ -106,6 +108,42 @@ export default function Quotations({ quotations, isFinance }) {
     const [dateEnd, setDateEnd] = useState('');
     const [page, setPage] = useState(1);
     const [selectedIds, setSelectedIds] = useState([]);
+
+    // Connect lead state
+    const [connectLeadQuot, setConnectLeadQuot] = useState(null);
+    const [connectMode, setConnectMode] = useState('new');
+    const [newLeadTitle, setNewLeadTitle] = useState('');
+    const [selectedLeadId, setSelectedLeadId] = useState('');
+    const [isConnectingLead, setIsConnectingLead] = useState(false);
+
+    const handleOpenConnectLead = (q) => {
+        setConnectLeadQuot(q);
+        setConnectMode('new');
+        setNewLeadTitle(q.customer?.name ? `${q.customer.name}` : q.id);
+        const matchingLeads = (availableLeads || []).filter(l => l.customer_id === q.customer?.id);
+        setSelectedLeadId(matchingLeads[0]?.id || availableLeads[0]?.id || '');
+    };
+
+    const handleConnectLeadSubmit = async (e) => {
+        e?.preventDefault();
+        if (!connectLeadQuot) return;
+
+        setIsConnectingLead(true);
+        try {
+            const payload = connectMode === 'new'
+                ? { title: newLeadTitle.trim() }
+                : { lead_id: selectedLeadId };
+
+            await axios.post(route('quotations.workflow.lead', connectLeadQuot.id), payload);
+            toast.success('Quotation berhasil dihubungkan ke lead!');
+            setConnectLeadQuot(null);
+            router.reload({ only: ['quotations'] });
+        } catch (err) {
+            toast.error(err.response?.data?.message || 'Gagal menghubungkan ke lead.');
+        } finally {
+            setIsConnectingLead(false);
+        }
+    };
     const [deleteTarget, setDeleteTarget] = useState(null);
     const [isDeleting, setIsDeleting] = useState(false);
     const [duplicateTarget, setDuplicateTarget] = useState(null);
@@ -143,7 +181,9 @@ export default function Quotations({ quotations, isFinance }) {
 
     const countByStatus = (key) => {
         if (!quotations) return 0;
-        return key === 'all' ? quotations.length : quotations.filter(q => q.status === key).length;
+        if (key === 'all') return quotations.length;
+        if (key === 'no_lead') return quotations.filter(q => !q.lead_id).length;
+        return quotations.filter(q => q.status === key).length;
     };
 
     const calcGrandTotal = (q) => {
@@ -152,7 +192,11 @@ export default function Quotations({ quotations, isFinance }) {
     };
 
     const filtered = (quotations || []).filter(q => {
-        const matchStatus = filterStatus === 'all' || q.status === filterStatus;
+        let matchStatus;
+        if (filterStatus === 'all') matchStatus = true;
+        else if (filterStatus === 'no_lead') matchStatus = !q.lead_id;
+        else matchStatus = q.status === filterStatus;
+
         if (!matchStatus) return false;
         if (dateStart) {
             const qDate = new Date(q.created_at).toISOString().split('T')[0];
@@ -184,8 +228,12 @@ export default function Quotations({ quotations, isFinance }) {
                 valB = b.customer?.name?.toLowerCase() || '';
                 break;
             case 'sales':
-                valA = (a.creator?.name || a.sales?.name || '').toLowerCase();
-                valB = (b.creator?.name || b.sales?.name || '').toLowerCase();
+                valA = (a.sales?.name || a.creator?.name || '').toLowerCase();
+                valB = (b.sales?.name || b.creator?.name || '').toLowerCase();
+                break;
+            case 'creator':
+                valA = (a.creator?.name || '').toLowerCase();
+                valB = (b.creator?.name || '').toLowerCase();
                 break;
             case 'items':
                 valA = a.items?.length || 0;
@@ -504,7 +552,7 @@ export default function Quotations({ quotations, isFinance }) {
                     {filtered.length > 0 && (
                         <div className="bg-white border border-surface-200 rounded-xl overflow-hidden shadow-sm">
                             <div className="overflow-x-auto">
-                                <table className="w-full text-left border-collapse table-fixed min-w-[1000px]">
+                                <table className="w-full text-left border-collapse table-fixed min-w-[1100px]">
                                     <thead>
                                         <tr className="bg-surface-50 border-b border-surface-200">
                                             <th className="py-3.5 px-4 text-center w-12">
@@ -517,7 +565,8 @@ export default function Quotations({ quotations, isFinance }) {
                                             </th>
                                             <ResizableTH defaultWidth={145} sortable sortKey="id" currentSortKey={sortKey} currentSortOrder={sortOrder} onSort={handleSort}>No. Quotation</ResizableTH>
                                             <ResizableTH defaultWidth={200} sortable sortKey="customer" currentSortKey={sortKey} currentSortOrder={sortOrder} onSort={handleSort}>Customer</ResizableTH>
-                                            <ResizableTH defaultWidth={85} sortable sortKey="sales" currentSortKey={sortKey} currentSortOrder={sortOrder} onSort={handleSort}>Sales</ResizableTH>
+                                            <ResizableTH defaultWidth={85} sortable sortKey="sales" currentSortKey={sortKey} currentSortOrder={sortOrder} onSort={handleSort}>Sales PIC</ResizableTH>
+                                            <ResizableTH defaultWidth={90} sortable sortKey="creator" currentSortKey={sortKey} currentSortOrder={sortOrder} onSort={handleSort}>Dibuat Oleh</ResizableTH>
                                             <ResizableTH defaultWidth={100}>Brand</ResizableTH>
                                             <ResizableTH defaultWidth={75} align="center" sortable sortKey="items" currentSortKey={sortKey} currentSortOrder={sortOrder} onSort={handleSort}>Items</ResizableTH>
                                             <ResizableTH defaultWidth={145} align="right" sortable sortKey="grand_total" currentSortKey={sortKey} currentSortOrder={sortOrder} onSort={handleSort}>Grand Total</ResizableTH>
@@ -552,9 +601,22 @@ export default function Quotations({ quotations, isFinance }) {
                                                     <td className="py-3.5 px-4">
                                                         <div className="text-sm font-semibold text-surface-800 line-clamp-1">{q.customer?.name || '-'}</div>
                                                         <div className="text-xs text-surface-400 truncate">{q.pic?.name || '-'}</div>
+                                                        {!q.lead_id && (
+                                                            <button
+                                                                onClick={() => handleOpenConnectLead(q)}
+                                                                className="mt-1.5 inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100 transition-colors cursor-pointer"
+                                                                title="Hubungkan quotation ini ke Lead"
+                                                            >
+                                                                <Link2 className="w-3 h-3" />
+                                                                Hubungkan Lead
+                                                            </button>
+                                                        )}
                                                     </td>
-                                                    <td className="py-3.5 px-4 text-xs font-semibold text-surface-700">
-                                                        {(q.creator?.name || q.sales?.name || '-').split(' ')[0]}
+                                                    <td className="py-3.5 px-4 text-xs font-semibold text-surface-800" title={q.sales?.name || q.creator?.name || '-'}>
+                                                        {(q.sales?.name || q.creator?.name || '-').split(' ')[0]}
+                                                    </td>
+                                                    <td className="py-3.5 px-4 text-xs text-surface-500" title={q.creator?.name || '-'}>
+                                                        {(q.creator?.name || '-').split(' ')[0]}
                                                     </td>
                                                     <td className="py-3.5 px-4">
                                                         <div className="flex flex-wrap gap-1 max-h-[40px] overflow-hidden">
@@ -581,6 +643,16 @@ export default function Quotations({ quotations, isFinance }) {
                                                             >
                                                                 <Eye className="w-4 h-4" />
                                                             </Link>
+                                                            {!q.lead_id && !isFinance && (
+                                                                <button
+                                                                    onClick={() => handleOpenConnectLead(q)}
+                                                                    className="w-7 h-7 rounded-md flex items-center justify-center text-amber-600 hover:bg-amber-50 hover:text-amber-700 transition-colors cursor-pointer"
+                                                                    title="Hubungkan ke Lead"
+                                                                    aria-label="Hubungkan ke Lead"
+                                                                >
+                                                                    <Link2 className="w-4 h-4" />
+                                                                </button>
+                                                            )}
                                                             {!isFinance && (
                                                                 <button
                                                                     onClick={() => setDuplicateTarget(q)}
@@ -750,6 +822,116 @@ export default function Quotations({ quotations, isFinance }) {
                                     <span>{isDeleting ? 'Menghapus...' : 'Ya, Hapus Quotation'}</span>
                                 </button>
                             </div>
+                        </div>
+                    </div>,
+                    document.body
+                )}
+                {/* Modal Hubungkan ke Lead */}
+                {connectLeadQuot && ReactDOM.createPortal(
+                    <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-surface-900/60 backdrop-blur-sm animate-fade-in">
+                        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-scale-in border border-surface-200">
+                            <div className="px-6 py-4 border-b border-surface-100 flex items-center justify-between bg-surface-50/60">
+                                <div className="flex items-center gap-2.5">
+                                    <div className="w-8 h-8 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center">
+                                        <Link2 className="w-4 h-4" />
+                                    </div>
+                                    <div>
+                                        <h3 className="text-sm font-bold text-surface-900">Hubungkan Quotation ke Lead</h3>
+                                        <p className="text-[11px] text-surface-500 font-mono">{connectLeadQuot.id}</p>
+                                    </div>
+                                </div>
+                                <button
+                                    onClick={() => setConnectLeadQuot(null)}
+                                    className="p-1 text-surface-400 hover:text-surface-600 rounded-lg hover:bg-surface-100 transition-colors cursor-pointer"
+                                >
+                                    <X className="w-4 h-4" />
+                                </button>
+                            </div>
+
+                            <form onSubmit={handleConnectLeadSubmit} className="p-6 space-y-4">
+                                <div className="bg-surface-50 border border-surface-200 rounded-xl p-3 text-xs space-y-1">
+                                    <div className="flex justify-between">
+                                        <span className="text-surface-500">Customer:</span>
+                                        <span className="font-semibold text-surface-800">{connectLeadQuot.customer?.name || '-'}</span>
+                                    </div>
+                                    <div className="flex justify-between">
+                                        <span className="text-surface-500">Nilai Penawaran:</span>
+                                        <span className="font-bold text-brand-700">{formatCurrency(calcGrandTotal(connectLeadQuot))}</span>
+                                    </div>
+                                </div>
+
+                                <div className="space-y-2">
+                                    <label className="block text-xs font-bold text-surface-700 uppercase tracking-wider">Metode Hubungkan</label>
+                                    <div className="grid grid-cols-2 gap-2">
+                                        <button
+                                            type="button"
+                                            onClick={() => setConnectMode('new')}
+                                            className={`p-2.5 rounded-xl border text-xs font-semibold transition-all cursor-pointer text-left ${connectMode === 'new' ? 'border-brand-500 bg-brand-50 text-brand-800 ring-2 ring-brand-500/20' : 'border-surface-200 hover:bg-surface-50 text-surface-600'}`}
+                                        >
+                                            <div className="font-bold">✨ Buat Lead Baru</div>
+                                            <div className="text-[10px] text-surface-400 mt-0.5">Otomatis dari quotation</div>
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setConnectMode('existing')}
+                                            className={`p-2.5 rounded-xl border text-xs font-semibold transition-all cursor-pointer text-left ${connectMode === 'existing' ? 'border-brand-500 bg-brand-50 text-brand-800 ring-2 ring-brand-500/20' : 'border-surface-200 hover:bg-surface-50 text-surface-600'}`}
+                                        >
+                                            <div className="font-bold">🔗 Pilih Lead Ada</div>
+                                            <div className="text-[10px] text-surface-400 mt-0.5">Dari daftar lead aktif</div>
+                                        </button>
+                                    </div>
+                                </div>
+
+                                {connectMode === 'new' ? (
+                                    <div>
+                                        <label className="block text-xs font-bold text-surface-600 uppercase tracking-wider mb-1.5">Nama Proyek / Judul Lead</label>
+                                        <input
+                                            type="text"
+                                            required
+                                            value={newLeadTitle}
+                                            onChange={e => setNewLeadTitle(e.target.value)}
+                                            placeholder="Contoh: Pengadaan Headset Yealink"
+                                            className="w-full text-sm bg-white border border-surface-300 rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500 outline-none"
+                                        />
+                                        <p className="text-[10px] text-surface-400 mt-1">Lead baru akan dibuat dan langsung terhubung dengan quotation ini.</p>
+                                    </div>
+                                ) : (
+                                    <div>
+                                        <label className="block text-xs font-bold text-surface-600 uppercase tracking-wider mb-1.5">Pilih Lead Tujuan</label>
+                                        <select
+                                            required
+                                            value={selectedLeadId}
+                                            onChange={e => setSelectedLeadId(e.target.value)}
+                                            className="w-full text-sm bg-white border border-surface-300 rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500 outline-none font-medium"
+                                        >
+                                            <option value="">-- Pilih Lead Aktif --</option>
+                                            {(availableLeads || []).map(l => (
+                                                <option key={l.id} value={l.id}>
+                                                    {l.lead_code ? `[${l.lead_code}] ` : ''}{l.title}
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                )}
+
+                                <div className="flex items-center justify-end gap-3 pt-3 border-t border-surface-100">
+                                    <button
+                                        type="button"
+                                        onClick={() => setConnectLeadQuot(null)}
+                                        className="px-4 py-2 text-xs font-semibold text-surface-600 hover:text-surface-800 transition-colors cursor-pointer"
+                                    >
+                                        Batal
+                                    </button>
+                                    <button
+                                        type="submit"
+                                        disabled={isConnectingLead}
+                                        className="px-5 py-2 text-xs font-bold bg-brand-600 hover:bg-brand-700 text-white rounded-xl shadow-sm transition-colors cursor-pointer disabled:opacity-50 flex items-center gap-1.5"
+                                    >
+                                        {isConnectingLead && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                                        <span>Hubungkan Sekarang</span>
+                                    </button>
+                                </div>
+                            </form>
                         </div>
                     </div>,
                     document.body

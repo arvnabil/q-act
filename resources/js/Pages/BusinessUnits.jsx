@@ -202,6 +202,11 @@ export default function BusinessUnits({
                         <div className="text-xs text-surface-500 mt-0.5 flex items-center gap-2">
                           <span className="font-mono bg-surface-100 px-1.5 py-0.5 rounded text-surface-700">{bu.code}</span>
                           <span>{members.length} anggota</span>
+                          {bu.default_sales_name && (
+                            <span className="bg-brand-50 text-brand-700 border border-brand-200 px-1.5 py-0.5 rounded text-[11px] font-medium" title="Default Sales PIC untuk Presales">
+                              Default Sales: {bu.default_sales_name}
+                            </span>
+                          )}
                           {!bu.is_active && (
                             <span className="bg-red-50 text-red-600 px-1.5 py-0.5 rounded text-[10px] font-bold uppercase">Nonaktif</span>
                           )}
@@ -528,6 +533,25 @@ export default function BusinessUnits({
                     rows={2}
                     className="w-full border border-surface-200 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-300 resize-none"
                   />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-surface-600 uppercase tracking-wider block mb-1.5">
+                    Default Sales PIC <span className="text-surface-400 font-normal normal-case">(Otomatis untuk Presales BU ini)</span>
+                  </label>
+                  <select
+                    value={editingBU.default_sales_id || ''}
+                    onChange={e => setEditingBU(b => ({ ...b, default_sales_id: e.target.value || null }))}
+                    className="w-full border border-surface-200 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-300 bg-white"
+                  >
+                    <option value="">-- Belum Ditentukan (Pilih Saat Buat Quotation) --</option>
+                    {(editingBU.members || [])
+                      .map(m => m.user)
+                      .filter(Boolean)
+                      .filter(u => ['Sales', 'Sales Manager', 'Manager'].includes(u.role))
+                      .map(u => (
+                        <option key={u.id} value={u.id}>{u.name} ({u.role})</option>
+                      ))}
+                  </select>
                 </div>
                 <div className="flex items-center gap-2">
                   <input

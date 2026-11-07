@@ -10,6 +10,7 @@ use App\Models\SalesOrderCost;
 use App\Models\User;
 use App\Services\NotificationService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -349,9 +350,22 @@ class SalesOrderController extends Controller
             'category_name' => 'nullable|string|max:100',
             'description' => 'required|string|max:255',
             'amount' => 'required|numeric|min:1',
+            'cost_date'   => 'nullable|date',
+            'attachment'  => 'nullable|file|mimes:png,jpg,jpeg,pdf|max:2048',
         ]);
 
-        $salesOrder->costs()->create($validated);
+        $attachmentPath = null;
+        if ($request->hasFile('attachment')) {
+            $file = $request->file('attachment');
+            $ext  = $file->getClientOriginalExtension();
+            $desc = \Illuminate\Support\Str::slug($validated['description'], '_');
+            $date = $validated['cost_date'] ?? now()->toDateString();
+            $filename = "{$desc}_{$date}.{$ext}";
+            $attachmentPath = $file->storeAs("so-costs/{$salesOrder->id}", $filename, 'public');
+        }
+        $salesOrder->costs()->create(array_merge($validated, [
+            'attachment_path' => $attachmentPath,
+        ]));
 
         $salesOrder->load(['items', 'costs']);
         $totalItemVal = $salesOrder->items->sum(fn ($i) => ($i->qty * $i->price));
@@ -365,8 +379,48 @@ class SalesOrderController extends Controller
         return back()->with('message', 'Biaya tambahan (cost) berhasil ditambahkan.');
     }
 
+    public function updateCost(Request $request, SalesOrder $salesOrder, SalesOrderCost $cost)
+    {
+        $validated = $request->validate([
+            'cost_category_id' => 'nullable|exists:cost_categories,id',
+            'category_name' => 'nullable|string|max:100',
+            'description' => 'required|string|max:255',
+            'amount' => 'required|numeric|min:1',
+            'cost_date'   => 'nullable|date',
+            'attachment'  => 'nullable|file|mimes:png,jpg,jpeg,pdf|max:2048',
+        ]);
+
+        if ($request->hasFile('attachment')) {
+            if ($cost->attachment_path) {
+                Storage::disk('public')->delete($cost->attachment_path);
+            }
+            $file = $request->file('attachment');
+            $ext  = $file->getClientOriginalExtension();
+            $desc = \Illuminate\Support\Str::slug($validated['description'], '_');
+            $date = $validated['cost_date'] ?? now()->toDateString();
+            $filename = "{$desc}_{$date}.{$ext}";
+            $validated['attachment_path'] = $file->storeAs("so-costs/{$salesOrder->id}", $filename, 'public');
+        }
+
+        $cost->update($validated);
+
+        $salesOrder->load(['items', 'costs']);
+        $totalItemVal = $salesOrder->items->sum(fn ($i) => ($i->qty * $i->price));
+        $totalCost = $salesOrder->costs->sum('amount');
+        $salesOrder->update([
+            'total_item_value' => $totalItemVal,
+            'total_cost' => $totalCost,
+            'grand_total' => $totalItemVal + $totalCost,
+        ]);
+
+        return back()->with('message', 'Biaya tambahan (cost) berhasil diperbarui.');
+    }
+
     public function destroyCost(SalesOrder $salesOrder, SalesOrderCost $cost)
     {
+        if ($cost->attachment_path) {
+            Storage::disk('public')->delete($cost->attachment_path);
+        }
         $cost->delete();
 
         $salesOrder->load(['items', 'costs']);

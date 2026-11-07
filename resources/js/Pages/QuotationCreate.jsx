@@ -6,7 +6,7 @@ import { Head, router } from '@inertiajs/react';
 import { X, ChevronRight, Plus, Trash2, Info, Loader2, ArrowLeft } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 
-export default function QuotationCreate({ customers, bankAccounts, currentUser, leads = [], prefilledLead = null }) {
+export default function QuotationCreate({ customers, bankAccounts, currentUser, leads = [], prefilledLead = null, defaultSalesId = null, buSalesUsers = [] }) {
 
     const isManagerOrAdmin = ['Administrator', 'Sales Manager', 'Manager'].includes(currentUser?.role);
     const [mode, setMode] = useState('existing'); // 'existing' | 'new'
@@ -54,6 +54,7 @@ export default function QuotationCreate({ customers, bankAccounts, currentUser, 
     // Quotation info
     const [expiryDays, setExpiryDays] = useState(7);
     const [prefixType, setPrefixType] = useState(currentUser?.bu?.code ? 'bu' : 'personal');
+    const [salesId, setSalesId] = useState(defaultSalesId || (buSalesUsers?.[0]?.id || ''));
 
     // When selected customer changes, auto-select primary PIC
     useEffect(() => {
@@ -122,6 +123,7 @@ export default function QuotationCreate({ customers, bankAccounts, currentUser, 
 
         const payload = {
             lead_id: selectedLeadId || null,
+            sales_id: currentUser?.role === 'Presales' ? (salesId || null) : undefined,
             customer_id: mode === 'existing' ? selectedCustomerId : null,
             pic_id: selectedPicId && selectedPicId !== 'new' ? selectedPicId : null,
             expiry_days: expiryDays,
@@ -324,8 +326,23 @@ export default function QuotationCreate({ customers, bankAccounts, currentUser, 
                             </div>
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="flex flex-col gap-1.5">
-                                    <label className="text-xs font-semibold text-surface-600">Sales (Pembuat)</label>
-                                    <input type="text" value={currentUser?.name || ''} readOnly className="bg-surface-50 border border-surface-200 rounded-lg px-3 py-2.5 text-sm text-surface-700 outline-none opacity-60 cursor-default" />
+                                    <label className="text-xs font-semibold text-surface-600">
+                                        {currentUser?.role === 'Presales' ? 'Sales PIC Penanggung Jawab *' : 'Sales (Pembuat)'}
+                                    </label>
+                                    {currentUser?.role === 'Presales' ? (
+                                        <select
+                                            value={salesId || ''}
+                                            onChange={e => setSalesId(e.target.value)}
+                                            className="bg-white border border-surface-200 rounded-lg px-3 py-2.5 text-sm text-surface-700 outline-none focus:border-brand-500 font-medium"
+                                        >
+                                            <option value="">-- Pilih Sales PIC Penanggung Jawab --</option>
+                                            {buSalesUsers.map(s => (
+                                                <option key={s.id} value={s.id}>{s.name} ({s.role})</option>
+                                            ))}
+                                        </select>
+                                    ) : (
+                                        <input type="text" value={currentUser?.name || ''} readOnly className="bg-surface-50 border border-surface-200 rounded-lg px-3 py-2.5 text-sm text-surface-700 outline-none opacity-60 cursor-default" />
+                                    )}
                                 </div>
                                 <div className="flex flex-col gap-1.5">
                                     <label className="text-xs font-semibold text-surface-600">Masa Berlaku (Hari)</label>

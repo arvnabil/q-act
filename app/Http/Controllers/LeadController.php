@@ -450,6 +450,38 @@ class LeadController extends Controller
 
         $lead->update($updateData);
 
+        // Send email notification to Finance team when lead is confirmed as paid
+        if ($newStage === 'selesai_terbayar') {
+            $lead->load(['customer', 'sales']);
+            $financeUsers = \App\Models\User::where('is_active', true)
+                ->where('role', 'Finance')
+                ->get();
+            foreach ($financeUsers as $financeUser) {
+                try {
+                    \Illuminate\Support\Facades\Mail::to($financeUser->email)
+                        ->send(new \App\Mail\LeadPaidNotification($lead, $request->user()));
+                } catch (\Exception $e) {
+                    \Illuminate\Support\Facades\Log::error('LeadPaid email failed for ' . $financeUser->email . ': ' . $e->getMessage());
+                }
+            }
+        }
+
+        // Send correction email to Finance if lead was reverted from selesai_terbayar
+        if ($oldStage === 'selesai_terbayar' && $newStage !== 'selesai_terbayar') {
+            $lead->load(['customer', 'sales']);
+            $financeUsers = \App\Models\User::where('is_active', true)
+                ->where('role', 'Finance')
+                ->get();
+            foreach ($financeUsers as $financeUser) {
+                try {
+                    \Illuminate\Support\Facades\Mail::to($financeUser->email)
+                        ->send(new \App\Mail\LeadPaidCancelledNotification($lead, $request->user(), $oldStage, $newStage));
+                } catch (\Exception $e) {
+                    \Illuminate\Support\Facades\Log::error('LeadPaidCancelled email failed for ' . $financeUser->email . ': ' . $e->getMessage());
+                }
+            }
+        }
+
         // Log stage change
         $this->logActivity(
             $lead,
@@ -648,7 +680,7 @@ class LeadController extends Controller
 
         $query = LeadVisit::whereNull('cancelled_at')->whereIn('user_id', WorkflowAccess::ids($request->user()))->with([
             'lead:id,title,lead_code',
-            'user:id,name',
+            'user:id,name,role',
             'customer:id,name',
         ])->orderBy('scheduled_at');
 
@@ -693,7 +725,7 @@ class LeadController extends Controller
             'quotation_id' => 'nullable|string|exists:quotations,id',
             'lead_id'      => 'nullable|uuid|exists:leads,id',
             'customer_id'  => 'nullable|string|exists:customers,id',
-            'visit_type'   => 'required|string|in:visit,follow_up,demo,presentation,installation,maintenance,leave,other',
+            'visit_type'   => 'required|string|in:visit,follow_up,demo,presentation,installation,maintenance,leave,internal_meeting,other',
             'subject'      => 'required|string|max:255',
             'location'     => 'nullable|string|max:255',
             'scheduled_at' => 'required|date',
@@ -879,7 +911,7 @@ class LeadController extends Controller
         WorkflowAccess::visit($request->user(), $visit);
         abort_if($visit->cancelled_at || $visit->checked_in_at, 422, 'Agenda sudah selesai/dibatalkan.');
         $data = $request->validate([
-            'visit_type'        => 'required|string|in:visit,follow_up,demo,presentation,installation,maintenance,leave,other',
+            'visit_type'        => 'required|string|in:visit,follow_up,demo,presentation,installation,maintenance,leave,internal_meeting,other',
             'subject'           => 'required|string|max:255',
             'location'          => 'nullable|string|max:255',
             'scheduled_at'      => 'required|date',
@@ -1105,7 +1137,7 @@ class LeadController extends Controller
 
         $query = LeadVisit::whereNull('cancelled_at')->whereIn('user_id', $calendarUserIds)->with([
             'lead:id,title,lead_code',
-            'user:id,name,avatar_initials,avatar_url',
+            'user:id,name,avatar_initials,avatar_url,role',
             'customer:id,name',
         ])->orderBy('scheduled_at');
 

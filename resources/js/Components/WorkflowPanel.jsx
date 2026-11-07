@@ -70,6 +70,7 @@ export default function WorkflowPanel({
     embedded = false,
     refreshPage = true,
     onLinked,
+    onCloseModal,
 }) {
     const [data, setData] = useState(null),
         [mode, setMode] = useState(null),
@@ -83,6 +84,10 @@ export default function WorkflowPanel({
         [title, setTitle] = useState(""),
         [form, setForm] = useState({}),
         [customEmail, setCustomEmail] = useState("");
+    // State for the embedded quick-link UI (matches Quotations list modal style)
+    const [connectMode, setConnectMode] = useState("new");
+    const [connectTitle, setConnectTitle] = useState("");
+    const [connectSelectedId, setConnectSelectedId] = useState("");
 
     const addAttendeeEmail = (emailToAdd) => {
         const trimmed = (emailToAdd || customEmail).trim().toLowerCase();
@@ -108,7 +113,15 @@ export default function WorkflowPanel({
     const load = useCallback(async () => {
         try {
             const res = await axios.get(endpoint);
-            setData(res.data);
+            const rawData = res.data;
+            if (rawData && rawData.suggestedTitle) {
+                rawData.suggestedTitle = rawData.suggestedTitle.replace(/^Lead\s+/i, "");
+            }
+            setData(rawData);
+            // Pre-fill connectTitle for quick-link UI
+            if (rawData?.suggestedTitle && !rawData?.lead) {
+                setConnectTitle(rawData.suggestedTitle.replace(/^Lead\s+/i, ""));
+            }
             onLinked?.(!!res.data.lead);
         } catch {
             setError("Tidak dapat memuat hubungan proyek dan agenda.");
@@ -263,173 +276,205 @@ export default function WorkflowPanel({
                     Memuat lead dan agenda…
                 </p>
             )}
+            {/* Quotation context: info card + link/connect section */}
             {quotationId && data && (
-                <div className="mt-4 rounded-xl border border-brand-100 bg-brand-50/40 p-4 text-sm">
+                <div className="mt-4 space-y-3 text-sm">
+                    {/* Info card: Customer + Grand Total */}
+                    {(data.customerName || data.grandTotal != null) && (
+                        <div className="bg-surface-50 border border-surface-200 rounded-xl p-3 text-xs space-y-1">
+                            {data.customerName && (
+                                <div className="flex justify-between">
+                                    <span className="text-surface-500">Customer:</span>
+                                    <span className="font-semibold text-surface-800">{data.customerName}</span>
+                                </div>
+                            )}
+                            {data.grandTotal != null && (
+                                <div className="flex justify-between">
+                                    <span className="text-surface-500">Nilai Penawaran:</span>
+                                    <span className="font-bold text-brand-700">
+                                        {new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 }).format(data.grandTotal)}
+                                    </span>
+                                </div>
+                            )}
+                        </div>
+                    )}
+
                     {data.lead ? (
-                        <>
-                            <p className="flex items-center gap-2 font-semibold text-brand-700">
-                                <Check className="h-4 w-4" />
-                                Quotation sudah terhubung
+                        /* Already linked */
+                        <div className="rounded-xl border border-emerald-200 bg-emerald-50/60 p-3">
+                            <p className="flex items-center gap-2 font-semibold text-emerald-700 text-xs">
+                                <Check className="h-4 w-4 shrink-0" />
+                                Quotation sudah terhubung ke lead
                             </p>
                             <Link
                                 href={"/leads/" + data.lead.id}
-                                className="mt-2 block font-bold text-surface-900 hover:underline"
+                                className="mt-2 block font-bold text-surface-900 hover:underline text-sm"
                             >
+                                {data.lead.lead_code && (
+                                    <span className="text-xs font-normal text-surface-500 mr-1">{data.lead.lead_code}</span>
+                                )}
                                 {data.lead.title} →
                             </Link>
-                            {data.canManage &&
-                                data.otherQuotations?.length > 0 && (
+                            {/* Jadwalkan button always visible when linked */}
+                            {data.canSchedule && (
+                                <button
+                                    type="button"
+                                    onClick={() => schedule()}
+                                    className={button + " mt-3"}
+                                >
+                                    <Plus className="h-3.5 w-3.5" />
+                                    Jadwalkan tindak lanjut
+                                </button>
+                            )}
+                            {data.canManage && data.otherQuotations?.length > 0 && (
+                                <button
+                                    type="button"
+                                    className={button + " mt-2"}
+                                    onClick={() => {
+                                        setSelected(data.lead.id);
+                                        setOtherIds([]);
+                                        setError("");
+                                        setMode("link");
+                                    }}
+                                >
+                                    Hubungkan quotation lain
+                                </button>
+                            )}
+                        </div>
+                    ) : data.canManage ? (
+                        /* Not linked — 2-tab quick connect UI */
+                        <div className="space-y-3">
+                            <div>
+                                <label className="block text-xs font-bold text-surface-700 uppercase tracking-wider mb-1.5">
+                                    Metode Hubungkan
+                                </label>
+                                <div className="grid grid-cols-2 gap-2">
                                     <button
                                         type="button"
-                                        className={button + " mt-3"}
-                                        onClick={() => {
-                                            setSelected(data.lead.id);
-                                            setOtherIds([]);
-                                            setError("");
-                                            setMode("link");
-                                        }}
+                                        onClick={() => setConnectMode("new")}
+                                        className={`p-2.5 rounded-xl border text-xs font-semibold transition-all cursor-pointer text-left ${connectMode === "new" ? "border-brand-500 bg-brand-50 text-brand-800 ring-2 ring-brand-500/20" : "border-surface-200 hover:bg-surface-50 text-surface-600"}`}
                                     >
-                                        Hubungkan quotation lain
+                                        <div className="font-bold">✨ Buat Lead Baru</div>
+                                        <div className="text-[10px] text-surface-400 mt-0.5">Otomatis dari quotation</div>
                                     </button>
-                                )}
-                        </>
-                    ) : (
-                        <>
-                            <h4 className="font-bold text-surface-900">
-                                Quotation ini untuk proyek yang mana?
-                            </h4>
-                            <p className="mt-1 text-xs text-surface-500">
-                                Satu proyek bisa memiliki banyak quotation.
-                                Hubungkan ke lead yang sama agar riwayat
-                                terkumpul; buat lead baru hanya untuk proyek
-                                berbeda.
-                            </p>
-                            {data.canManage ? (
-                                <div className="mt-4 space-y-3">
-                                    {!data.candidates?.length && (
-                                        <div className="rounded-lg border border-surface-200 bg-white p-3">
-                                            <p className="font-semibold text-surface-800">
-                                                Lead yang sudah ada
-                                            </p>
-                                            <p className="mt-1 text-xs text-surface-500">
-                                                Belum ada lead aktif untuk
-                                                customer ini dalam cakupan akses
-                                                Anda.
-                                            </p>
-                                        </div>
-                                    )}
-                                    {!!data.candidates?.length && (
-                                        <div className="space-y-2">
-                                            <p className="text-xs font-semibold text-surface-600">
-                                                Lead yang disarankan — hubungkan
-                                                jika proyeknya sama
-                                            </p>
-                                            {data.candidates.map((l) => (
-                                                <div
-                                                    key={l.id}
-                                                    className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-surface-200 bg-white p-3"
-                                                >
-                                                    <div>
-                                                        <p className="text-xs text-surface-500">
-                                                            {l.lead_code}
-                                                        </p>
-                                                        <p className="font-semibold text-surface-800">
-                                                            {l.title}
-                                                        </p>
-                                                    </div>
-                                                    <button
-                                                        type="button"
-                                                        disabled={busy}
-                                                        className="inline-flex items-center gap-2 rounded-lg bg-brand-600 px-3 py-2 text-xs font-bold text-white hover:bg-brand-700 disabled:opacity-50"
-                                                        onClick={() =>
-                                                            perform(
-                                                                () =>
-                                                                    axios.post(
-                                                                        endpoint +
-                                                                            "/lead",
-                                                                        {
-                                                                            lead_id:
-                                                                                l.id,
-                                                                        },
-                                                                    ),
-                                                                "Quotation berhasil dihubungkan ke lead.",
-                                                            )
-                                                        }
-                                                    >
-                                                        <Link2 className="h-4 w-4" />
-                                                        Hubungkan
-                                                    </button>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    )}
-                                    <div className="rounded-lg border border-brand-200 bg-white p-3">
-                                        <p className="font-semibold text-surface-800">
-                                            {data.candidates?.length
-                                                ? "Proyek berbeda? Buat lead baru"
-                                                : "Buat lead dari quotation ini"}
-                                        </p>
-                                        <p className="mt-1 text-xs text-surface-500">
-                                            Nama proyek: {data.suggestedTitle}
-                                        </p>
-                                        <div className="mt-3 flex flex-wrap gap-2">
-                                            <button
-                                                type="button"
-                                                disabled={busy}
-                                                className="inline-flex items-center gap-2 rounded-lg bg-brand-600 px-4 py-2 text-xs font-bold text-white hover:bg-brand-700 disabled:opacity-50"
-                                                onClick={() => {
-                                                    setOtherIds([]);
-                                                    setTitle(
-                                                        data.suggestedTitle ||
-                                                            "",
-                                                    );
-                                                    setError("");
-                                                    setMode("create");
-                                                }}
-                                            >
-                                                <Plus className="h-4 w-4" />
-                                                {busy
-                                                    ? "Menyimpan…"
-                                                    : "Buat lead untuk proyek baru"}
-                                            </button>
-                                            <button
-                                                type="button"
-                                                disabled={busy}
-                                                className={button}
-                                                onClick={() => {
-                                                    setOtherIds([]);
-                                                    setTitle(
-                                                        data.suggestedTitle ||
-                                                            "",
-                                                    );
-                                                    setError("");
-                                                    setMode("create");
-                                                }}
-                                            >
-                                                Ubah nama / pilih quotation lain
-                                            </button>
-                                        </div>
-                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={() => setConnectMode("existing")}
+                                        className={`p-2.5 rounded-xl border text-xs font-semibold transition-all cursor-pointer text-left ${connectMode === "existing" ? "border-brand-500 bg-brand-50 text-brand-800 ring-2 ring-brand-500/20" : "border-surface-200 hover:bg-surface-50 text-surface-600"}`}
+                                    >
+                                        <div className="font-bold">🔗 Pilih Lead Ada</div>
+                                        <div className="text-[10px] text-surface-400 mt-0.5">Dari daftar lead aktif</div>
+                                    </button>
+                                </div>
+                            </div>
+
+                            {connectMode === "new" ? (
+                                <div>
+                                    <label className="block text-xs font-bold text-surface-600 uppercase tracking-wider mb-1.5">
+                                        Nama Proyek / Judul Lead
+                                    </label>
+                                    <input
+                                        type="text"
+                                        value={connectTitle}
+                                        onChange={e => setConnectTitle(e.target.value)}
+                                        placeholder="Contoh: Pengadaan Headset Yealink"
+                                        className="w-full text-sm bg-white border border-surface-300 rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500 outline-none"
+                                    />
+                                    <p className="text-[10px] text-surface-400 mt-1">Lead baru akan dibuat dan langsung terhubung dengan quotation ini.</p>
                                 </div>
                             ) : (
-                                <p className="mt-3 text-xs text-surface-500">
-                                    Anda belum memiliki izin untuk menghubungkan
-                                    lead.
-                                </p>
+                                <div>
+                                    <label className="block text-xs font-bold text-surface-600 uppercase tracking-wider mb-1.5">
+                                        Pilih Lead Tujuan
+                                    </label>
+                                    {/* Candidates from same customer first, then allLeads fallback */}
+                                    {(data.candidates?.length || data.allLeads?.length) ? (
+                                        <select
+                                            value={connectSelectedId}
+                                            onChange={e => setConnectSelectedId(e.target.value)}
+                                            className="w-full text-sm bg-white border border-surface-300 rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500 outline-none font-medium"
+                                        >
+                                            <option value="">-- Pilih Lead Aktif --</option>
+                                            {/* Same-customer candidates shown first */}
+                                            {data.candidates?.length > 0 && (
+                                                <optgroup label="Lead customer ini">
+                                                    {data.candidates.map(l => (
+                                                        <option key={l.id} value={l.id}>
+                                                            {l.lead_code ? `[${l.lead_code}] ` : ""}{l.title}
+                                                        </option>
+                                                    ))}
+                                                </optgroup>
+                                            )}
+                                            {data.allLeads?.filter(l => !data.candidates?.some(c => c.id === l.id)).length > 0 && (
+                                                <optgroup label="Semua lead aktif">
+                                                    {data.allLeads.filter(l => !data.candidates?.some(c => c.id === l.id)).map(l => (
+                                                        <option key={l.id} value={l.id}>
+                                                            {l.lead_code ? `[${l.lead_code}] ` : ""}{l.title}
+                                                        </option>
+                                                    ))}
+                                                </optgroup>
+                                            )}
+                                        </select>
+                                    ) : (
+                                        <p className="text-xs text-surface-500 italic">Tidak ada lead aktif yang dapat dipilih.</p>
+                                    )}
+                                </div>
                             )}
-                        </>
+
+                            {error && <p className="text-xs text-red-600">{error}</p>}
+
+                            <div className="flex items-center justify-end gap-3 pt-2 border-t border-surface-100">
+                                <button
+                                    type="button"
+                                    onClick={() => onCloseModal?.()}
+                                    className="px-4 py-2 text-xs font-semibold text-surface-600 hover:text-surface-800 transition-colors cursor-pointer"
+                                >
+                                    Batal
+                                </button>
+                                <button
+                                    type="button"
+                                    disabled={busy || (connectMode === "existing" && !connectSelectedId)}
+                                    className="px-5 py-2 text-xs font-bold bg-brand-600 hover:bg-brand-700 text-white rounded-xl shadow-sm transition-colors cursor-pointer disabled:opacity-50 flex items-center gap-1.5"
+                                    onClick={() => {
+                                        if (connectMode === "new") {
+                                            const cleanTitle = (connectTitle || data.suggestedTitle || "").replace(/^Lead\s+/i, "");
+                                            perform(
+                                                () => axios.post(endpoint + "/lead", { title: cleanTitle }),
+                                                "Lead baru berhasil dibuat dan dihubungkan.",
+                                            );
+                                        } else {
+                                            if (!connectSelectedId) return;
+                                            perform(
+                                                () => axios.post(endpoint + "/lead", { lead_id: connectSelectedId }),
+                                                "Quotation berhasil dihubungkan ke lead.",
+                                            );
+                                        }
+                                    }}
+                                >
+                                    <span>{busy ? "Menyimpan…" : "Hubungkan Sekarang"}</span>
+                                </button>
+                            </div>
+
+                            {/* Schedule without lead option */}
+                            {data.canSchedule && (
+                                <div className="pt-1 border-t border-surface-100">
+                                    <button
+                                        type="button"
+                                        onClick={() => schedule()}
+                                        className={button + " w-full justify-center"}
+                                    >
+                                        <Calendar className="h-4 w-4" />
+                                        Jadwalkan tindak lanjut tanpa lead
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+                    ) : (
+                        <p className="text-xs text-surface-500">
+                            Anda belum memiliki izin untuk menghubungkan lead.
+                        </p>
                     )}
                 </div>
-            )}
-            {quotationId && data && !data.lead && data.canSchedule && (
-                <button
-                    type="button"
-                    onClick={() => schedule()}
-                    className={button + " mt-4"}
-                >
-                    <Calendar className="h-4 w-4" />
-                    Jadwalkan tindak lanjut tanpa lead
-                </button>
             )}
             {/* Sub-tabs: Aktif / Riwayat / Semua */}
             {data && visits.length > 0 && (
@@ -878,6 +923,7 @@ export default function WorkflowPanel({
                                             Follow-up
                                         </option>
                                         <option value="visit">Kunjungan</option>
+                                        <option value="internal_meeting">Meeting Internal</option>
                                         <option value="demo">Demo</option>
                                         <option value="other">
                                             Meeting online / lainnya

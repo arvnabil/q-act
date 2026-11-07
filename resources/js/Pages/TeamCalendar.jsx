@@ -11,14 +11,26 @@ import {
 } from 'lucide-react';
 
 const VISIT_TYPES = {
-    installation: { label: 'Instalasi', bg: 'bg-indigo-50 text-indigo-700 border-indigo-200', dot: 'bg-indigo-500' },
-    maintenance: { label: 'Maintenance', bg: 'bg-orange-50 text-orange-700 border-orange-200', dot: 'bg-orange-500' },
-    leave: { label: 'Cuti', bg: 'bg-rose-50 text-rose-700 border-rose-200', dot: 'bg-rose-500' },
+    internal_meeting: { label: 'Meeting Internal', bg: 'bg-emerald-50 text-emerald-700 border-emerald-200', dot: 'bg-emerald-500' },
     visit:        { label: 'Visit Lapangan',  bg: 'bg-blue-50 text-blue-700 border-blue-200', dot: 'bg-blue-500' },
     follow_up:    { label: 'Follow-up',       bg: 'bg-amber-50 text-amber-700 border-amber-200', dot: 'bg-amber-500' },
     demo:         { label: 'Demo Produk',     bg: 'bg-violet-50 text-violet-700 border-violet-200', dot: 'bg-violet-500' },
     presentation: { label: 'Presentasi',     bg: 'bg-teal-50 text-teal-700 border-teal-200', dot: 'bg-teal-500' },
+    installation: { label: 'Instalasi',       bg: 'bg-indigo-50 text-indigo-700 border-indigo-200', dot: 'bg-indigo-500' },
+    maintenance:  { label: 'Maintenance',      bg: 'bg-orange-50 text-orange-700 border-orange-200', dot: 'bg-orange-500' },
+    leave:        { label: 'Cuti',            bg: 'bg-rose-50 text-rose-700 border-rose-200', dot: 'bg-rose-500' },
     other:        { label: 'Lainnya',         bg: 'bg-gray-50 text-gray-700 border-gray-200', dot: 'bg-gray-400' },
+};
+
+export const getUserRoleLabel = (user) => {
+    if (!user) return 'Petugas';
+    const r = (user.role || '').toLowerCase();
+    if (r.includes('manager')) return 'Manager';
+    if (r.includes('admin')) return 'Administrator';
+    if (r.includes('presales')) return 'Presales';
+    if (r.includes('finance')) return 'Finance';
+    if (r.includes('sales')) return 'Petugas Sales';
+    return user.role || 'Petugas';
 };
 
 const DAYS = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu', 'Minggu'];
@@ -480,7 +492,7 @@ export default function TeamCalendar({
 
                                 <div className="flex items-center gap-2">
                                     <User className="w-4 h-4 text-surface-400 shrink-0" />
-                                    <span>Petugas Sales: <strong>{selectedEvent.user?.name || '—'}</strong></span>
+                                    <span>{getUserRoleLabel(selectedEvent.user)}: <strong>{selectedEvent.user?.name || '—'}</strong></span>
                                 </div>
 
                                 <div className="flex items-center gap-2">
@@ -723,6 +735,7 @@ function AddCalendarVisitModal({ open, onClose, leads, customers, customerPics =
                         >
                             <option value="visit">Visit Lapangan</option>
                             <option value="follow_up">Follow Up</option>
+                            <option value="internal_meeting">Meeting Internal</option>
                             <option value="demo">Demo Produk</option>
                             <option value="presentation">Presentasi / Pitching</option><option value="installation">Instalasi</option><option value="maintenance">Maintenance</option><option value="leave">Cuti</option>
                             <option value="other">Lainnya</option>
