@@ -141,6 +141,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
 
+    // Release Notes & Version Info
+    Route::get('/releases', [\App\Http\Controllers\ReleaseController::class, 'index'])->name('releases.index');
+
     // Lead Pipeline
     Route::prefix('leads')->name('leads.')->group(function () {
         Route::get('/',                              [LeadController::class, 'index'])->name('index');

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Link, usePage } from '@inertiajs/react';
-import { LayoutDashboard, FileText, Users, Box, Settings, LogOut, ChevronRight, ChevronDown, BarChart2, ShieldCheck, UserCog, FileStack, TrendingUp, MapPin, Trophy, Calendar } from 'lucide-react';
+import { LayoutDashboard, FileText, Users, Box, Settings, LogOut, ChevronRight, ChevronDown, BarChart2, ShieldCheck, UserCog, FileStack, TrendingUp, MapPin, Trophy, Calendar, Sparkles } from 'lucide-react';
 
 export default function Sidebar({ mobileOpen, setMobileOpen }) {
     const { auth } = usePage().props;
@@ -305,6 +305,21 @@ export default function Sidebar({ mobileOpen, setMobileOpen }) {
                     })()}
                 </nav>
 
+                <div className="px-3 py-2 border-t border-surface-100 bg-surface-50/50">
+                    <Link
+                        href="/releases"
+                        className={`flex items-center justify-between px-3 py-2 rounded-lg text-xs font-semibold transition-all ${isActiveLink('/releases') ? 'bg-brand-100 text-brand-800 font-bold' : 'text-surface-600 hover:bg-surface-100 hover:text-surface-900'}`}
+                        onClick={() => setMobileOpen(false)}
+                    >
+                        <div className="flex items-center gap-2">
+                            <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+                            <span>Info Versi & Rilis</span>
+                        </div>
+                        <span className="font-mono text-[10px] font-bold px-1.5 py-0.5 rounded bg-brand-50 text-brand-700 border border-brand-200">
+                            v2.4.0
+                        </span>
+                    </Link>
+                </div>
                 <div className="px-4 py-4 border-t border-surface-100 flex items-center justify-between">
                     <Link href="/profile" className="flex items-center gap-3 px-2 py-2 rounded-lg hover:bg-surface-50 transition-colors cursor-pointer flex-1 min-w-0" onClick={() => setMobileOpen(false)}>
                         <div className="w-8 h-8 rounded-lg bg-brand-500 flex items-center justify-center text-white text-xs font-bold shrink-0 overflow-hidden">

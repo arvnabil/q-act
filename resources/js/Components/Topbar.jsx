@@ -23,6 +23,7 @@ const PAGE_CONFIG = {
     '/analytics': { title: 'Analytics', subtitle: 'Laporan dan analisis mendalam' },
     '/settings': { title: 'Settings', subtitle: 'Kelola pengaturan aplikasi dan integrasi' },
     '/profile': { title: 'Profil Pengguna', subtitle: 'Kelola informasi akun dan pengaturan profil' },
+    '/releases': { title: 'Info Versi & Rilis Pembaruan', subtitle: 'Dokumentasi berkala fitur baru, perbaikan, dan siklus rilis mingguan' },
 };
 
 function NotifIcon({ title }) {
