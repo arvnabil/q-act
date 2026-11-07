@@ -3,162 +3,62 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Reset Kata Sandi QSales</title>
     <style>
-        body {
-            font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, Helvetica, Arial, sans-serif;
-            background-color: #f4f6f9;
-            margin: 0;
-            padding: 0;
-            -webkit-font-smoothing: antialiased;
-            color: #334155;
-        }
-        .wrapper {
-            width: 100%;
-            background-color: #f4f6f9;
-            padding: 40px 16px;
-            box-sizing: border-box;
-        }
-        .card {
-            max-width: 520px;
-            margin: 0 auto;
-            background-color: #ffffff;
-            border-radius: 16px;
-            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.03);
-            border: 1px solid #e2e8f0;
-            overflow: hidden;
-        }
-        .header {
-            background-color: #0f172a;
-            padding: 28px 32px;
-            text-align: center;
-        }
-        .header img {
-            max-height: 48px;
-            width: auto;
-            display: inline-block;
-        }
-        .body-content {
-            padding: 36px 32px 32px;
-        }
-        .greeting {
-            font-size: 18px;
-            font-weight: 700;
-            color: #0f172a;
-            margin-top: 0;
-            margin-bottom: 16px;
-        }
-        .text {
-            font-size: 15px;
-            line-height: 1.6;
-            color: #475569;
-            margin-top: 0;
-            margin-bottom: 20px;
-        }
-        .button-wrapper {
-            text-align: center;
-            margin: 28px 0;
-        }
-        .btn {
-            background-color: #2563eb;
-            color: #ffffff !important;
-            font-size: 15px;
-            font-weight: 600;
-            text-decoration: none;
-            padding: 14px 32px;
-            border-radius: 10px;
-            display: inline-block;
-            box-shadow: 0 4px 12px rgba(37, 99, 235, 0.25);
-            transition: background-color 0.2s ease;
-        }
-        .btn:hover {
-            background-color: #1d4ed8;
-        }
-        .info-box {
-            background-color: #f8fafc;
-            border: 1px solid #e2e8f0;
-            border-left: 4px solid #2563eb;
-            border-radius: 8px;
-            padding: 14px 16px;
-            font-size: 14px;
-            color: #334155;
-            margin-bottom: 24px;
-        }
-        .divider {
-            height: 1px;
-            background-color: #e2e8f0;
-            margin: 28px 0;
-        }
-        .footer-sign {
-            font-size: 15px;
-            line-height: 1.5;
-            color: #334155;
-            margin: 0;
-        }
-        .subtext {
-            font-size: 12px;
-            color: #94a3b8;
-            word-break: break-all;
-            margin-top: 20px;
-            line-height: 1.4;
-        }
-        .footer {
-            text-align: center;
-            padding: 20px 32px 32px;
-            font-size: 12px;
-            color: #94a3b8;
-        }
+        body { font-family: Arial, sans-serif; color: #333; line-height: 1.6; margin: 0; padding: 0; background: #f5f5f5; }
+        .container { max-width: 600px; margin: 30px auto; background: #fff; border-radius: 10px; overflow: hidden; box-shadow: 0 2px 12px rgba(0,0,0,0.08); }
+        .header { background: linear-gradient(135deg, #0f766e, #0d9488); color: #fff; padding: 28px 32px; }
+        .header h1 { margin: 0 0 4px; font-size: 22px; }
+        .header p { margin: 0; font-size: 13px; opacity: 0.85; }
+        .body { padding: 28px 32px; }
+        .greeting { font-size: 15px; margin-bottom: 16px; }
+        .info-box { background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 18px 20px; margin-bottom: 20px; }
+        .info-row { display: flex; margin-bottom: 10px; gap: 8px; }
+        .info-row:last-child { margin-bottom: 0; }
+        .info-label { font-weight: 600; min-width: 170px; color: #555; font-size: 13px; flex-shrink: 0; }
+        .info-value { color: #111; font-size: 13px; }
+        .badge { display: inline-block; background: #dcfce7; color: #15803d; border-radius: 4px; padding: 2px 10px; font-size: 12px; font-weight: 700; border: 1px solid #86efac; }
+        .note { background: #fffbeb; border: 1px solid #fde68a; border-radius: 6px; padding: 12px 16px; font-size: 13px; color: #92400e; margin-bottom: 20px; }
+        .btn { display: inline-block; background: #0f766e; color: #fff !important; padding: 11px 26px; border-radius: 7px; text-decoration: none; font-weight: 700; font-size: 14px; margin-top: 4px; }
+        .subtext { font-size: 12px; color: #94a3b8; word-break: break-all; margin-top: 20px; line-height: 1.4; }
+        .footer { background: #f9fafb; padding: 16px 32px; font-size: 12px; color: #9ca3af; border-top: 1px solid #e5e7eb; text-align: center; }
     </style>
 </head>
 <body>
-    <div class="wrapper">
-        <div class="card">
-            <!-- Header dengan Logo -->
-            <div class="header">
-                @if(isset($message) && file_exists(public_path('logo.png')))
-                    <img src="{{ $message->embed(public_path('logo.png')) }}" alt="QSales Logo">
-                @else
-                    <img src="{{ config('app.url') }}/logo.png" alt="QSales Logo">
-                @endif
+<div class="container">
+    <div class="header">
+        <h1>🔐 Reset Kata Sandi Akun</h1>
+        <p>Q-Sales – Sales Portal PT Alfa Cipta Teknologi Virtual</p>
+    </div>
+    <div class="body">
+        <p class="greeting">Halo <strong>{{ $nama }}</strong>,</p>
+        <p>Kami menerima permintaan untuk mengatur ulang kata sandi akun Q-Sales Anda. Silakan klik tombol di bawah untuk membuat kata sandi baru:</p>
+
+        <div class="info-box">
+            <div class="info-row">
+                <span class="info-label">Jenis Permintaan</span>
+                <span class="info-value"><strong>Reset Kata Sandi Pengguna</strong></span>
             </div>
-
-            <!-- Body Content -->
-            <div class="body-content">
-                <p class="greeting">Halo {{ $nama }},</p>
-                
-                <p class="text">Kami menerima permintaan untuk mengatur ulang kata sandi akun QSales Anda.</p>
-
-                <p class="text">Untuk melanjutkan, silakan klik tombol berikut:</p>
-
-                <div class="button-wrapper">
-                    <a href="{{ $url }}" class="btn" target="_blank">Reset Kata Sandi</a>
-                </div>
-
-                <div class="info-box">
-                    🔒 Tautan ini berlaku selama {{ $expire }} menit.
-                </div>
-
-                <p class="text" style="font-size: 14px; color: #64748b;">
-                    Jika Anda tidak meminta reset kata sandi, abaikan email ini. Kata sandi Anda tidak akan berubah tanpa tindakan dari Anda.
-                </p>
-
-                <div class="divider"></div>
-
-                <p class="footer-sign">
-                    Salam,<br>
-                    <strong>QSales Team</strong>
-                </p>
-
-                <div class="subtext">
-                    Jika Anda mengalami masalah saat mengklik tombol "Reset Kata Sandi", salin dan tempel URL berikut ke browser web Anda:<br>
-                    <a href="{{ $url }}" style="color: #2563eb;">{{ $url }}</a>
-                </div>
+            <div class="info-row">
+                <span class="info-label">Masa Berlaku</span>
+                <span class="info-value"><span class="badge">⏱️ {{ $expire }} Menit</span></span>
             </div>
         </div>
 
-        <div class="footer">
-            &copy; {{ date('Y') }} QSales. All rights reserved.
+        <div class="note">
+            ⚠️ Jika Anda tidak merasa meminta reset kata sandi, abaikan email ini dengan aman. Kata sandi akun Anda tidak akan berubah tanpa tindakan dari Anda.
+        </div>
+
+        <a class="btn" href="{{ $url }}" target="_blank">Reset Kata Sandi Sekarang →</a>
+
+        <div class="subtext">
+            Jika tombol di atas tidak dapat diklik, salin dan tempel URL berikut ke browser Anda:<br>
+            <a href="{{ $url }}" style="color: #0f766e;">{{ $url }}</a>
         </div>
     </div>
+    <div class="footer">
+        Email ini dikirim otomatis oleh sistem Q-Sales. Jangan balas email ini.<br>
+        PT Alfa Cipta Teknologi Virtual
+    </div>
+</div>
 </body>
 </html>

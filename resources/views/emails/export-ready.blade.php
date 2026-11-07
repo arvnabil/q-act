@@ -14,12 +14,11 @@
         .info-box { background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 18px 20px; margin-bottom: 20px; }
         .info-row { display: flex; margin-bottom: 10px; gap: 8px; }
         .info-row:last-child { margin-bottom: 0; }
-        .info-label { font-weight: 600; min-width: 150px; color: #555; font-size: 13px; flex-shrink: 0; }
+        .info-label { font-weight: 600; min-width: 170px; color: #555; font-size: 13px; flex-shrink: 0; }
         .info-value { color: #111; font-size: 13px; }
         .badge { display: inline-block; background: #dcfce7; color: #15803d; border-radius: 4px; padding: 2px 10px; font-size: 12px; font-weight: 700; border: 1px solid #86efac; }
-        .btn-wrapper { text-align: center; margin: 26px 0 16px; }
-        .btn { display: inline-block; background: #0f766e; color: #fff !important; padding: 12px 28px; border-radius: 8px; text-decoration: none; font-weight: 700; font-size: 14px; box-shadow: 0 2px 4px rgba(15,118,110,0.3); }
-        .note { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 12px 16px; font-size: 12px; color: #64748b; margin-top: 20px; }
+        .note { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 12px 16px; font-size: 13px; color: #475569; margin-bottom: 20px; }
+        .btn { display: inline-block; background: #0f766e; color: #fff !important; padding: 11px 26px; border-radius: 7px; text-decoration: none; font-weight: 700; font-size: 14px; margin-top: 4px; }
         .footer { background: #f9fafb; padding: 16px 32px; font-size: 12px; color: #9ca3af; border-top: 1px solid #e5e7eb; text-align: center; }
     </style>
 </head>
@@ -31,7 +30,7 @@
     </div>
     <div class="body">
         <p class="greeting">Halo <strong>{{ $recipient->name }}</strong>,</p>
-        <p>Permintaan ekspor data Anda di portal penjualan ACTiV telah selesai diproses oleh sistem dan siap untuk diunduh.</p>
+        <p>Permintaan ekspor data Anda di portal penjualan ACTiV telah <strong>selesai diproses</strong> dan berkas zip siap untuk diunduh.</p>
 
         <div class="info-box">
             <div class="info-row">
@@ -39,8 +38,8 @@
                 <span class="info-value"><strong>{{ $exportJob->title }}</strong></span>
             </div>
             <div class="info-row">
-                <span class="info-label">Jumlah Data</span>
-                <span class="info-value">{{ $exportJob->total_items }} Sales Orders</span>
+                <span class="info-label">Total Data Sales Order</span>
+                <span class="info-value">{{ $exportJob->total_items }} Dokumen SO</span>
             </div>
             <div class="info-row">
                 <span class="info-label">Nama Berkas</span>
@@ -51,24 +50,26 @@
                 <span class="info-value">{{ $exportJob->formatted_file_size }}</span>
             </div>
             <div class="info-row">
-                <span class="info-label">Status</span>
-                <span class="info-value"><span class="badge">Selesai (Ready)</span></span>
+                <span class="info-label">Status Ekspor</span>
+                <span class="info-value"><span class="badge">✅ Selesai (Ready)</span></span>
+            </div>
+            <div class="info-row">
+                <span class="info-label">Masa Berlaku Tautan</span>
+                <span class="info-value">{{ $exportJob->expires_at ? $exportJob->expires_at->locale('id')->isoFormat('D MMMM YYYY') : '7 hari' }}</span>
             </div>
         </div>
 
-        <div class="btn-wrapper">
-            <a href="{{ $downloadUrl }}" class="btn">⬇️ Unduh Berkas ZIP</a>
+        <div class="note">
+            💡 <strong>Informasi Unduhan:</strong><br>
+            • Berkas zip dapat diunduh langsung melalui tombol di bawah atau melalui menu <strong>Download Center</strong> di portal ACTiV.<br>
+            • Jika ukuran file di bawah 15 MB, berkas zip juga telah dilampirkan langsung pada email ini.
         </div>
 
-        <div class="note">
-            💡 <strong>Informasi Tambahan:</strong><br>
-            • Berkas zip ini juga dapat diunduh kapan saja melalui menu <strong>Download Center</strong> di portal ACTiV.<br>
-            • Jika ukuran berkas di bawah 15 MB, file zip juga telah kami lampirkan langsung pada email ini.<br>
-            • Tautan unduhan ini akan tersedia selama 7 hari (sampai {{ $exportJob->expires_at ? $exportJob->expires_at->isoFormat('D MMMM Y') : '7 hari ke depan' }}).
-        </div>
+        <a class="btn" href="{{ $downloadUrl }}">⬇️ Unduh Berkas ZIP Sekarang</a>
     </div>
     <div class="footer">
-        Email ini dikirim otomatis oleh sistem Q-Sales • PT Alfa Cipta Teknologi Virtual
+        Email ini dikirim otomatis oleh sistem Q-Sales. Jangan balas email ini.<br>
+        PT Alfa Cipta Teknologi Virtual
     </div>
 </div>
 </body>
