@@ -164,6 +164,54 @@ class SalesOrderExcelService
             $currentRow++;
         }
 
+        // Summary COGS Row
+        $cogsTotalRow = $currentRow;
+        $sheet->setCellValue("G{$cogsTotalRow}", $totalCogs);
+        $sheet->setCellValue("H{$cogsTotalRow}", $totalCogsPpn);
+        $sheet->getStyle("G{$cogsTotalRow}:H{$cogsTotalRow}")->getNumberFormat()->setFormatCode('#,##0');
+
+        // Section: OTHER COGS
+        $otherCogsRow = null;
+        for ($r = 1; $r <= $sheet->getHighestRow(); $r++) {
+            if ($sheet->getCell("A{$r}")->getValue() === 'OTHER COGS') {
+                $otherCogsRow = $r;
+                break;
+            }
+        }
+
+        if ($otherCogsRow) {
+            $otherStartRow = $otherCogsRow + 1;
+            $totalOtherCogs = 0;
+
+            if ($costs->count() > 0) {
+                $extraCosts = $costs->count() - 1;
+                if ($extraCosts > 0) {
+                    $sheet->insertNewRowBefore($otherStartRow + 1, $extraCosts);
+                }
+
+                foreach ($costs as $cIdx => $cost) {
+                    $amt = (float) ($cost->amount ?: 0);
+                    $totalOtherCogs += $amt;
+                    $catName = $cost->category?->name ?: ($cost->category_name ?: 'Other COGS');
+                    $subLabel = $cost->description ?: '';
+
+                    if (!$subLabel && str_contains($catName, '(') && str_contains($catName, ')')) {
+                        if (preg_match('/^(.*?)\s*\((.*?)\)$/', $catName, $m)) {
+                            $catName = trim($m[1]);
+                            $subLabel = trim($m[2]);
+                        }
+                    }
+
+                    $cr = $otherStartRow + $cIdx;
+                    $sheet->setCellValue("B{$cr}", $catName);
+                    $sheet->setCellValue("C{$cr}", $subLabel);
+                    $sheet->setCellValue("F{$cr}", -$amt);
+                    $sheet->setCellValue("G{$cr}", -$amt);
+                    $sheet->getStyle("F{$cr}:G{$cr}")->getNumberFormat()->setFormatCode('#,##0');
+                }
+            }
+        }
+
         // Output to string in memory
         $writer = IOFactory::createWriter($spreadsheet, 'Xlsx');
         ob_start();
