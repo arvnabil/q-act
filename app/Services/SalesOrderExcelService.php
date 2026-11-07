@@ -7,8 +7,6 @@ use Carbon\Carbon;
 use PhpOffice\PhpSpreadsheet\IOFactory;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Style\Alignment;
-use PhpOffice\PhpSpreadsheet\Style\Border;
-use PhpOffice\PhpSpreadsheet\Style\Fill;
 use PhpOffice\PhpSpreadsheet\Style\NumberFormat;
 
 class SalesOrderExcelService
@@ -25,13 +23,12 @@ class SalesOrderExcelService
      */
     public function generate(SalesOrder $so): string
     {
-        $so->loadMissing(['customer', 'sales', 'quotation', 'items.product', 'costs.category']);
+        $so->loadMissing(['customer', 'sales', 'quotation.salesNotes', 'items.product', 'costs.category']);
 
         $customerName = $so->customer?->name ?: ($so->quotation?->customer_name ?: '-');
         $salesName = $so->sales?->name ?: ($so->quotation?->sales_name ?: 'Sales');
         $quotationId = $so->quotation_id ?: ($so->id ?: 'SO-EXPORT');
         $soDateFormatted = $so->date ? Carbon::parse($so->date)->isoFormat('dddd, D MMMM Y') : Carbon::now()->isoFormat('dddd, D MMMM Y');
-        $notes = $customerName;
 
         // Auto-detect PPN & PPh
         $showPpn = $so->quotation ? ($so->quotation->calc_tax !== false) : true;
@@ -40,7 +37,6 @@ class SalesOrderExcelService
         $pphRatePct = (int) round($pphRate * 100);
 
         $items = $so->items ?: collect();
-        $costs = $so->costs ?: collect();
 
         // Load template or create new
         if (file_exists($this->templatePath)) {
@@ -50,166 +46,153 @@ class SalesOrderExcelService
         }
 
         $sheet = $spreadsheet->getActiveSheet();
-        $sheet->setTitle(substr($so->id, 0, 31));
+        $sheet->setTitle(substr(preg_replace('/[^A-Za-z0-9_\-]/', '_', $so->id), 0, 31));
 
-        // Fill Header Info
-        $sheet->setCellValue('C4', $customerName);
-        $sheet->setCellValue('C5', $quotationId);
-        $sheet->setCellValue('H4', $soDateFormatted);
-        $sheet->setCellValue('H5', $salesName);
-        $sheet->setCellValue('C7', $notes);
+        // 1. Fill Header Info (Row 3-6, Col B)
+        $sheet->setCellValue('B3', $customerName);
+        $sheet->setCellValue('B4', $salesName);
+        $sheet->setCellValue('B5', $quotationId);
+        $sheet->setCellValue('B6', $soDateFormatted);
 
-        // Define row pointers matching template layout
-        // Template standard:
-        // Row 9: REVENUE Header
-        // Row 10: Table Columns Header (NO, ITEM, QTY, SATUAN, HARGA SATUAN, TOTAL, TOTAL+PPN)
-        // Row 11: First item data template
-        
-        $currentRow = 11;
+        // 2. Prepare items data
+        $revenueRows = [];
+        $cogsRows = [];
         $totalRevenue = 0;
         $totalRevenuePpn = 0;
-        $pphBasisRevenue = 0;
-
-        if ($items->count() > 0) {
-            $extraItemCount = $items->count() - 1;
-            if ($extraItemCount > 0) {
-                $sheet->insertNewRowBefore($currentRow + 1, $extraItemCount);
-            }
-
-            foreach ($items as $idx => $item) {
-                $qty = (float) ($item->qty ?: 1);
-                $price = (float) ($item->price ?: 0);
-                $total = $qty * $price;
-                $totalPpn = round($total * 1.11);
-
-                $totalRevenue += $total;
-                $totalRevenuePpn += $totalPpn;
-                if ($calcPph && $item->is_pph_applied) {
-                    $pphBasisRevenue += $total;
-                }
-
-                $brandStr = $item->brand_name ?: '';
-                $itemLabel = ($item->product_name ?: ($item->sku ?: '-')) . ($brandStr ? " ($brandStr)" : '');
-                if ($calcPph && $item->is_pph_applied) {
-                    $itemLabel .= " [PPh {$pphRatePct}%]";
-                }
-
-                $r = $currentRow + $idx;
-                $sheet->setCellValue("A{$r}", $idx + 1);
-                $sheet->setCellValue("B{$r}", $itemLabel);
-                $sheet->setCellValue("D{$r}", $qty);
-                $sheet->setCellValue("E{$r}", 'UNIT');
-                $sheet->setCellValue("F{$r}", $price);
-                $sheet->setCellValue("G{$r}", $total);
-                $sheet->setCellValue("H{$r}", $totalPpn);
-
-                // Formatting
-                $sheet->getStyle("A{$r}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
-                $sheet->getStyle("D{$r}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
-                $sheet->getStyle("E{$r}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
-                $sheet->getStyle("F{$r}:H{$r}")->getNumberFormat()->setFormatCode('#,##0');
-            }
-            $currentRow += $items->count();
-        } else {
-            $currentRow++;
-        }
-
-        // Summary Revenue Row
-        $revenueTotalRow = $currentRow;
-        $sheet->setCellValue("G{$revenueTotalRow}", $totalRevenue);
-        $sheet->setCellValue("H{$revenueTotalRow}", $totalRevenuePpn);
-        $sheet->getStyle("G{$revenueTotalRow}:H{$revenueTotalRow}")->getNumberFormat()->setFormatCode('#,##0');
-
-        // Next Section: COGS (HPP)
-        // Find or skip down to COGS table
-        $currentRow += 4; // Skip subtotal/spacing rows
-        $cogsStartRow = $currentRow;
         $totalCogs = 0;
         $totalCogsPpn = 0;
 
-        if ($items->count() > 0) {
-            $extraCogsCount = $items->count() - 1;
-            if ($extraCogsCount > 0) {
-                $sheet->insertNewRowBefore($cogsStartRow + 1, $extraCogsCount);
+        foreach ($items as $idx => $item) {
+            $qty = (float) ($item->qty ?: 1);
+            $price = (float) ($item->price ?: 0);
+            $hpp = (float) ($item->hpp ?: ($item->modal ?: 0));
+
+            $revTotal = $qty * $price;
+            $revTotalPpn = (float) round($revTotal * 1.11);
+            $cogsTotal = $qty * $hpp;
+            $cogsTotalPpn = (float) round($cogsTotal * 1.11);
+
+            $totalRevenue += $revTotal;
+            $totalRevenuePpn += $revTotalPpn;
+            $totalCogs += $cogsTotal;
+            $totalCogsPpn += $cogsTotalPpn;
+
+            $brandStr = $item->brand_name ?: '';
+            $desc = ($item->product_name ?: ($item->sku ?: '-')) . ($brandStr ? " ({$brandStr})" : '');
+            if ($calcPph && $item->is_pph_applied) {
+                $desc .= " [PPh {$pphRatePct}%]";
             }
 
-            foreach ($items as $idx => $item) {
-                $qty = (float) ($item->qty ?: 1);
-                $hpp = (float) ($item->hpp ?: ($item->modal ?: 0));
-                $total = $qty * $hpp;
-                $totalPpn = round($total * 1.11);
+            $revenueRows[] = [
+                'no' => $idx + 1,
+                'desc' => $desc,
+                'qty' => $qty,
+                'unit' => 'UNIT',
+                'price' => $price,
+                'total' => $revTotal,
+                'total_ppn' => $revTotalPpn,
+            ];
 
-                $totalCogs += $total;
-                $totalCogsPpn += $totalPpn;
-
-                $brandStr = $item->brand_name ?: '';
-                $itemLabel = ($item->product_name ?: ($item->sku ?: '-')) . ($brandStr ? " ($brandStr)" : '');
-
-                $r = $cogsStartRow + $idx;
-                $sheet->setCellValue("A{$r}", $idx + 1);
-                $sheet->setCellValue("B{$r}", $itemLabel);
-                $sheet->setCellValue("D{$r}", $qty);
-                $sheet->setCellValue("E{$r}", 'UNIT');
-                $sheet->setCellValue("F{$r}", $hpp);
-                $sheet->setCellValue("G{$r}", $total);
-                $sheet->setCellValue("H{$r}", $totalPpn);
-
-                $sheet->getStyle("A{$r}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
-                $sheet->getStyle("D{$r}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
-                $sheet->getStyle("E{$r}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
-                $sheet->getStyle("F{$r}:H{$r}")->getNumberFormat()->setFormatCode('#,##0');
-            }
-            $currentRow += $items->count();
-        } else {
-            $currentRow++;
+            $cogsRows[] = [
+                'no' => $idx + 1,
+                'desc' => $desc,
+                'qty' => $qty,
+                'unit' => 'UNIT',
+                'price' => $hpp,
+                'total' => $cogsTotal,
+                'total_ppn' => $cogsTotalPpn,
+            ];
         }
 
-        // Summary COGS Row
-        $cogsTotalRow = $currentRow;
-        $sheet->setCellValue("G{$cogsTotalRow}", $totalCogs);
-        $sheet->setCellValue("H{$cogsTotalRow}", $totalCogsPpn);
-        $sheet->getStyle("G{$cogsTotalRow}:H{$cogsTotalRow}")->getNumberFormat()->setFormatCode('#,##0');
+        // 3. Prepare Other COGS data (from SO Costs or Quotation SalesNote adjustments)
+        $otherCogsRows = [];
+        $totalOtherCogs = 0;
 
-        // Section: OTHER COGS
-        $otherCogsRow = null;
-        for ($r = 1; $r <= $sheet->getHighestRow(); $r++) {
-            if ($sheet->getCell("A{$r}")->getValue() === 'OTHER COGS') {
-                $otherCogsRow = $r;
-                break;
-            }
-        }
+        if ($so->costs && $so->costs->count() > 0) {
+            foreach ($so->costs as $cost) {
+                $amt = (float) ($cost->amount ?: 0);
+                $cat = $cost->category?->name ?: 'Transport & Accommodation';
+                $lbl = $cost->description ?: '';
 
-        if ($otherCogsRow) {
-            $otherStartRow = $otherCogsRow + 1;
-            $totalOtherCogs = 0;
-
-            if ($costs->count() > 0) {
-                $extraCosts = $costs->count() - 1;
-                if ($extraCosts > 0) {
-                    $sheet->insertNewRowBefore($otherStartRow + 1, $extraCosts);
+                // If label is empty but category has "Transport & Accommodation (Ongkir)"
+                if (!$lbl && preg_match('/^(.*?)\s*\((.*?)\)$/', $cat, $m)) {
+                    $cat = trim($m[1]);
+                    $lbl = trim($m[2]);
                 }
 
-                foreach ($costs as $cIdx => $cost) {
-                    $amt = (float) ($cost->amount ?: 0);
-                    $totalOtherCogs += $amt;
-                    $catName = $cost->category?->name ?: ($cost->category_name ?: 'Other COGS');
-                    $subLabel = $cost->description ?: '';
+                $otherCogsRows[] = [
+                    'category' => $cat,
+                    'label' => $lbl,
+                    'amount' => $amt,
+                ];
+                $totalOtherCogs += $amt;
+            }
+        } elseif ($so->quotation && $so->quotation->salesNotes && $so->quotation->salesNotes->count() > 0) {
+            $latestNote = $so->quotation->salesNotes->sortByDesc('created_at')->first();
+            $adjs = $latestNote?->adjustments;
+            if (is_array($adjs)) {
+                foreach ($adjs as $adj) {
+                    $amt = (float) ($adj['amount'] ?? 0);
+                    $cat = $adj['category'] ?? 'Transport & Accommodation';
+                    $lbl = $adj['label'] ?? '';
 
-                    if (!$subLabel && str_contains($catName, '(') && str_contains($catName, ')')) {
-                        if (preg_match('/^(.*?)\s*\((.*?)\)$/', $catName, $m)) {
-                            $catName = trim($m[1]);
-                            $subLabel = trim($m[2]);
-                        }
+                    if (!$lbl && preg_match('/^(.*?)\s*\((.*?)\)$/', $cat, $m)) {
+                        $cat = trim($m[1]);
+                        $lbl = trim($m[2]);
                     }
 
-                    $cr = $otherStartRow + $cIdx;
-                    $sheet->setCellValue("B{$cr}", $catName);
-                    $sheet->setCellValue("C{$cr}", $subLabel);
-                    $sheet->setCellValue("F{$cr}", -$amt);
-                    $sheet->setCellValue("G{$cr}", -$amt);
-                    $sheet->getStyle("F{$cr}:G{$cr}")->getNumberFormat()->setFormatCode('#,##0');
+                    if ($amt > 0 || !empty($lbl) || !empty($cat)) {
+                        $otherCogsRows[] = [
+                            'category' => $cat,
+                            'label' => $lbl,
+                            'amount' => $amt,
+                        ];
+                        $totalOtherCogs += $amt;
+                    }
                 }
             }
+        }
+
+        // Margin calculations
+        $grossProfitRp = $totalRevenue - $totalCogs - $totalOtherCogs;
+        $grossProfitPct = $totalRevenue > 0 ? ($grossProfitRp / $totalRevenue) * 100 : 0;
+        $grossProfitPpnRp = $totalRevenuePpn - $totalCogsPpn - $totalOtherCogs;
+        $grossProfitPpnPct = $totalRevenuePpn > 0 ? ($grossProfitPpnRp / $totalRevenuePpn) * 100 : 0;
+
+        // 4. Fill Zones using row growth
+        $this->populateZone($sheet, 'REVENUE', 'Total Revenue', $revenueRows, true, $showPpn);
+        $this->populateZone($sheet, 'COGS', 'Total COGS', $cogsRows, true, $showPpn);
+        $this->populateZone($sheet, 'OTHER COGS', 'Total Other COGS', $otherCogsRows, false, $showPpn);
+
+        // 5. Fill Totals
+        $rRevTot = $this->findRowWithText($sheet, 'Total Revenue');
+        if ($rRevTot) {
+            $sheet->setCellValue("F{$rRevTot}", $totalRevenue);
+            $sheet->setCellValue("G{$rRevTot}", $showPpn ? $totalRevenuePpn : null);
+        }
+
+        $rCogsTot = $this->findRowWithText($sheet, 'Total COGS');
+        if ($rCogsTot) {
+            $sheet->setCellValue("F{$rCogsTot}", $totalCogs);
+            $sheet->setCellValue("G{$rCogsTot}", $showPpn ? $totalCogsPpn : null);
+        }
+
+        $rOthTot = $this->findRowWithText($sheet, 'Total Other COGS');
+        if ($rOthTot) {
+            $sheet->setCellValue("F{$rOthTot}", -$totalOtherCogs);
+            $sheet->setCellValue("G{$rOthTot}", $showPpn ? -$totalOtherCogs : null);
+        }
+
+        $rGrossRp = $this->findRowWithText($sheet, 'GROSS MARGIN (RP)');
+        if ($rGrossRp) {
+            $sheet->setCellValue("F{$rGrossRp}", $grossProfitRp);
+            $sheet->setCellValue("G{$rGrossRp}", $showPpn ? $grossProfitPpnRp : null);
+        }
+
+        $rGrossPct = $this->findRowWithText($sheet, 'GROSS MARGIN (%)');
+        if ($rGrossPct) {
+            $sheet->setCellValue("F{$rGrossPct}", $grossProfitPct);
+            $sheet->setCellValue("G{$rGrossPct}", $showPpn ? $grossProfitPpnPct : null);
         }
 
         // Output to string in memory
@@ -219,5 +202,85 @@ class SalesOrderExcelService
         $excelData = ob_get_clean();
 
         return $excelData;
+    }
+
+    /**
+     * Populate a section table zone between $startLabel and $totalLabel.
+     */
+    protected function populateZone($sheet, string $startLabel, string $totalLabel, array $rows, bool $isItemTable, bool $showPpn): void
+    {
+        $startRow = $this->findRowWithText($sheet, $startLabel);
+        $totalRow = $this->findRowWithText($sheet, $totalLabel);
+
+        if (!$startRow || !$totalRow) {
+            return;
+        }
+
+        $capacity = $totalRow - $startRow - 1;
+        $needed = count($rows);
+
+        // Grow rows if needed
+        if ($needed > $capacity) {
+            $extra = $needed - $capacity;
+            $sheet->insertNewRowBefore($totalRow, $extra);
+            $totalRow += $extra;
+            $capacity = $needed;
+        }
+
+        for ($slot = 0; $slot < $capacity; $slot++) {
+            $r = $startRow + 1 + $slot;
+
+            if ($slot < $needed) {
+                $item = $rows[$slot];
+                if ($isItemTable) {
+                    $sheet->setCellValue("A{$r}", $item['no']);
+                    $sheet->setCellValue("B{$r}", $item['desc']);
+                    $sheet->setCellValue("C{$r}", $item['qty']);
+                    $sheet->setCellValue("D{$r}", $item['unit']);
+                    $sheet->setCellValue("E{$r}", $item['price']);
+                    $sheet->setCellValue("F{$r}", $item['total']);
+                    $sheet->setCellValue("G{$r}", $showPpn ? $item['total_ppn'] : null);
+
+                    $sheet->getStyle("A{$r}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+                    $sheet->getStyle("C{$r}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+                    $sheet->getStyle("D{$r}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+                    $sheet->getStyle("E{$r}:G{$r}")->getNumberFormat()->setFormatCode('#,##0');
+                } else {
+                    // Other COGS: Column B = Category, Column C = Label (separated cells!)
+                    $sheet->setCellValue("A{$r}", null);
+                    $sheet->setCellValue("B{$r}", $item['category'] ?? '');
+                    $sheet->setCellValue("C{$r}", $item['label'] ?? '');
+                    $sheet->setCellValue("D{$r}", null);
+                    $sheet->setCellValue("E{$r}", null);
+                    $sheet->setCellValue("F{$r}", -$item['amount']);
+                    $sheet->setCellValue("G{$r}", $showPpn ? -$item['amount'] : null);
+
+                    $sheet->getStyle("B{$r}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_LEFT);
+                    $sheet->getStyle("C{$r}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_LEFT);
+                    $sheet->getStyle("F{$r}:G{$r}")->getNumberFormat()->setFormatCode('#,##0');
+                }
+            } else {
+                // Clear unused template slot
+                $sheet->setCellValue("A{$r}", null);
+                $sheet->setCellValue("B{$r}", null);
+                $sheet->setCellValue("C{$r}", null);
+                $sheet->setCellValue("D{$r}", null);
+                $sheet->setCellValue("E{$r}", null);
+                $sheet->setCellValue("F{$r}", null);
+                $sheet->setCellValue("G{$r}", null);
+            }
+        }
+    }
+
+    protected function findRowWithText($sheet, string $text): ?int
+    {
+        $highestRow = $sheet->getHighestRow();
+        for ($r = 1; $r <= $highestRow; $r++) {
+            $val = trim((string)$sheet->getCell("A{$r}")->getValue());
+            if (strcasecmp($val, $text) === 0) {
+                return $r;
+            }
+        }
+        return null;
     }
 }

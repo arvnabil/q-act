@@ -136,20 +136,14 @@ export function generateSimulasiSOHTML(q, adjustments = [], currentUser = null) 
             const itemsInCat = adjsByCategory[item.name] || [];
             if (itemsInCat.length > 0) {
                 itemsInCat.forEach(adjItem => {
-                    let catName = item.name;
-                    let subLabel = adjItem.label || '';
-                    if (!subLabel && catName.includes('(') && catName.includes(')')) {
-                        const m = catName.match(/^(.*?)\s*\((.*?)\)$/);
-                        if (m) {
-                            catName = m[1].trim();
-                            subLabel = m[2].trim();
-                        }
-                    }
+                    const descText = adjItem.label
+                        ? `${item.name} (${adjItem.label})`
+                        : item.name;
                     otherCogsRows.push(`
                         <tr>
                             <td></td>
-                            <td style="padding-left: ${item.indent ? '15px' : '0px'};">${catName}</td>
-                            <td style="text-align: center;">${subLabel}</td>
+                            <td style="padding-left: ${item.indent ? '15px' : '0px'};">${descText}</td>
+                            <td></td>
                             <td></td>
                             <td></td>
                             <td style="text-align: right; color: #dc2626;">${adjItem.amount > 0 ? `- ${fmtRp(adjItem.amount)}` : '-'}</td>
@@ -178,20 +172,12 @@ export function generateSimulasiSOHTML(q, adjustments = [], currentUser = null) 
         const isStandard = categoriesStructure.some(c => c.name === catKey);
         if (!isStandard) {
             adjsByCategory[catKey].forEach(adjItem => {
-                let catName = catKey;
-                let subLabel = adjItem.label || '';
-                if (!subLabel && catName.includes('(') && catName.includes(')')) {
-                    const m = catName.match(/^(.*?)\s*\((.*?)\)$/);
-                    if (m) {
-                        catName = m[1].trim();
-                        subLabel = m[2].trim();
-                    }
-                }
+                const descText = adjItem.label ? `${catKey} (${adjItem.label})` : catKey;
                 otherCogsRows.push(`
                     <tr>
                         <td></td>
-                        <td style="padding-left: 15px;">${catName}</td>
-                        <td style="text-align: center;">${subLabel}</td>
+                        <td style="padding-left: 15px;">${descText}</td>
+                        <td></td>
                         <td></td>
                         <td></td>
                         <td style="text-align: right; color: #dc2626;">${adjItem.amount > 0 ? `- ${fmtRp(adjItem.amount)}` : '-'}</td>
@@ -581,17 +567,18 @@ function buildOtherCogsRows(adjsByCategory) {
         list.forEach(entry => {
             let category = catKey;
             let label = entry.label || '';
+            // If label is not explicitly provided, but category has a parenthesized suffix like "Transport & Accommodation (Ongkir)"
             if (!label) {
-                const match = catKey.match(/^(.*?)\s*\((.*?)\)$/);
+                const match = category.match(/^(.*?)\s*\((.*?)\)$/);
                 if (match) {
                     category = match[1].trim();
                     label = match[2].trim();
                 }
             }
             rows.push({
-                desc: label ? `${category} (${label})` : category,
                 category: category,
                 label: label,
+                desc: label ? `${category} (${label})` : category,
                 amount: entry.amount,
             });
         });
@@ -823,20 +810,8 @@ export function populateSimulasiSOTemplate(workbook, q, adjustments = [], curren
                 } else {
                     row.hidden = false;
                     clearCells(row, 1, 7);
-
-                    let catName = item.category || item.desc || '';
-                    let subLabel = item.label || '';
-
-                    if (!subLabel && catName.includes('(') && catName.includes(')')) {
-                        const m = catName.match(/^(.*?)\s*\((.*?)\)$/);
-                        if (m) {
-                            catName = m[1].trim();
-                            subLabel = m[2].trim();
-                        }
-                    }
-
-                    row.getCell(2).value = catName;
-                    row.getCell(3).value = subLabel;
+                    row.getCell(2).value = item.category || item.desc;
+                    row.getCell(3).value = item.label || null;
                     row.getCell(6).value = -item.amount;
                     row.getCell(7).value = showPpn ? -item.amount : null;
                 }
