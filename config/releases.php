@@ -2,17 +2,22 @@
 
 return [
     'current_version' => 'v2.4.0',
-    'last_updated' => '2026-11-07',
+    'last_updated' => '2026-11-08',
     'releases' => [
         [
             'version' => 'v2.4.0',
             'week' => '2026 - Minggu ke-45 (02 Nov - 08 Nov 2026)',
-            'date' => '2026-11-07',
+            'date' => '2026-11-08',
             'is_current' => true,
             'tag' => 'Major Feature Update',
-            'summary' => 'Peluncuran Ekosistem Lead Pipeline 360, Integrasi Google Calendar & Zoom, Manajemen Multi-PIC, Export PPTX, dan Peningkatan Workflow Quotation.',
+            'summary' => 'Peluncuran Ekosistem Lead Pipeline 360, Download Center Antrian Ekspor ZIP, Integrasi Google Calendar & Zoom, Redesain Template Email, dan Peningkatan Simulasi SO Excel.',
             'highlights' => [
-                'Lead Pipeline Kanban Board dinamis dengan custom stages, colors, dan perhitungan nilai deal otomatis.',
+                'Download Center terpusat di Topbar dengan antrian background queue job untuk ekspor massal Sales Orders ke ZIP tanpa freeze visual aplikasi.',
+                'Notifikasi email otomatis saat ekspor ZIP selesai diproses dengan direct link unduhan dan lampiran file (jika < 15MB).',
+                'Penyempurnaan Simulasi SO Excel: Pemisahan cell Kategori & Label pada Other COGS (misal: Transport & Accommodation | Ongkir) serta pembersihan template dari efek teks tercoret (strikethrough).',
+                'Standardisasi seluruh template email Qsales sesuai desain modern Konfirmasi Terbayar dengan header teal gradient dan icon kontekstual.',
+                'Halaman Info Versi & Rilis Pembaruan (/releases) interaktif dan badge versi di navigasi Sidebar.',
+                'Lead Pipeline Kanban Board dinamis dengan custom stages, colors, dan kalkulasi deal otomatis.',
                 'Hubungkan Quotation ke Lead dengan modal modern 2-tab (Buat Baru / Pilih Ada), lengkap dengan filter "Tanpa Lead".',
                 'Integrasi Google Calendar (Sync event & invite attendees PIC) & Zoom Meeting generator instan.',
                 'Export Report Presentasi PPTX profesional bertema hijau Qsales dari Pipeline.',
@@ -20,6 +25,19 @@ return [
                 'Default Sales per Business Unit (BU) & Scope hak akses data (Own, BU, All).',
             ],
             'categories' => [
+                'Download Center & Ekspor Data' => [
+                    'Fitur Bulk Export Sales Orders ke format ZIP di latar belakang menggunakan Database Queue Worker.',
+                    'Menu dropdown Download Center di Topbar dengan indikator progress bar real-time, badge jumlah proses aktif, dan auto-refresh polling.',
+                    'Pemisahan kolom cell pada Other COGS di simulasi Excel: Kolom B untuk Kategori utama dan Kolom C untuk Label/Keterangan biaya.',
+                    'Pembersihan template master SO Analysis Excel dari efek teks tercoret (strikethrough).',
+                    'Direct streaming binary response untuk file ZIP mencegah browser menyimpan sebagai file JSON.',
+                    'Pengiriman email otomatis kepada user saat file ZIP telah siap diunduh.',
+                    'Mekanisme penyimpanan berkas ekspor privat dengan masa berlaku aman 7 hari.',
+                ],
+                'Email & Komunikasi' => [
+                    'Penyelarasan seluruh template email (Ekspor Selesai, Reset Password, Notifikasi Lead Terbayar, Pembatalan) dengan standar visual Konfirmasi Terbayar.',
+                    'Header gradient hijau toska (teal), tipografi terstruktur, tombol aksi mencolok, dan icon kontekstual per jenis pesan.',
+                ],
                 'Lead & Pipeline' => [
                     'Papan Kanban interaktif dengan drag-and-drop dan deteksi status deal (Lost, Won, Terbayar).',
                     'Alasan Lost (Lost Reason) ditampilkan transparan di card kanban dan detail lead.',
@@ -40,6 +58,11 @@ return [
                 'Sales Order & Finance' => [
                     'Fitur rincian biaya operasional (Other COGS) lengkap dengan tanggal dan upload file bukti pembayaran.',
                     'Email notifikasi otomatis dikirim ke tim Finance saat Lead mencapai stage Terbayar (Paid) atau dibatalkan.',
+                    'Dukungan sinkronisasi kalkulasi COGS, PPh, dan Other COGS di kedua versi ekspor (browser dan server).',
+                ],
+                'Info Versi & Infrastruktur' => [
+                    'Halaman Info Versi & Rilis Pembaruan (/releases) terintegrasi dengan filter pencarian dan statistik changelog.',
+                    'Penambahan ekstensi PHP zip dan libzip-dev pada container Docker worker (q_act_queue & q_act_app).',
                 ],
             ],
         ],
