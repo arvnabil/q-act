@@ -189,15 +189,18 @@ export default function DownloadCenterDropdown() {
 
                                             <div className="flex items-center gap-1 shrink-0">
                                                 {isCompleted && job.download_url && (
-                                                    <a
-                                                        href={job.download_url}
-                                                        download
+                                                    <button
+                                                        type="button"
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            window.location.href = job.download_url;
+                                                        }}
                                                         className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-brand-600 hover:bg-brand-700 text-white text-[11px] font-bold shadow-2xs transition-colors cursor-pointer"
                                                         title="Unduh File ZIP"
                                                     >
                                                         <DownloadCloud className="w-3 h-3" />
                                                         <span>Unduh</span>
-                                                    </a>
+                                                    </button>
                                                 )}
                                                 <button
                                                     type="button"
