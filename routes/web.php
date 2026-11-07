@@ -144,6 +144,14 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // Release Notes & Version Info
     Route::get('/releases', [\App\Http\Controllers\ReleaseController::class, 'index'])->name('releases.index');
 
+    // Download Center
+    Route::prefix('downloads')->name('downloads.')->group(function () {
+        Route::get('/', [\App\Http\Controllers\DownloadCenterController::class, 'index'])->name('index');
+        Route::post('/sales-orders', [\App\Http\Controllers\DownloadCenterController::class, 'exportSalesOrders'])->name('export.sales-orders');
+        Route::get('/{id}/download', [\App\Http\Controllers\DownloadCenterController::class, 'download'])->name('download');
+        Route::delete('/{id}', [\App\Http\Controllers\DownloadCenterController::class, 'destroy'])->name('destroy');
+    });
+
     // Lead Pipeline
     Route::prefix('leads')->name('leads.')->group(function () {
         Route::get('/',                              [LeadController::class, 'index'])->name('index');

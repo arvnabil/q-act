@@ -2,7 +2,9 @@ import React, { useState, useEffect, useMemo } from 'react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import Pagination from '@/Components/Pagination';
 import { Head, Link, router, usePage } from '@inertiajs/react';
-import { Search, FileStack, CheckCircle2, Trash2, AlertTriangle, Filter, ChevronDown } from 'lucide-react';
+import { Search, FileStack, CheckCircle2, Trash2, AlertTriangle, Filter, ChevronDown, DownloadCloud, FileArchive, Loader2 } from 'lucide-react';
+import axios from 'axios';
+import toast from 'react-hot-toast';
 import { formatMoney } from '@/utils/money';
 
 const formatCurrency = (val) => formatMoney(val);
@@ -75,6 +77,21 @@ export default function SalesOrders({ salesOrders = [], salesUsers = [], isFinan
     const [search, setSearch] = useState('');
     const [selectedIds, setSelectedIds] = useState([]);
     const [page, setPage] = useState(1);
+    const [isExportingZip, setIsExportingZip] = useState(false);
+
+    const handleExportZip = async () => {
+        if (selectedIds.length === 0) return;
+        setIsExportingZip(true);
+        try {
+            const res = await axios.post('/downloads/sales-orders', { ids: selectedIds });
+            toast.success(res.data.message || 'Ekspor dimulai di antrian background!');
+            window.dispatchEvent(new CustomEvent('export-job-started'));
+        } catch (err) {
+            toast.error(err.response?.data?.message || 'Gagal memulai ekspor background.');
+        } finally {
+            setIsExportingZip(false);
+        }
+    };
     const [pageSize, setPageSize] = useState(15);
 
     const canDelete = isManagerOrAdmin || userPermissions.includes('sales_orders_delete');
@@ -357,8 +374,22 @@ export default function SalesOrders({ salesOrders = [], salesUsers = [], isFinan
                         </div>
 
                         {/* Bulk Actions */}
-                        {canBulkDelete && selectedIds.length > 0 && (
+                        {selectedIds.length > 0 && (
                             <div className="flex items-center gap-2 shrink-0">
+                                <button
+                                    type="button"
+                                    onClick={handleExportZip}
+                                    disabled={isExportingZip}
+                                    className="inline-flex items-center gap-2 px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-lg text-sm font-semibold transition-colors shadow-sm cursor-pointer"
+                                    title="Unduh seluruh Excel Sales Order terpilih dalam satu file ZIP"
+                                >
+                                    {isExportingZip ? (
+                                        <Loader2 className="w-4 h-4 animate-spin" />
+                                    ) : (
+                                        <FileArchive className="w-4 h-4" />
+                                    )}
+                                    <span>Export to ZIP ({selectedIds.length})</span>
+                                </button>
                                 <button
                                     type="button"
                                     onClick={handleBulkDelete}

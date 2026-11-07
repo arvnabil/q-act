@@ -3,6 +3,7 @@ import { Menu, Search, Bell, Plus, CheckCheck, Trash2, Info, AlertCircle, CheckC
 import { Link, usePage, router } from '@inertiajs/react';
 import axios from 'axios';
 import HeaderSearch from './HeaderSearch';
+import DownloadCenterDropdown from './DownloadCenterDropdown';
 import { MANAGEMENT_PAGES } from './ManagementPageHeader';
 
 const PAGE_CONFIG = {
@@ -151,6 +152,9 @@ export default function Topbar({ setMobileOpen }) {
             </div>
             <div className="flex items-center gap-3">
                 <HeaderSearch />
+
+                {/* Download Center */}
+                <DownloadCenterDropdown />
 
                 {/* Notification Bell */}
                 <div className="relative" ref={notifRef}>
