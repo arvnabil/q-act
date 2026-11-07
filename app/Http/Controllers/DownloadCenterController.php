@@ -111,7 +111,12 @@ class DownloadCenterController extends Controller
         }
 
         $fullPath = Storage::path($job->file_path);
-        return response()->download($fullPath, $job->file_name);
+        $fileName = $job->file_name ?: ('Sales_Orders_' . $job->id . '.zip');
+
+        return response()->download($fullPath, $fileName, [
+            'Content-Type' => 'application/zip',
+            'Content-Disposition' => 'attachment; filename="' . $fileName . '"',
+        ]);
     }
 
     /**
