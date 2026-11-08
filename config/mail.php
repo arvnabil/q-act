@@ -97,6 +97,15 @@ return [
             'retry_after' => 60,
         ],
 
+        // Microsoft Graph API (OAuth2 Application Permissions - no SMTP needed)
+        'microsoft-graph' => [
+            'transport'     => 'microsoft-graph',
+            'tenant_id'     => env('GRAPH_TENANT_ID'),
+            'client_id'     => env('GRAPH_CLIENT_ID'),
+            'client_secret' => env('GRAPH_CLIENT_SECRET'),
+            'from_address'  => env('MAIL_FROM_ADDRESS', 'noreply@activ.co.id'),
+        ],
+
     ],
 
     /*

@@ -5,12 +5,15 @@ $app->make('Illuminate\Contracts\Console\Kernel')->bootstrap();
 
 use Illuminate\Support\Facades\Mail;
 
+$to = $argv[1] ?? config('mail.from.address');
+
 try {
-    Mail::raw('Test email dari Qsales - konfigurasi Exchange 365 berhasil!', function ($message) {
-        $message->to(config('mail.from.address'))
-                ->subject('[Qsales] Test Email Office 365 - ' . now()->format('d/m/Y H:i'));
-    });
-    echo "✓ Email berhasil dikirim ke: " . config('mail.from.address') . "\n";
+    Mail::mailer('microsoft-graph')
+        ->raw('Test email dari Qsales via Microsoft Graph API - ' . now()->format('d/m/Y H:i'), function ($message) use ($to) {
+            $message->to($to)
+                    ->subject('[Qsales] Test Microsoft Graph - ' . now()->format('d/m/Y H:i'));
+        });
+    echo "✓ Email berhasil dikirim ke: {$to}\n";
 } catch (\Exception $e) {
     echo "✗ GAGAL: " . $e->getMessage() . "\n";
 }
