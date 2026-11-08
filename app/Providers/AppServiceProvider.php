@@ -32,6 +32,7 @@ class AppServiceProvider extends ServiceProvider
                 clientId:     $config['client_id'],
                 clientSecret: $config['client_secret'],
                 fromAddress:  $config['from_address'],
+                mailbox:      $config['mailbox'] ?? $config['from_address'],
             );
         });
 

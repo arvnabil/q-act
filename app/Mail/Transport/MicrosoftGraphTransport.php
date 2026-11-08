@@ -17,20 +17,24 @@ class MicrosoftGraphTransport extends AbstractTransport
     protected string $clientId;
     protected string $clientSecret;
     protected string $fromAddress;
+    protected string $mailbox;
 
     public function __construct(
         string $tenantId,
         string $clientId,
         string $clientSecret,
         string $fromAddress,
+        string $mailbox = '',
         ?EventDispatcherInterface $dispatcher = null,
         ?LoggerInterface $logger = null
     ) {
         parent::__construct($dispatcher, $logger);
-        $this->tenantId    = $tenantId;
-        $this->clientId    = $clientId;
+        $this->tenantId     = $tenantId;
+        $this->clientId     = $clientId;
         $this->clientSecret = $clientSecret;
         $this->fromAddress  = $fromAddress;
+        // mailbox = akun utama untuk Graph API endpoint (bisa beda dari FROM alias)
+        $this->mailbox      = $mailbox ?: $fromAddress;
     }
 
     /**
@@ -90,7 +94,10 @@ class MicrosoftGraphTransport extends AbstractTransport
     {
         $email   = MessageConverter::toEmail($message->getOriginalMessage());
         $token   = $this->getAccessToken();
-        $sender  = $this->fromAddress;
+        $fromList = $email->getFrom();
+        $fromItem = !empty($fromList) ? $fromList[0] : null;
+        $senderAddress = $fromItem ? $fromItem->getAddress() : $this->fromAddress;
+        $senderName    = $fromItem ? $fromItem->getName() : null;
 
         // Build TO, CC, BCC
         $toRecipients  = $this->buildRecipients($email->getTo());
@@ -114,6 +121,11 @@ class MicrosoftGraphTransport extends AbstractTransport
             ];
         }
 
+        $fromData = ['address' => $senderAddress];
+        if (!empty($senderName)) {
+            $fromData['name'] = $senderName;
+        }
+
         $payload = [
             'message' => [
                 'subject' => $email->getSubject(),
@@ -122,7 +134,7 @@ class MicrosoftGraphTransport extends AbstractTransport
                     'content'     => $bodyContent,
                 ],
                 'from' => [
-                    'emailAddress' => ['address' => $sender],
+                    'emailAddress' => $fromData,
                 ],
                 'toRecipients'  => $toRecipients,
                 'ccRecipients'  => $ccRecipients,
@@ -132,7 +144,7 @@ class MicrosoftGraphTransport extends AbstractTransport
             'saveToSentItems' => false,
         ];
 
-        $url = "https://graph.microsoft.com/v1.0/users/{$sender}/sendMail";
+        $url = "https://graph.microsoft.com/v1.0/users/{$this->mailbox}/sendMail";
 
         $ch = curl_init($url);
         curl_setopt_array($ch, [

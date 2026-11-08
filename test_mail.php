@@ -8,12 +8,17 @@ use Illuminate\Support\Facades\Mail;
 $to = $argv[1] ?? config('mail.from.address');
 
 try {
+    $from = config('mail.from.address');
+    echo "Pengirim (From): {$from}\n";
+    echo "Penerima (To): {$to}\n";
+
     Mail::mailer('microsoft-graph')
-        ->raw('Test email dari Qsales via Microsoft Graph API - ' . now()->format('d/m/Y H:i'), function ($message) use ($to) {
+        ->raw("Test email dari Qsales via Microsoft Graph API\nPengirim: {$from}\nPenerima: {$to}\nWaktu: " . now()->format('d/m/Y H:i:s'), function ($message) use ($to, $from) {
             $message->to($to)
-                    ->subject('[Qsales] Test Microsoft Graph - ' . now()->format('d/m/Y H:i'));
+                    ->from($from, config('mail.from.name'))
+                    ->subject('[Qsales] Test Microsoft Graph (From: ' . $from . ') - ' . now()->format('d/m/Y H:i'));
         });
-    echo "✓ Email berhasil dikirim ke: {$to}\n";
+    echo "✓ Email berhasil dikirim ke: {$to} dari: {$from}\n";
 } catch (\Exception $e) {
     echo "✗ GAGAL: " . $e->getMessage() . "\n";
 }

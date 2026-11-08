@@ -103,6 +103,9 @@ return [
             'tenant_id'     => env('GRAPH_TENANT_ID'),
             'client_id'     => env('GRAPH_CLIENT_ID'),
             'client_secret' => env('GRAPH_CLIENT_SECRET'),
+            // mailbox = akun utama Microsoft 365 (untuk Graph API endpoint)
+            'mailbox'       => env('GRAPH_MAILBOX', env('MAIL_FROM_ADDRESS')),
+            // from_address = alamat FROM yang tampil di email (boleh alias dari mailbox)
             'from_address'  => env('MAIL_FROM_ADDRESS', 'noreply@activ.co.id'),
         ],
 
