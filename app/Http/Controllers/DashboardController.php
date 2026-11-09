@@ -127,15 +127,21 @@ class DashboardController extends Controller
 
         $salesUsers = $allowedUsers->filter(fn ($u) => in_array($u->role, ['Sales', 'Presales'], true))->sortBy('name')->values();
         $salesTargets = SalesTarget::whereIn('user_id', $allowedIds)->get();
-        $salesPerf = $salesUsers->map(function ($sales) use ($reportQuotations, $salesTargets, $periodStart, $periodEnd) {
-            $target = 0;
-            for ($month = $periodStart->copy()->startOfMonth(); $month->lte($periodEnd); $month->addMonth()) {
-                $monthly = $salesTargets->first(fn ($t) => $t->user_id === $sales->id && (int) $t->period_year === $month->year && (int) $t->period_month === $month->month);
-                $target += (float) ($monthly?->target_amount ?? $sales->target_sales ?? 0);
-            }
-            return ['id' => $sales->id, 'name' => $sales->name, 'avatar' => $this->getInitials($sales->name),
-                'target' => $target, 'monthly_target' => (float) ($sales->target_sales ?? 0),
-                'achieved' => $reportQuotations->filter(fn ($q) => ($q->sales_id ?: $q->created_by) === $sales->id)->sum('grand_total')];
+        $salesPerf = $salesUsers->map(function ($sales) use ($reportQuotations, $salesTargets) {
+            $latestTarget = $salesTargets->first(fn ($t) => $t->user_id === $sales->id && (int) $t->period_year === now()->year && (int) $t->period_month === now()->month)?->target_amount
+                ?? $salesTargets->where('user_id', $sales->id)->sortByDesc('created_at')->first()?->target_amount
+                ?? $sales->target_sales
+                ?? 0;
+            $target = (float) $latestTarget;
+
+            return [
+                'id' => $sales->id,
+                'name' => $sales->name,
+                'avatar' => $this->getInitials($sales->name),
+                'target' => $target,
+                'monthly_target' => $target,
+                'achieved' => $reportQuotations->filter(fn ($q) => ($q->sales_id ?: $q->created_by) === $sales->id)->sum('grand_total'),
+            ];
         })->sortByDesc('achieved')->values()->toArray();
 
         // Prepare table data for Dashboard Quotation

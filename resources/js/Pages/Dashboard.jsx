@@ -1223,7 +1223,7 @@ export default function Dashboard({ stats, personalStats, salesUsers: incomingSa
                         {canEditTarget && editingSales && (
                             <form onSubmit={handleSaveSalesTarget} className="mb-4 p-3.5 rounded-xl bg-emerald-50/70 border border-emerald-300 animate-fade-in space-y-2">
                                 <label className="text-xs font-bold text-emerald-800 block">
-                                    Target bulanan: {editingSales.name}
+                                    Target Quarter (3 Bulan): {editingSales.name}
                                 </label>
                                 <div className="flex items-center gap-2">
                                     <div className="relative flex-1">
@@ -1299,7 +1299,7 @@ export default function Dashboard({ stats, personalStats, salesUsers: incomingSa
                                                 <div className="flex justify-between mt-1 text-[11px] text-surface-400">
                                                     <span className="font-medium text-surface-600">{formatShort(s.achieved)}</span>
                                                     <span className="flex items-center gap-1">
-                                                        Target: {formatShort(s.target)} · <span className={`font-bold ${pct >= 80 ? 'text-emerald-600' : pct >= 50 ? 'text-amber-600' : 'text-red-500'}`}>{pct}%</span>
+                                                        Target: {formatShort(s.target)} / qtr · <span className={`font-bold ${pct >= 80 ? 'text-emerald-600' : pct >= 50 ? 'text-amber-600' : 'text-red-500'}`}>{pct}%</span>
                                                         {canEditTarget && <Pencil className="w-3 h-3 text-surface-300 group-hover:text-emerald-600 transition-colors" />}
                                                     </span>
                                                 </div>
