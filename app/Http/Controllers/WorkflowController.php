@@ -149,15 +149,25 @@ class WorkflowController extends Controller
                     throw ValidationException::withMessages(['lead_id' => 'Customer proyek harus sama dengan quotation.']);
                 }
             }
+            $isNewLead = false;
             if (! $lead) {
+                $isNewLead = true;
                 $stages = collect(SystemSetting::find('lead_pipeline_settings')?->value['stages'] ?? []);
-                $lead = Lead::create(['lead_code' => LeadCode::next(), 'title' => ($data['title'] ?? null) ?: ($root->customer?->name ?: $root->id),
-                    'customer_id' => $root->customer_id, 'sales_id' => $root->sales_id ?: $root->created_by,
-                    'bu_id' => $root->bu_id, 'created_by' => $request->user()->id,
+                $lead = Lead::create([
+                    'lead_code' => LeadCode::next(),
+                    'title' => ($data['title'] ?? null) ?: ($root->customer?->name ?: $root->id),
+                    'customer_id' => $root->customer_id,
+                    'sales_id' => $root->sales_id ?: $request->user()->id,
+                    'bu_id' => $root->bu_id,
+                    'created_by' => $request->user()->id,
                     'stage' => $stages->firstWhere('type', 'normal')['key'] ?? 'lead_masuk',
-                    'estimated_value' => $root->grand_total, 'quotation_id' => $root->id]);
+                    'estimated_value' => $root->grand_total,
+                    'quotation_id' => $root->id,
+                ]);
             }
-            WorkflowAccess::lead($request->user(), $lead);
+            if (! $isNewLead) {
+                WorkflowAccess::lead($request->user(), $lead);
+            }
             if ($lead->customer_id && $lead->customer_id !== $root->customer_id) {
                 throw ValidationException::withMessages(['lead_id' => 'Customer proyek harus sama dengan quotation.']);
             }

@@ -134,7 +134,11 @@ export default function Quotations({ quotations, isFinance, availableLeads = [] 
                 ? { title: newLeadTitle.trim() }
                 : { lead_id: selectedLeadId };
 
-            await axios.post(route('quotations.workflow.lead', connectLeadQuot.id), payload);
+            const url = typeof route === 'function' && route().has?.('quotations.workflow.lead')
+                ? route('quotations.workflow.lead', connectLeadQuot.id)
+                : `/workflow/quotations/${connectLeadQuot.id}/lead`;
+
+            await axios.post(url, payload);
             toast.success('Quotation berhasil dihubungkan ke lead!');
             setConnectLeadQuot(null);
             router.reload({ only: ['quotations'] });

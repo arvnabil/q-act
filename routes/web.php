@@ -69,7 +69,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::delete('/brands/{brand}', [BrandController::class, 'destroy'])->name('brands.destroy');
 
     Route::get('/workflow/quotations/{quotation}', [\App\Http\Controllers\WorkflowController::class, 'quotation']);
-    Route::post('/workflow/quotations/{quotation}/lead', [\App\Http\Controllers\WorkflowController::class, 'link']);
+    Route::post('/workflow/quotations/{quotation}/lead', [\App\Http\Controllers\WorkflowController::class, 'link'])->name('quotations.workflow.lead');
     Route::get('/workflow/leads/{lead}', [\App\Http\Controllers\WorkflowController::class, 'lead']);
     Route::post('/workflow/visits/{visit}/cancel', [\App\Http\Controllers\WorkflowController::class, 'cancel']);
 
