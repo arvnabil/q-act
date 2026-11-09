@@ -197,7 +197,7 @@ class DashboardController extends Controller
                 'invalidAllocation' => $selectedPoData['invalidAllocation']],
             'tableQuotations' => $basis === 'quotation' ? $tableQuotations : [],
             'tableSalesOrders' => $basis === 'po' ? $tableSalesOrders : [],
-            'salesUsers' => $salesUsers->map(fn($u) => ['id' => $u->id, 'name' => $u->name, 'role' => $u->role])->values(),
+            'salesUsers' => $salesUsers->map(fn($u) => ['id' => $u->id, 'name' => $u->name, 'role' => $u->roles->first()?->name ?? $u->role])->values(),
             'filters' => [
                 'period' => $period,
                 'salesFilter' => $salesFilter,

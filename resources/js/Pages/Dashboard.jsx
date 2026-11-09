@@ -618,7 +618,7 @@ function PersonalSalesDashboard({
 // ─── Main Component ──────────────────────────────────────────────────────────
 
 export default function Dashboard({ stats, personalStats, salesUsers: incomingSalesUsers = [], filters, auth, tableQuotations = [], tableSalesOrders = [], dashboardAccess = {}, dataQuality = {} }) {
-    const salesUsers = incomingSalesUsers.filter(s => ['Sales', 'Presales'].includes(s.role));
+    const salesUsers = incomingSalesUsers.filter(s => s.role === 'Sales');
     const refreshedLegacySales = useRef(false);
     useEffect(() => {
         // Vite HMR replaces JSX but retains the previous Inertia page props.

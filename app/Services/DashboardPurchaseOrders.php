@@ -29,10 +29,20 @@ class DashboardPurchaseOrders
             if (!$po->po_date) { $missingDate++; continue; }
             $q = $quotes[$po->quotation_id];
             $ids = array_unique($po->quotation_item_ids ?? []);
-            $items = $q->items->whereIn('id', $ids);
-            if (!$ids || $items->count() !== count($ids) || $items->contains(fn ($item) =>
-                ($usage[$item->source_quotation_item_id ?: $item->id] ?? 0) > 1)) {
-                $invalidAllocation++; continue;
+            // If quotation_item_ids is empty/null, use all items from the quotation
+            if (!$ids) {
+                $items = $q->items;
+            } else {
+                $items = $q->items->whereIn('id', $ids);
+                // Skip if specific IDs were listed but items don't match
+                if ($items->count() !== count($ids)) {
+                    $invalidAllocation++; continue;
+                }
+                // Skip if items are over-allocated (used in multiple eligible POs)
+                if ($items->contains(fn ($item) =>
+                    ($usage[$item->source_quotation_item_id ?: $item->id] ?? 0) > 1)) {
+                    $invalidAllocation++; continue;
+                }
             }
             $row = clone $q;
             $row->setRelation('items', $items);
