@@ -256,6 +256,7 @@ function PersonalSalesDashboard({
     isManagerOrAdmin = false,
     selectedSalesId,
     onSelectSalesUser,
+    onSelectQuarter,
 }) {
     const [isCollapsed, setIsCollapsed] = useState(false);
 
@@ -666,10 +667,17 @@ export default function Dashboard({ stats, personalStats, salesUsers: incomingSa
     const [customStart, setCustomStart] = useState(filters?.customStart || '');
     const [customEnd, setCustomEnd] = useState(filters?.customEnd || '');
     const [personalSalesId, setPersonalSalesId] = useState(filters?.personalSalesId || auth?.user?.id);
+    const [personalQuarter, setPersonalQuarter] = useState(filters?.personalQuarter || personalStats?.selectedQuarter || 'q4');
+    const [personalYear, setPersonalYear] = useState(filters?.personalYear || personalStats?.selectedYear || new Date().getFullYear());
 
     useEffect(() => {
         setPersonalSalesId(filters?.personalSalesId || auth?.user?.id);
     }, [filters?.personalSalesId, auth?.user?.id]);
+
+    useEffect(() => {
+        if (filters?.personalQuarter) setPersonalQuarter(filters.personalQuarter);
+        if (filters?.personalYear) setPersonalYear(filters.personalYear);
+    }, [filters?.personalQuarter, filters?.personalYear]);
 
     // Table search & pagination state
     const [tableSearch, setTableSearch] = useState('');
@@ -799,6 +807,8 @@ export default function Dashboard({ stats, personalStats, salesUsers: incomingSa
             custom_start: overrides.customStart ?? customStart,
             custom_end: overrides.customEnd ?? customEnd,
             personal_sales_id: overrides.personal_sales_id ?? personalSalesId,
+            personal_quarter: overrides.personal_quarter ?? personalQuarter,
+            personal_year: overrides.personal_year ?? personalYear,
         };
         router.get('/dashboard', params, { preserveState: true, replace: true });
     };
@@ -809,6 +819,7 @@ export default function Dashboard({ stats, personalStats, salesUsers: incomingSa
     };
 
     const handlePersonalQuarterChange = (qKey) => {
+        setPersonalQuarter(qKey);
         applyFilters({ personal_quarter: qKey, basis: 'personal' });
     };
 
