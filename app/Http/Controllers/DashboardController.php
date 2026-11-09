@@ -125,7 +125,10 @@ class DashboardController extends Controller
         usort($customerMap, fn($a, $b) => $b['poValue'] <=> $a['poValue']);
         $topCustomers = array_slice(array_values($customerMap), 0, 5);
 
-        $salesUsers = $allowedUsers->filter(fn ($u) => $u->role === 'Sales')->sortBy('name')->values();
+        $salesUsers = $allowedUsers->filter(function ($u) {
+            $userRole = $u->roles->first()?->name ?? $u->role;
+            return $userRole === 'Sales';
+        })->sortBy('name')->values();
         $salesTargets = SalesTarget::whereIn('user_id', $allowedIds)->get();
         $salesPerf = $salesUsers->map(function ($sales) use ($reportQuotations, $salesTargets) {
             $latestTarget = $salesTargets->first(fn ($t) => $t->user_id === $sales->id && (int) $t->period_year === now()->year && (int) $t->period_month === now()->month)?->target_amount

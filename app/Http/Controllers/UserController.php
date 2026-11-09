@@ -54,6 +54,7 @@ class UserController extends Controller
             'password' => Hash::make($validated['password']),
             'sales_code' => strtoupper($validated['sales_code']),
             'mobile' => $validated['mobile'] ?? null,
+            'role' => $validated['role'],
             'is_active' => true,
         ]);
         $user->save();
@@ -82,6 +83,7 @@ class UserController extends Controller
             'name' => trim($validated['name']),
             'sales_code' => strtoupper($validated['sales_code']),
             'mobile' => $validated['mobile'] ?? null,
+            'role' => $validated['role'],
         ]);
 
         // Sync Spatie Role
