@@ -46,42 +46,134 @@ class DashboardController extends Controller
 
         [$periodStart, $periodEnd] = $this->getPeriodRange($period, $customStart, $customEnd);
 
-        $visible = DashboardScope::owned(Quotation::active()->with(['customer', 'sales', 'creator', 'items', 'salesOrders']), $allowedIds);
-        $allVisibleQuotations = $visible->get();
-        $salesMatchFn = function ($q) use ($salesFilter) {
-            if ($salesFilter === 'all') return true;
-            if ($q->sales_id === $salesFilter || $q->created_by === $salesFilter) return true;
-            if ($q->salesOrders && $q->salesOrders->contains(fn ($so) => $so->sales_id === $salesFilter)) return true;
-            return false;
-        };
+        // =========================================================================
+        // JIKA BASIS === 'PO' : BACA LANGSUNG BERDASARKAN SALES ORDER & TGL PO-NYA
+        // =========================================================================
+        if ($basis === 'po') {
+            $soQuery = SalesOrder::with(['customer', 'sales', 'quotation'])
+                ->where(function ($sq) use ($allowedIds) {
+                    $sq->whereIn('sales_id', $allowedIds)->orWhereIn('created_by', $allowedIds);
+                })
+                ->whereNotIn(DB::raw('UPPER(COALESCE(status, ""))'), ['REVISED', 'CANCELLED', 'BATAL']);
 
-        $selectedQuotations = $salesFilter === 'all' ? $allVisibleQuotations : $allVisibleQuotations->filter($salesMatchFn);
-        $poData = app(DashboardPurchaseOrders::class)->rows($allVisibleQuotations);
-        $poRows = $salesFilter === 'all' ? $poData['rows'] : $poData['rows']->filter($salesMatchFn);
-        $selectedPoData = $salesFilter === 'all' ? $poData : app(DashboardPurchaseOrders::class)->rows($selectedQuotations);
-        $missingPoDateCount = $selectedPoData['missingDate'];
-        $approvedPoQuotations = $poRows->filter(fn ($q) => $this->poDateInRange($q, $periodStart, $periodEnd));
-        // The root retains copied sub-items. Report only its remaining allocation.
-        $allocated = $allVisibleQuotations->filter(fn ($q) => $q->relation_type === 'split' && !in_array($q->status, ['cancelled', 'superseded']))
-            ->flatMap(fn ($q) => $q->items->pluck('source_quotation_item_id'))->filter()->all();
-        $quotations = $selectedQuotations->filter(fn ($q) => !in_array($q->status, ['cancelled', 'superseded']) && $q->date
-            && Carbon::parse($q->date)->betweenIncluded($periodStart, $periodEnd))->map(function ($q) use ($allocated) {
-                $row = clone $q;
-                $remaining = $q->items->whereNotIn('id', $allocated);
-                if ($remaining->count() !== $q->items->count()) {
-                    $row->setRelation('items', $remaining);
-                    $row->subtotal = 0;
-                    $row->grand_total = app(\App\Services\QuotationCalculator::class)->calculateTotals($q, $remaining)['grand_total'];
+            if ($salesFilter !== 'all') {
+                $soQuery->where(function ($sq) use ($salesFilter) {
+                    $sq->where('sales_id', $salesFilter)->orWhere('created_by', $salesFilter);
+                });
+            }
+
+            $allSoList = $soQuery->get();
+            $missingPoDateCount = 0;
+            $approvedSoList = collect();
+
+            foreach ($allSoList as $so) {
+                $rawPoDate = $so->po_date ?: $so->quotation?->po_date;
+                $poNumber = $so->po_number ?: $so->quotation?->po_number;
+                $poStatus = $so->po_status ?: ($so->quotation?->po_status ?: 'Diterima');
+
+                if (!$rawPoDate) {
+                    $missingPoDateCount++;
+                    continue;
                 }
-                return $row;
-            });
-        $approvedQuotationQuotations = $quotations->where('status', 'approved');
 
-        // The selected dashboard tab is the reporting source of truth. The
-        // quotation tab uses the document date; the PO tab uses the manually entered
-        // PO date and excludes records where that date is still missing.
-        $reportQuotations = $basis === 'po' ? $approvedPoQuotations : $quotations;
-        $approvedReportQuotations = $basis === 'po' ? $approvedPoQuotations : $approvedQuotationQuotations;
+                $carbonPoDate = Carbon::parse($rawPoDate);
+                if ($carbonPoDate->betweenIncluded($periodStart, $periodEnd)) {
+                    // Buat object representasi PO
+                    $row = (object) [
+                        'id' => $so->id,
+                        'quotation_id' => $so->quotation_id,
+                        'date' => $so->date,
+                        'po_date' => $carbonPoDate,
+                        'po_number' => $poNumber,
+                        'po_status' => $poStatus,
+                        'grand_total' => (float) $so->grand_total,
+                        'status' => $so->status,
+                        'customer_id' => $so->customer_id,
+                        'customer' => $so->customer,
+                        'sales_id' => $so->sales_id ?: $so->created_by,
+                        'sales' => $so->sales,
+                    ];
+                    $approvedSoList->push($row);
+                }
+            }
+
+            $reportQuotations = $approvedSoList;
+            $approvedReportQuotations = $approvedSoList;
+            $quotations = collect();
+            $tableQuotations = [];
+
+            $tableSalesOrders = $approvedSoList->map(function ($so) {
+                return [
+                    'id' => $so->id,
+                    'row_key' => 'so_' . $so->id,
+                    'url' => '/sales-orders/' . $so->id,
+                    'quotation_id' => $so->quotation_id,
+                    'date' => $so->date?->toDateString(),
+                    'po_number' => $so->po_number,
+                    'po_date' => $so->po_date->toDateString(),
+                    'po_status' => $so->po_status,
+                    'grand_total' => (float) $so->grand_total,
+                    'status' => $so->status,
+                    'customer' => $so->customer ? ['id' => $so->customer->id, 'name' => $so->customer->name] : null,
+                    'sales' => $so->sales ? ['id' => $so->sales->id, 'name' => $so->sales->name] : null,
+                ];
+            })->values()->all();
+
+            $selectedPoData = [
+                'missingDate' => $missingPoDateCount,
+                'missingRecord' => 0,
+                'invalidAllocation' => 0,
+            ];
+            $approvedPoQuotations = $approvedSoList;
+        } else {
+            // Basis Quotation / Personal: tetap dari Quotation
+            $visible = DashboardScope::owned(Quotation::active()->with(['customer', 'sales', 'creator', 'items']), $allowedIds);
+            $allVisibleQuotations = $visible->get();
+            $salesMatchFn = function ($q) use ($salesFilter) {
+                if ($salesFilter === 'all') return true;
+                return ($q->sales_id === $salesFilter || $q->created_by === $salesFilter);
+            };
+
+            $selectedQuotations = $salesFilter === 'all' ? $allVisibleQuotations : $allVisibleQuotations->filter($salesMatchFn);
+            $poData = app(DashboardPurchaseOrders::class)->rows($allVisibleQuotations);
+            $poRows = $salesFilter === 'all' ? $poData['rows'] : $poData['rows']->filter($salesMatchFn);
+            $selectedPoData = $salesFilter === 'all' ? $poData : app(DashboardPurchaseOrders::class)->rows($selectedQuotations);
+            $missingPoDateCount = $selectedPoData['missingDate'];
+            $approvedPoQuotations = $poRows->filter(fn ($q) => $this->poDateInRange($q, $periodStart, $periodEnd));
+
+            $allocated = $allVisibleQuotations->filter(fn ($q) => $q->relation_type === 'split' && !in_array($q->status, ['cancelled', 'superseded']))
+                ->flatMap(fn ($q) => $q->items->pluck('source_quotation_item_id'))->filter()->all();
+            $quotations = $selectedQuotations->filter(fn ($q) => !in_array($q->status, ['cancelled', 'superseded']) && $q->date
+                && Carbon::parse($q->date)->betweenIncluded($periodStart, $periodEnd))->map(function ($q) use ($allocated) {
+                    $row = clone $q;
+                    $remaining = $q->items->whereNotIn('id', $allocated);
+                    if ($remaining->count() !== $q->items->count()) {
+                        $row->setRelation('items', $remaining);
+                        $row->subtotal = 0;
+                        $row->grand_total = app(\App\Services\QuotationCalculator::class)->calculateTotals($q, $remaining)['grand_total'];
+                    }
+                    return $row;
+                });
+            $approvedQuotationQuotations = $quotations->where('status', 'approved');
+
+            $reportQuotations = $quotations;
+            $approvedReportQuotations = $approvedQuotationQuotations;
+
+            $tableQuotations = $quotations->sortByDesc('created_at')->values()->map(function ($q) {
+                return [
+                    'id' => $q->id,
+                    'date' => $q->date?->toDateString() ?: ($q->created_at ? Carbon::parse($q->created_at)->toDateString() : null),
+                    'created_at' => $q->created_at?->toDateTimeString(),
+                    'status' => $q->status,
+                    'po_number' => $q->po_number,
+                    'po_date' => $q->po_date?->toDateString(),
+                    'grand_total' => (float) $q->grand_total,
+                    'customer' => $q->customer ? ['id' => $q->customer->id, 'name' => $q->customer->name] : null,
+                    'sales' => $q->sales ? ['id' => $q->sales->id, 'name' => $q->sales->name] : ($q->creator ? ['id' => $q->creator->id, 'name' => $q->creator->name] : null),
+                ];
+            })->toArray();
+            $tableSalesOrders = [];
+        }
 
         // KPIs
         $totalQ = $reportQuotations->count();
@@ -152,35 +244,9 @@ class DashboardController extends Controller
             ];
         })->sortByDesc('achieved')->values()->toArray();
 
-        // Prepare table data for Dashboard Quotation
-        $tableQuotations = $quotations->sortByDesc('created_at')->values()->map(function ($q) {
-            return [
-                'id' => $q->id,
-                'date' => $q->date?->toDateString() ?: ($q->created_at ? Carbon::parse($q->created_at)->toDateString() : null),
-                'created_at' => $q->created_at?->toDateTimeString(),
-                'status' => $q->status,
-                'po_number' => $q->po_number,
-                'po_date' => $q->po_date?->toDateString(),
-                'grand_total' => (float) $q->grand_total,
-                'customer' => $q->customer ? ['id' => $q->customer->id, 'name' => $q->customer->name] : null,
-                'sales' => $q->sales ? ['id' => $q->sales->id, 'name' => $q->sales->name] : ($q->creator ? ['id' => $q->creator->id, 'name' => $q->creator->name] : null),
-            ];
-        })->toArray();
-
-        $orders = SalesOrder::with(['customer', 'sales'])->whereIn('quotation_id', $approvedPoQuotations->pluck('id'))->get()->keyBy('quotation_id');
-        $tableSalesOrders = $approvedPoQuotations->map(function ($q) use ($orders) {
-            $so = $orders->get($q->id);
-            $salesInfo = $q->sales ? ['id' => $q->sales->id, 'name' => $q->sales->name] : ($so?->sales ? ['id' => $so->sales->id, 'name' => $so->sales->name] : null);
-            return ['id' => $so?->id ?? $q->id, 'row_key' => $q->po_record_id,
-                'url' => $so ? '/sales-orders/'.$so->id : '/quotations/'.$q->id,
-                'quotation_id' => $q->id, 'date' => $so?->date?->toDateString(),
-                'po_number' => $q->po_number, 'po_date' => $q->po_date->toDateString(), 'po_status' => $q->po_status,
-                'grand_total' => (float) $q->grand_total, 'status' => $so?->status,
-                'customer' => $q->customer?->only('id', 'name'), 'sales' => $salesInfo];
-        })->values()->all();
         $targetUser = $salesUsers->firstWhere('id', $request->get('personal_sales_id', $user->id))
             ?? $salesUsers->firstWhere('id', $user->id) ?? $salesUsers->first() ?? $user;
-        $personalStats = $basis === 'personal' ? app(PersonalDashboard::class)->build($targetUser, $poData['rows']) : null;
+        $personalStats = $basis === 'personal' ? app(PersonalDashboard::class)->build($targetUser, ($poData['rows'] ?? collect())) : null;
 
         return Inertia::render('Dashboard', [
             'stats' => [
@@ -261,9 +327,9 @@ class DashboardController extends Controller
         return $months;
     }
 
-    private function poDateInRange(Quotation $quotation, Carbon $start, Carbon $end): bool
+    private function poDateInRange($quotation, Carbon $start, Carbon $end): bool
     {
-        $date = $quotation->po_date;
+        $date = $quotation->po_date ?? null;
         return $date && Carbon::parse($date)->betweenIncluded($start, $end);
     }
 
