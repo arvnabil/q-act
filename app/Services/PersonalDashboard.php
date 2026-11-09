@@ -87,6 +87,27 @@ class PersonalDashboard
             $months[] = ['month' => $m->locale('id')->translatedFormat('M'), 'year' => $m->year, 'revenue' => $value, 'deals' => $deals];
             $trends[] = ['month' => $m->locale('id')->translatedFormat('M'), 'leads' => $leads->filter(fn ($l) => $within($l->created_at, $m, $e))->count(), 'deals' => $deals, 'revenue' => $value];
         }
+        $quarterLeads = $leads->filter(fn ($l) => $within($l->created_at, $qStart, $qEnd))->count();
+        $quarterWinRate = ($quarterWon + $quarterLost) > 0 ? round(100 * $quarterWon / ($quarterWon + $quarterLost), 1) : 0;
+        $quarterRevenue = (float) $quarterPo->sum('grand_total');
+        $quarterPoCount = $quarterPo->count();
+
+        // 3 bulan dalam quarter yang dipilih untuk chart
+        $quarterMonthlyBreakdown = [];
+        for ($mIdx = $quarterStartMonth; $mIdx <= $quarterStartMonth + 2; $mIdx++) {
+            $mDate = Carbon::createFromDate($year, $mIdx, 1)->startOfMonth();
+            $mEnd = $mDate->copy()->endOfMonth();
+            $val = (float) $personalPo->filter(fn ($q) => $within($q->po_date, $mDate, $mEnd))->sum('grand_total');
+            $deals = $won->filter(fn ($l) => $within($closedAt($l), $mDate, $mEnd))->count();
+            $quarterMonthlyBreakdown[] = [
+                'month' => $mDate->locale('id')->translatedFormat('M'),
+                'fullMonth' => $mDate->locale('id')->translatedFormat('F'),
+                'year' => $mDate->year,
+                'revenue' => $val,
+                'deals' => $deals,
+            ];
+        }
+
         $rate = ($won->count() + $lost->count()) ? round(100 * $won->count() / ($won->count() + $lost->count()), 1) : 0;
         return [
             'targetUser' => $target->only('id', 'name', 'email', 'role'),
@@ -100,7 +121,16 @@ class PersonalDashboard
                 ['key' => 'q1', 'label' => 'Q1 (Jan - Mar)', 'fullLabel' => 'Q1 ' . $year . ' (Jan - Mar)'],
             ],
             'revenueThisQuarter' => $revenueThisQuarter,
-            'poCountThisQuarter' => $quarterPo->count(),
+            'poCountThisQuarter' => $quarterPoCount,
+            'quarterStats' => [
+                'totalLeads' => $quarterLeads,
+                'dealsWon' => $quarterWon,
+                'dealsLost' => $quarterLost,
+                'winRate' => $quarterWinRate,
+                'totalRevenue' => $quarterRevenue,
+                'poCount' => $quarterPoCount,
+            ],
+            'quarterMonthlyBreakdown' => $quarterMonthlyBreakdown,
             'revenueThisMonth' => $monthPo->sum('grand_total'), 
             'poCountThisMonth' => $monthPo->count(),
             'dealsWonThisMonth' => $monthlyWon, 
@@ -111,11 +141,15 @@ class PersonalDashboard
             'targetPct' => $targetPct,
             'forecastPipeline' => $active->sum('estimated_value'), 'monthlyRevenueLast6' => $months, 'monthlyTrendsLast6' => $trends,
             'allTime' => ['totalLeads' => $leads->count(), 'dealsWon' => $won->count(), 'dealsLost' => $lost->count(),
-                'winRate' => $rate, 'totalRevenue' => $personalPo->sum('grand_total')],
+                'winRate' => $rate, 'totalRevenue' => (float) $personalPo->sum('grand_total')],
             'pipelineReview' => ['totalLeads' => $active->count(), 'dealsWon' => $won->count(), 'dealsLost' => $lost->count(),
                 'needsFollowUp' => $tasks->map(fn ($t) => $t['lead_id'] ?: ($t['quotation_id'] ?? $t['id']))->unique()->count(),
                 'todayAgenda' => $tasks->filter(fn ($t) => $t['scheduled']->isToday())->count(),
-                'nextCustomer' => $upcoming[0]['customer'] ?? null, 'dealsThisMonth' => $monthlyWon,
+                'nextCustomer' => $upcoming[0]['customer'] ?? null,
+                'dealsThisMonth' => $monthlyWon,
+                'dealsThisQuarter' => $quarterWon,
+                'dealsLostThisQuarter' => $quarterLost,
+                'quarterWinRate' => $quarterWinRate,
                 'monthWinRate' => ($monthlyWon + $monthlyLost) ? round(100 * $monthlyWon / ($monthlyWon + $monthlyLost), 1) : 0],
             'missingCloseDate' => $won->concat($lost)->filter(fn ($l) => !$closedAt($l))->count(),
             'smartTip' => ['title' => 'Prioritas Follow-up', 'message' => $tasks->isEmpty()

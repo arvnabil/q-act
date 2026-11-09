@@ -259,6 +259,7 @@ function PersonalSalesDashboard({
     onSelectQuarter,
 }) {
     const [isCollapsed, setIsCollapsed] = useState(false);
+    const [perfViewMode, setPerfViewMode] = useState('quarter');
 
     const {
         targetUser = {},
@@ -267,6 +268,8 @@ function PersonalSalesDashboard({
         selectedQuarter = 'q4',
         revenueThisQuarter = 0,
         poCountThisQuarter = 0,
+        quarterStats = {},
+        quarterMonthlyBreakdown = [],
         revenueThisMonth = 0,
         dealsWonThisMonth = 0,
         dealsLostThisMonth = 0,
@@ -282,6 +285,20 @@ function PersonalSalesDashboard({
     } = personalStats || {};
     const displayRevenue = revenueThisQuarter ?? revenueThisMonth;
     const displayPoCount = poCountThisQuarter ?? personalStats?.poCountThisMonth ?? 0;
+
+    const currentPerf = perfViewMode === 'quarter'
+        ? (quarterStats || {
+            totalLeads: 0,
+            winRate: 0,
+            dealsWon: 0,
+            totalRevenue: revenueThisQuarter || 0,
+        })
+        : allTime;
+
+    const activeMonthlyBars = (quarterMonthlyBreakdown && quarterMonthlyBreakdown.length > 0)
+        ? quarterMonthlyBreakdown
+        : monthlyRevenueLast6;
+    const maxBarRev = Math.max(1, ...(activeMonthlyBars || []).map(m => m.revenue || 0));
 
     const maxMonthlyRev = Math.max(1, ...(monthlyRevenueLast6 || []).map(m => m.revenue || 0));
 
@@ -424,61 +441,95 @@ function PersonalSalesDashboard({
 
                         <hr className="border-surface-100" />
 
-                        {/* Bottom Row: 6-month bars + All-time summary */}
+                        {/* Bottom Row: Quarter monthly bars + Quarter/All-time summary */}
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-end">
-                            {/* Nilai PO saya 6 bulan terakhir */}
+                            {/* Nilai PO per bulan dalam quarter terpilih */}
                             <div>
                                 <h3 className="text-xs font-bold text-surface-700 uppercase tracking-wider mb-4">
-                                    Nilai PO saya 6 bulan terakhir
+                                    Nilai PO per Bulan ({quarterLabel || 'Quarter Ini'})
                                 </h3>
-                                <div className="flex items-end justify-between gap-2 pt-2 pb-1">
-                                    {(monthlyRevenueLast6 || []).map((m, idx) => {
+                                <div className="flex items-end justify-around gap-2 pt-2 pb-1 bg-surface-50/50 rounded-xl p-3 border border-surface-100">
+                                    {(activeMonthlyBars || []).map((m, idx) => {
                                         const rev = m.revenue || 0;
-                                        const h = rev > 0 ? Math.max(16, Math.round((rev / maxMonthlyRev) * 70)) : 4;
+                                        const h = rev > 0 ? Math.max(18, Math.round((rev / maxBarRev) * 70)) : 4;
                                         return (
-                                            <div key={idx} className="flex flex-col items-center gap-1.5 flex-1 min-w-[45px]">
-                                                <div className="text-[10px] font-semibold text-surface-600 whitespace-nowrap">
+                                            <div key={idx} className="flex flex-col items-center gap-1.5 flex-1 min-w-[55px]">
+                                                <div className="text-[10px] font-bold text-surface-700 whitespace-nowrap">
                                                     {rev > 0 ? formatShort(rev) : '-'}
                                                 </div>
                                                 <div className="w-full flex items-end justify-center" style={{ height: '70px' }}>
                                                     <div
-                                                        className={`w-6 sm:w-8 rounded-t transition-all ${
+                                                        className={`w-8 sm:w-12 rounded-t transition-all ${
                                                             rev > 0
                                                                 ? 'bg-brand-500 hover:bg-brand-600'
                                                                 : 'h-1 bg-surface-200'
                                                         }`}
                                                         style={{ height: `${h}px` }}
-                                                        title={`${m.month} ${m.year}: ${formatFull(rev)}`}
+                                                        title={`${m.fullMonth || m.month} ${m.year}: ${formatFull(rev)} (${m.deals || 0} deal)`}
                                                     />
                                                 </div>
-                                                <div className="text-[11px] text-surface-500 font-semibold">{m.month}</div>
+                                                <div className="text-[11px] text-surface-600 font-bold">{m.month}</div>
                                             </div>
                                         );
                                     })}
                                 </div>
                             </div>
 
-                            {/* Performa saya sepanjang masa */}
+                            {/* Performa saya (Quarter vs All-time switch) */}
                             <div>
-                                <h3 className="text-xs font-bold text-surface-700 uppercase tracking-wider mb-4">
-                                    Performa saya sepanjang masa
-                                </h3>
+                                <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+                                    <h3 className="text-xs font-bold text-surface-700 uppercase tracking-wider">
+                                        {perfViewMode === 'quarter' ? `Performa ${quarterLabel || 'Quarter Ini'}` : 'Performa Sepanjang Masa'}
+                                    </h3>
+                                    <div className="inline-flex items-center bg-surface-100 p-0.5 rounded-lg border border-surface-200 text-[11px]">
+                                        <button
+                                            type="button"
+                                            onClick={() => setPerfViewMode('quarter')}
+                                            className={`px-2.5 py-1 rounded-md transition-all cursor-pointer ${
+                                                perfViewMode === 'quarter'
+                                                    ? 'bg-white text-brand-700 shadow-2xs font-bold'
+                                                    : 'text-surface-500 hover:text-surface-800 font-medium'
+                                            }`}
+                                        >
+                                            Quarter Ini
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setPerfViewMode('all_time')}
+                                            className={`px-2.5 py-1 rounded-md transition-all cursor-pointer ${
+                                                perfViewMode === 'all_time'
+                                                    ? 'bg-white text-brand-700 shadow-2xs font-bold'
+                                                    : 'text-surface-500 hover:text-surface-800 font-medium'
+                                            }`}
+                                        >
+                                            Sepanjang Masa
+                                        </button>
+                                    </div>
+                                </div>
                                 <div className="grid grid-cols-2 gap-4">
                                     <div className="p-3 rounded-xl bg-surface-50/80 border border-surface-100">
-                                        <div className="text-xl sm:text-2xl font-black text-surface-900">{allTime.totalLeads ?? 0}</div>
-                                        <div className="text-[11px] text-surface-500 font-medium mt-0.5">Total lead</div>
+                                        <div className="text-xl sm:text-2xl font-black text-surface-900">{currentPerf.totalLeads ?? 0}</div>
+                                        <div className="text-[11px] text-surface-500 font-medium mt-0.5">
+                                            {perfViewMode === 'quarter' ? 'Lead baru quarter ini' : 'Total lead'}
+                                        </div>
                                     </div>
                                     <div className="p-3 rounded-xl bg-surface-50/80 border border-surface-100">
-                                        <div className="text-xl sm:text-2xl font-black text-emerald-600">{allTime.winRate ?? 0}%</div>
-                                        <div className="text-[11px] text-surface-500 font-medium mt-0.5">Win rate</div>
+                                        <div className="text-xl sm:text-2xl font-black text-emerald-600">{currentPerf.winRate ?? 0}%</div>
+                                        <div className="text-[11px] text-surface-500 font-medium mt-0.5">
+                                            {perfViewMode === 'quarter' ? 'Win rate quarter ini' : 'Win rate'}
+                                        </div>
                                     </div>
                                     <div className="p-3 rounded-xl bg-surface-50/80 border border-surface-100">
-                                        <div className="text-xl sm:text-2xl font-black text-surface-900">{allTime.dealsWon ?? 0}</div>
-                                        <div className="text-[11px] text-surface-500 font-medium mt-0.5">Deal dimenangkan</div>
+                                        <div className="text-xl sm:text-2xl font-black text-surface-900">{currentPerf.dealsWon ?? 0}</div>
+                                        <div className="text-[11px] text-surface-500 font-medium mt-0.5">
+                                            {perfViewMode === 'quarter' ? 'Deal menang quarter ini' : 'Deal dimenangkan'}
+                                        </div>
                                     </div>
                                     <div className="p-3 rounded-xl bg-surface-50/80 border border-surface-100">
-                                        <div className="text-xl sm:text-2xl font-black text-surface-900">{formatShort(allTime.totalRevenue ?? 0)}</div>
-                                        <div className="text-[11px] text-surface-500 font-medium mt-0.5">Total nilai PO</div>
+                                        <div className="text-xl sm:text-2xl font-black text-surface-900">{formatShort(currentPerf.totalRevenue ?? 0)}</div>
+                                        <div className="text-[11px] text-surface-500 font-medium mt-0.5">
+                                            {perfViewMode === 'quarter' ? 'Nilai PO quarter ini' : 'Total nilai PO'}
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -550,10 +601,10 @@ function PersonalSalesDashboard({
                     </div>
 
                     <div className="bg-white rounded-xl border border-surface-200 p-5 shadow-xs flex flex-col gap-1">
-                        <div className="text-3xl font-black text-surface-900">{pipelineReview.dealsThisMonth ?? 0}</div>
-                        <div className="text-xs font-bold text-surface-700">Deal bulan ini</div>
+                        <div className="text-3xl font-black text-surface-900">{pipelineReview.dealsThisQuarter ?? pipelineReview.dealsThisMonth ?? 0}</div>
+                        <div className="text-xs font-bold text-surface-700">Deal {quarterLabel || 'quarter ini'}</div>
                         <div className="text-[11px] text-surface-400 mt-1">
-                            {dealsLostThisMonth} kalah • win rate {pipelineReview.monthWinRate ?? 0}% bulan ini
+                            {pipelineReview.dealsLostThisQuarter ?? dealsLostThisMonth ?? 0} kalah • win rate {pipelineReview.quarterWinRate ?? pipelineReview.monthWinRate ?? 0}%
                         </div>
                     </div>
                 </div>
