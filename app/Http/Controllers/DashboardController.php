@@ -48,11 +48,16 @@ class DashboardController extends Controller
 
         $visible = DashboardScope::owned(Quotation::active()->with(['customer', 'sales', 'creator', 'items', 'salesOrders']), $allowedIds);
         $allVisibleQuotations = $visible->get();
-        $selectedQuotations = $salesFilter === 'all' ? $allVisibleQuotations : $allVisibleQuotations->filter(
-            fn ($q) => ($q->sales_id ?: $q->created_by) === $salesFilter);
+        $salesMatchFn = function ($q) use ($salesFilter) {
+            if ($salesFilter === 'all') return true;
+            if ($q->sales_id === $salesFilter || $q->created_by === $salesFilter) return true;
+            if ($q->salesOrders && $q->salesOrders->contains(fn ($so) => $so->sales_id === $salesFilter)) return true;
+            return false;
+        };
+
+        $selectedQuotations = $salesFilter === 'all' ? $allVisibleQuotations : $allVisibleQuotations->filter($salesMatchFn);
         $poData = app(DashboardPurchaseOrders::class)->rows($allVisibleQuotations);
-        $poRows = $salesFilter === 'all' ? $poData['rows'] : $poData['rows']->filter(
-            fn ($q) => ($q->sales_id ?: $q->created_by) === $salesFilter);
+        $poRows = $salesFilter === 'all' ? $poData['rows'] : $poData['rows']->filter($salesMatchFn);
         $selectedPoData = $salesFilter === 'all' ? $poData : app(DashboardPurchaseOrders::class)->rows($selectedQuotations);
         $missingPoDateCount = $selectedPoData['missingDate'];
         $approvedPoQuotations = $poRows->filter(fn ($q) => $this->poDateInRange($q, $periodStart, $periodEnd));
@@ -162,15 +167,16 @@ class DashboardController extends Controller
             ];
         })->toArray();
 
-        $orders = SalesOrder::whereIn('quotation_id', $approvedPoQuotations->pluck('id'))->get()->keyBy('quotation_id');
+        $orders = SalesOrder::with(['customer', 'sales'])->whereIn('quotation_id', $approvedPoQuotations->pluck('id'))->get()->keyBy('quotation_id');
         $tableSalesOrders = $approvedPoQuotations->map(function ($q) use ($orders) {
             $so = $orders->get($q->id);
+            $salesInfo = $q->sales ? ['id' => $q->sales->id, 'name' => $q->sales->name] : ($so?->sales ? ['id' => $so->sales->id, 'name' => $so->sales->name] : null);
             return ['id' => $so?->id ?? $q->id, 'row_key' => $q->po_record_id,
                 'url' => $so ? '/sales-orders/'.$so->id : '/quotations/'.$q->id,
                 'quotation_id' => $q->id, 'date' => $so?->date?->toDateString(),
                 'po_number' => $q->po_number, 'po_date' => $q->po_date->toDateString(), 'po_status' => $q->po_status,
                 'grand_total' => (float) $q->grand_total, 'status' => $so?->status,
-                'customer' => $q->customer?->only('id', 'name'), 'sales' => $q->sales?->only('id', 'name')];
+                'customer' => $q->customer?->only('id', 'name'), 'sales' => $salesInfo];
         })->values()->all();
         $targetUser = $salesUsers->firstWhere('id', $request->get('personal_sales_id', $user->id))
             ?? $salesUsers->firstWhere('id', $user->id) ?? $salesUsers->first() ?? $user;
