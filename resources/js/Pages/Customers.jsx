@@ -204,11 +204,14 @@ export default function Customers({ customers }) {
     const filtered = (customers || []).filter(c => {
         if (!search) return true;
         const s = search.toLowerCase();
-        const primaryPic = c.pics?.[0];
         return (
             c.name?.toLowerCase().includes(s) ||
-            primaryPic?.name?.toLowerCase().includes(s) ||
-            primaryPic?.email?.toLowerCase().includes(s)
+            c.address?.toLowerCase().includes(s) ||
+            (c.pics || []).some(p =>
+                p.name?.toLowerCase().includes(s) ||
+                p.email?.toLowerCase().includes(s) ||
+                p.phone?.toLowerCase().includes(s)
+            )
         );
     });
 
