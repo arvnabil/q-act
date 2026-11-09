@@ -118,10 +118,15 @@ export default function Quotations({ quotations, isFinance, availableLeads = [] 
 
     const handleOpenConnectLead = (q) => {
         setConnectLeadQuot(q);
-        setConnectMode('new');
         setNewLeadTitle(q.customer?.name ? `${q.customer.name}` : q.id);
-        const matchingLeads = (availableLeads || []).filter(l => l.customer_id === q.customer?.id);
-        setSelectedLeadId(matchingLeads[0]?.id || availableLeads[0]?.id || '');
+        const matching = (availableLeads || []).filter(l => l.customer_id && l.customer_id === q.customer?.id);
+        if (matching.length > 0) {
+            setConnectMode('existing');
+            setSelectedLeadId(matching[0].id);
+        } else {
+            setConnectMode('new');
+            setSelectedLeadId(availableLeads[0]?.id || '');
+        }
     };
 
     const handleConnectLeadSubmit = async (e) => {
@@ -864,17 +869,25 @@ export default function Quotations({ quotations, isFinance, availableLeads = [] 
                                     </div>
                                 </div>
 
+                                {/* Notifikasi jika customer ini sudah punya lead aktif */ }
+                                {(() => {
+                                    const matching = (availableLeads || []).filter(l => l.customer_id && l.customer_id === connectLeadQuot?.customer?.id);
+                                    if (matching.length === 0) return null;
+                                    return (
+                                        <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-xs text-emerald-900 space-y-1">
+                                            <div className="flex items-center gap-1.5 font-bold text-emerald-800">
+                                                <span>💡 Ditemukan {matching.length} Lead untuk Customer Ini</span>
+                                            </div>
+                                            <p className="text-[11px] text-emerald-700 leading-relaxed">
+                                                Customer ini sudah memiliki proyek lead aktif. Anda disarankan menghubungkannya ke salah satu lead yang sudah ada di bawah.
+                                            </p>
+                                        </div>
+                                    );
+                                })()}
+
                                 <div className="space-y-2">
                                     <label className="block text-xs font-bold text-surface-700 uppercase tracking-wider">Metode Hubungkan</label>
                                     <div className="grid grid-cols-2 gap-2">
-                                        <button
-                                            type="button"
-                                            onClick={() => setConnectMode('new')}
-                                            className={`p-2.5 rounded-xl border text-xs font-semibold transition-all cursor-pointer text-left ${connectMode === 'new' ? 'border-brand-500 bg-brand-50 text-brand-800 ring-2 ring-brand-500/20' : 'border-surface-200 hover:bg-surface-50 text-surface-600'}`}
-                                        >
-                                            <div className="font-bold">✨ Buat Lead Baru</div>
-                                            <div className="text-[10px] text-surface-400 mt-0.5">Otomatis dari quotation</div>
-                                        </button>
                                         <button
                                             type="button"
                                             onClick={() => setConnectMode('existing')}
@@ -882,6 +895,14 @@ export default function Quotations({ quotations, isFinance, availableLeads = [] 
                                         >
                                             <div className="font-bold">🔗 Pilih Lead Ada</div>
                                             <div className="text-[10px] text-surface-400 mt-0.5">Dari daftar lead aktif</div>
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setConnectMode('new')}
+                                            className={`p-2.5 rounded-xl border text-xs font-semibold transition-all cursor-pointer text-left ${connectMode === 'new' ? 'border-brand-500 bg-brand-50 text-brand-800 ring-2 ring-brand-500/20' : 'border-surface-200 hover:bg-surface-50 text-surface-600'}`}
+                                        >
+                                            <div className="font-bold">✨ Buat Lead Baru</div>
+                                            <div className="text-[10px] text-surface-400 mt-0.5">Otomatis dari quotation</div>
                                         </button>
                                     </div>
                                 </div>
@@ -902,19 +923,39 @@ export default function Quotations({ quotations, isFinance, availableLeads = [] 
                                 ) : (
                                     <div>
                                         <label className="block text-xs font-bold text-surface-600 uppercase tracking-wider mb-1.5">Pilih Lead Tujuan</label>
-                                        <select
-                                            required
-                                            value={selectedLeadId}
-                                            onChange={e => setSelectedLeadId(e.target.value)}
-                                            className="w-full text-sm bg-white border border-surface-300 rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500 outline-none font-medium"
-                                        >
-                                            <option value="">-- Pilih Lead Aktif --</option>
-                                            {(availableLeads || []).map(l => (
-                                                <option key={l.id} value={l.id}>
-                                                    {l.lead_code ? `[${l.lead_code}] ` : ''}{l.title}
-                                                </option>
-                                            ))}
-                                        </select>
+                                        {(() => {
+                                            const matching = (availableLeads || []).filter(l => l.customer_id && l.customer_id === connectLeadQuot?.customer?.id);
+                                            const others = (availableLeads || []).filter(l => !l.customer_id || l.customer_id !== connectLeadQuot?.customer?.id);
+
+                                            return (
+                                                <select
+                                                    required
+                                                    value={selectedLeadId}
+                                                    onChange={e => setSelectedLeadId(e.target.value)}
+                                                    className="w-full text-sm bg-white border border-surface-300 rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500 outline-none font-medium"
+                                                >
+                                                    <option value="">-- Pilih Lead Aktif --</option>
+                                                    {matching.length > 0 && (
+                                                        <optgroup label="⭐ Lead Milik Customer Ini (Disarankan)">
+                                                            {matching.map(l => (
+                                                                <option key={l.id} value={l.id}>
+                                                                    {l.lead_code ? `[${l.lead_code}] ` : ''}{l.title} (Customer Ini)
+                                                                </option>
+                                                            ))}
+                                                        </optgroup>
+                                                    )}
+                                                    {others.length > 0 && (
+                                                        <optgroup label="Lead Lainnya">
+                                                            {others.map(l => (
+                                                                <option key={l.id} value={l.id}>
+                                                                    {l.lead_code ? `[${l.lead_code}] ` : ''}{l.title}
+                                                                </option>
+                                                            ))}
+                                                        </optgroup>
+                                                    )}
+                                                </select>
+                                            );
+                                        })()}
                                     </div>
                                 )}
 
