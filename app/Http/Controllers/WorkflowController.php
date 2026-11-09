@@ -153,20 +153,67 @@ class WorkflowController extends Controller
                 }
             }
             $isNewLead = false;
+            $stages = collect(SystemSetting::find('lead_pipeline_settings')?->value['stages'] ?? []);
+            $activeSos = $root->salesOrders ? $root->salesOrders->filter(fn($s) => !in_array(strtoupper($s->status ?? ''), ['REVISED', 'CANCELLED', 'BATAL'])) : collect();
+            $soWithPo = $activeSos->first(fn($s) => !empty($s->po_date));
+            $hasPo = $root->status === 'approved' || !empty($root->po_number) || !empty($root->po_date) || $activeSos->isNotEmpty();
+            $dealStage = $stages->firstWhere('type', 'deal')['key'] ?? 'win';
+            $normalStage = $stages->firstWhere('type', 'normal')['key'] ?? 'lead_masuk';
+            $qDate = $root->date ? Carbon::parse($root->date) : ($root->created_at ? Carbon::parse($root->created_at) : now());
+            $poDate = $soWithPo?->po_date ? Carbon::parse($soWithPo->po_date) : ($root->po_date ? Carbon::parse($root->po_date) : $qDate);
+
             if (! $lead) {
                 $isNewLead = true;
-                $stages = collect(SystemSetting::find('lead_pipeline_settings')?->value['stages'] ?? []);
-                $lead = Lead::create([
+                $lead = new Lead([
                     'lead_code' => LeadCode::next(),
                     'title' => ($data['title'] ?? null) ?: ($root->customer?->name ?: $root->id),
                     'customer_id' => $root->customer_id,
                     'sales_id' => $root->sales_id ?: $request->user()->id,
                     'bu_id' => $root->bu_id,
                     'created_by' => $request->user()->id,
-                    'stage' => $stages->firstWhere('type', 'normal')['key'] ?? 'lead_masuk',
+                    'stage' => $hasPo ? $dealStage : $normalStage,
                     'estimated_value' => $root->grand_total,
                     'quotation_id' => $root->id,
                 ]);
+                $lead->created_at = $qDate;
+                $lead->updated_at = $qDate;
+                $lead->save();
+
+                if ($hasPo) {
+                    LeadActivity::create([
+                        'lead_id' => $lead->id,
+                        'user_id' => $request->user()->id,
+                        'type' => 'deal_won',
+                        'title' => 'Deal dimenangkan (otomatis dari Quotation / PO ' . ($root->po_number ?: $root->id) . ')',
+                        'metadata' => [
+                            'quotation_id' => $root->id,
+                            'po_number' => $root->po_number,
+                            'po_date' => $poDate->toDateString(),
+                            'amount' => (float) $root->grand_total,
+                        ],
+                        'created_at' => $poDate,
+                        'updated_at' => $poDate,
+                    ]);
+                }
+            } else {
+                $isDeal = in_array($lead->stage, ['win', 'selesai_terbayar', 'proyek_deal', 'proyek_selesai']);
+                if ($hasPo && !$isDeal) {
+                    $lead->update(['stage' => $dealStage]);
+                    LeadActivity::create([
+                        'lead_id' => $lead->id,
+                        'user_id' => $request->user()->id,
+                        'type' => 'deal_won',
+                        'title' => 'Deal dimenangkan (otomatis dari Quotation / PO ' . ($root->po_number ?: $root->id) . ')',
+                        'metadata' => [
+                            'quotation_id' => $root->id,
+                            'po_number' => $root->po_number,
+                            'po_date' => $poDate->toDateString(),
+                            'amount' => (float) $root->grand_total,
+                        ],
+                        'created_at' => $poDate,
+                        'updated_at' => $poDate,
+                    ]);
+                }
             }
             if (! $isNewLead) {
                 WorkflowAccess::lead($request->user(), $lead);

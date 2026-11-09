@@ -8,7 +8,7 @@ class PersonalDashboard
 {
     public function build(User $target, $poRows, ?string $selectedQuarter = null, ?int $selectedYear = null): array
     {
-        $leads = DashboardScope::owned(Lead::query()->with('activities'), [$target->id])->get();
+        $leads = DashboardScope::owned(Lead::query()->with(['activities', 'quotation.salesOrders']), [$target->id])->get();
         $stages = collect(SystemSetting::find('lead_pipeline_settings')?->value['stages'] ?? []);
         $type = fn ($stage) => $stages->firstWhere('key', $stage)['type'] ??
             (in_array($stage, ['win', 'selesai_terbayar', 'proyek_deal', 'proyek_selesai']) ? 'deal' :
@@ -17,10 +17,30 @@ class PersonalDashboard
         $lost = $leads->filter(fn ($l) => $type($l->stage) === 'lost');
         $closedAt = function ($lead) use ($type) {
             // Use the latest transition into the current outcome, never creation/import time.
-            return $lead->activities->sortByDesc('created_at')->first(fn ($a) =>
+            $act = $lead->activities->sortByDesc('created_at')->first(fn ($a) =>
                 ($a->type === 'stage_change' && $type($a->metadata['to'] ?? '') === $type($lead->stage)
                     && $type($a->metadata['from'] ?? '') !== $type($lead->stage))
                 || $a->type === ($type($lead->stage) === 'deal' ? 'deal_won' : 'deal_lost'))?->created_at;
+
+            if ($act) {
+                return $act;
+            }
+
+            if ($type($lead->stage) === 'deal') {
+                $q = $lead->quotation;
+                if ($q) {
+                    $so = $q->salesOrders?->first(fn ($s) => !empty($s->po_date));
+                    if ($so && $so->po_date) {
+                        return $so->po_date;
+                    }
+                    if ($q->po_date) {
+                        return $q->po_date;
+                    }
+                }
+                return $lead->created_at;
+            }
+
+            return null;
         };
         $within = fn ($date, $start, $end) => $date && Carbon::parse($date)->betweenIncluded($start, $end);
         $now = now();
