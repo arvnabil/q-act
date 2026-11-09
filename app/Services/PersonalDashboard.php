@@ -23,13 +23,37 @@ class PersonalDashboard
                 || $a->type === ($type($lead->stage) === 'deal' ? 'deal_won' : 'deal_lost'))?->created_at;
         };
         $within = fn ($date, $start, $end) => $date && Carbon::parse($date)->betweenIncluded($start, $end);
-        $start = now()->startOfMonth(); $end = now()->endOfMonth();
+        $now = now();
+        $start = $now->copy()->startOfMonth();
+        $end = $now->copy()->endOfMonth();
+
+        // Quarter Berjalan (Q1: Jan-Mar, Q2: Apr-Jun, Q3: Jul-Sep, Q4: Okt-Des)
+        $quarterNum = (int) ceil($now->month / 3);
+        $quarterStartMonth = ($quarterNum - 1) * 3 + 1;
+        $qStart = $now->copy()->month($quarterStartMonth)->startOfMonth();
+        $qEnd = $now->copy()->month($quarterStartMonth + 2)->endOfMonth();
+        $quarterLabel = 'Q' . $quarterNum . ' ' . $now->year . ' (' . $qStart->locale('id')->translatedFormat('M') . ' - ' . $qEnd->locale('id')->translatedFormat('M') . ')';
+
         $monthlyWon = $won->filter(fn ($l) => $within($closedAt($l), $start, $end))->count();
         $monthlyLost = $lost->filter(fn ($l) => $within($closedAt($l), $start, $end))->count();
+        $quarterWon = $won->filter(fn ($l) => $within($closedAt($l), $qStart, $qEnd))->count();
+        $quarterLost = $lost->filter(fn ($l) => $within($closedAt($l), $qStart, $qEnd))->count();
+
         $personalPo = $poRows->filter(fn ($q) => ($q->sales_id ?: $q->created_by) === $target->id);
         $monthPo = $personalPo->filter(fn ($q) => $within($q->po_date, $start, $end));
-        $targetAmount = (float) (SalesTarget::where('user_id', $target->id)->where('period_year', now()->year)
-            ->where('period_month', now()->month)->value('target_amount') ?? $target->target_sales ?? 0);
+        $quarterPo = $personalPo->filter(fn ($q) => $within($q->po_date, $qStart, $qEnd));
+
+        $targetAmount = (float) (
+            SalesTarget::where('user_id', $target->id)->where('period_year', $now->year)
+                ->whereIn('period_month', [$quarterStartMonth, $quarterStartMonth + 1, $quarterStartMonth + 2])
+                ->orderByDesc('period_month')->value('target_amount')
+            ?? SalesTarget::where('user_id', $target->id)->orderByDesc('period_year')->orderByDesc('period_month')->value('target_amount')
+            ?? $target->target_sales 
+            ?? 0
+        );
+
+        $revenueThisQuarter = (float) $quarterPo->sum('grand_total');
+        $targetPct = $targetAmount > 0 ? round(100 * $revenueThisQuarter / $targetAmount, 1) : 0;
         $active = $leads->filter(fn ($l) => !$l->is_archived && $type($l->stage) === 'normal');
         $activities = LeadActivity::whereDoesntHave('visit')->whereIn('lead_id', $active->pluck('id'))->whereNull('completed_at')
             ->whereNotNull('scheduled_at')->where('scheduled_at', '<=', now()->endOfWeek())->get();
@@ -59,9 +83,17 @@ class PersonalDashboard
         $rate = ($won->count() + $lost->count()) ? round(100 * $won->count() / ($won->count() + $lost->count()), 1) : 0;
         return [
             'targetUser' => $target->only('id', 'name', 'email', 'role'),
-            'revenueThisMonth' => $monthPo->sum('grand_total'), 'poCountThisMonth' => $monthPo->count(),
-            'dealsWonThisMonth' => $monthlyWon, 'dealsLostThisMonth' => $monthlyLost,
-            'targetAmount' => $targetAmount, 'targetPct' => $targetAmount > 0 ? round(100 * $monthPo->sum('grand_total') / $targetAmount, 1) : 0,
+            'quarterLabel' => $quarterLabel,
+            'revenueThisQuarter' => $revenueThisQuarter,
+            'poCountThisQuarter' => $quarterPo->count(),
+            'revenueThisMonth' => $monthPo->sum('grand_total'), 
+            'poCountThisMonth' => $monthPo->count(),
+            'dealsWonThisMonth' => $monthlyWon, 
+            'dealsLostThisMonth' => $monthlyLost,
+            'dealsWonThisQuarter' => $quarterWon,
+            'dealsLostThisQuarter' => $quarterLost,
+            'targetAmount' => $targetAmount, 
+            'targetPct' => $targetPct,
             'forecastPipeline' => $active->sum('estimated_value'), 'monthlyRevenueLast6' => $months, 'monthlyTrendsLast6' => $trends,
             'allTime' => ['totalLeads' => $leads->count(), 'dealsWon' => $won->count(), 'dealsLost' => $lost->count(),
                 'winRate' => $rate, 'totalRevenue' => $personalPo->sum('grand_total')],

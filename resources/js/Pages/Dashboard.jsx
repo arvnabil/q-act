@@ -261,6 +261,9 @@ function PersonalSalesDashboard({
 
     const {
         targetUser = {},
+        quarterLabel = '',
+        revenueThisQuarter = 0,
+        poCountThisQuarter = 0,
         revenueThisMonth = 0,
         dealsWonThisMonth = 0,
         dealsLostThisMonth = 0,
@@ -274,6 +277,8 @@ function PersonalSalesDashboard({
         smartTip = {},
         upcomingTasks = [],
     } = personalStats || {};
+    const displayRevenue = revenueThisQuarter ?? revenueThisMonth;
+    const displayPoCount = poCountThisQuarter ?? personalStats?.poCountThisMonth ?? 0;
 
     const maxMonthlyRev = Math.max(1, ...(monthlyRevenueLast6 || []).map(m => m.revenue || 0));
 
@@ -341,7 +346,7 @@ function PersonalSalesDashboard({
                 <div className="flex items-center justify-between pb-4 border-b border-surface-100">
                     <div>
                         <h2 className="text-base font-bold text-surface-900">Performa saya</h2>
-                        <p className="text-xs text-surface-400 font-medium capitalize">{currentMonthYear}</p>
+                        <p className="text-xs text-brand-600 font-semibold">{quarterLabel || currentMonthYear}</p>
                     </div>
                     <button
                         type="button"
@@ -368,13 +373,13 @@ function PersonalSalesDashboard({
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
                             {/* Nilai PO saya */}
                             <div className="space-y-1.5">
-                                <span className="text-xs font-bold text-surface-500 uppercase tracking-wider">Nilai PO saya</span>
+                                <span className="text-xs font-bold text-surface-500 uppercase tracking-wider">Nilai PO Quarter Ini</span>
                                 <div className="text-3xl sm:text-4xl font-extrabold text-surface-900 tracking-tight">
-                                    {formatFull(revenueThisMonth)}
+                                    {formatFull(displayRevenue)}
                                 </div>
-                                <p className="text-xs text-surface-500">Nilai PO bertanggal bulan ini, termasuk pajak sesuai quotation</p>
+                                <p className="text-xs text-surface-500">Nilai PO bertanggal quarter ini ({quarterLabel || '3 bulan'}), termasuk pajak sesuai quotation</p>
                                 <div className="pt-2 text-[11px] text-surface-400">
-                                    {personalStats?.poCountThisMonth ?? 0} dokumen PO valid bulan ini
+                                    {displayPoCount} dokumen PO valid quarter ini
                                 </div>
                             </div>
 
@@ -386,7 +391,7 @@ function PersonalSalesDashboard({
                                 <div className="flex flex-col items-center">
                                     <PersonalTargetGauge pct={targetPct} />
                                     <div className="mt-2 text-sm font-extrabold text-surface-800 text-center">
-                                        {targetAmount > 0 ? `${formatShort(revenueThisMonth)} / ${formatShort(targetAmount)}` : 'Target belum diatur'}
+                                        {targetAmount > 0 ? `${formatShort(displayRevenue)} / ${formatShort(targetAmount)}` : 'Target belum diatur'}
                                     </div>
                                     <div className="text-[11px] text-surface-400 font-medium mt-0.5">
                                         Estimasi lead aktif {formatShort(forecastPipeline)}
