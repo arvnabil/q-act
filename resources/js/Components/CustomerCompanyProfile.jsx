@@ -26,7 +26,15 @@ export default function CustomerCompanyProfile({ customer }) {
     const begin = () => { form.setData(initial(customer)); form.clearErrors(); setEditing(true); };
     const submit = e => {
         e.preventDefault();
-        form.transform(data => ({ ...data, _method: 'put' })).post(route('customers.profile.update', customer.id), { forceFormData: true, preserveScroll: true, onSuccess: () => { setEditing(false); form.setData('npwp_file', null); } });
+        form.transform(data => ({ ...data, _method: 'put' }));
+        form.post(route('customers.profile.update', customer.id), {
+            forceFormData: true,
+            preserveScroll: true,
+            onSuccess: () => {
+                setEditing(false);
+                form.setData('npwp_file', null);
+            },
+        });
     };
     return <form onSubmit={submit} className="space-y-6 p-5 sm:p-6">
         <div className="flex flex-wrap items-start justify-between gap-3">
