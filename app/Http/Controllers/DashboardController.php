@@ -52,13 +52,15 @@ class DashboardController extends Controller
         if ($basis === 'po') {
             $soQuery = SalesOrder::with(['customer', 'sales', 'quotation'])
                 ->where(function ($sq) use ($allowedIds) {
-                    $sq->whereIn('sales_id', $allowedIds)->orWhereIn('created_by', $allowedIds);
+                    $sq->whereIn('sales_id', $allowedIds)
+                        ->orWhereHas('quotation', fn ($q) => $q->whereIn('sales_id', $allowedIds)->orWhereIn('created_by', $allowedIds));
                 })
                 ->whereNotIn(DB::raw('UPPER(COALESCE(status, ""))'), ['REVISED', 'CANCELLED', 'BATAL']);
 
             if ($salesFilter !== 'all') {
                 $soQuery->where(function ($sq) use ($salesFilter) {
-                    $sq->where('sales_id', $salesFilter)->orWhere('created_by', $salesFilter);
+                    $sq->where('sales_id', $salesFilter)
+                        ->orWhereHas('quotation', fn ($q) => $q->where('sales_id', $salesFilter)->orWhere('created_by', $salesFilter));
                 });
             }
 
@@ -90,7 +92,7 @@ class DashboardController extends Controller
                         'status' => $so->status,
                         'customer_id' => $so->customer_id,
                         'customer' => $so->customer,
-                        'sales_id' => $so->sales_id ?: $so->created_by,
+                        'sales_id' => $so->sales_id ?: $so->quotation?->sales_id ?: $so->quotation?->created_by,
                         'sales' => $so->sales,
                     ];
                     $approvedSoList->push($row);
