@@ -125,7 +125,7 @@ class DashboardController extends Controller
         usort($customerMap, fn($a, $b) => $b['poValue'] <=> $a['poValue']);
         $topCustomers = array_slice(array_values($customerMap), 0, 5);
 
-        $salesUsers = $allowedUsers->filter(fn ($u) => in_array($u->role, ['Sales', 'Presales'], true))->sortBy('name')->values();
+        $salesUsers = $allowedUsers->filter(fn ($u) => $u->role === 'Sales')->sortBy('name')->values();
         $salesTargets = SalesTarget::whereIn('user_id', $allowedIds)->get();
         $salesPerf = $salesUsers->map(function ($sales) use ($reportQuotations, $salesTargets) {
             $latestTarget = $salesTargets->first(fn ($t) => $t->user_id === $sales->id && (int) $t->period_year === now()->year && (int) $t->period_month === now()->month)?->target_amount
@@ -289,7 +289,7 @@ class DashboardController extends Controller
 
         if ($defaultTarget !== null) {
             $targetVal = (float) $defaultTarget;
-            $salesUserIds = DashboardScope::users($user)->whereIn('role', ['Sales', 'Presales'])->pluck('id');
+            $salesUserIds = DashboardScope::users($user)->where('role', 'Sales')->pluck('id');
             foreach ($salesUserIds as $userId) {
                 SalesTarget::updateOrCreate(
                     ['user_id' => $userId, 'period_year' => now()->year, 'period_month' => now()->month],
