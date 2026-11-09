@@ -262,6 +262,8 @@ function PersonalSalesDashboard({
     const {
         targetUser = {},
         quarterLabel = '',
+        availableQuarters = [],
+        selectedQuarter = 'q4',
         revenueThisQuarter = 0,
         poCountThisQuarter = 0,
         revenueThisMonth = 0,
@@ -348,7 +350,25 @@ function PersonalSalesDashboard({
                         <h2 className="text-base font-bold text-surface-900">Performa saya</h2>
                         <p className="text-xs text-brand-600 font-semibold">{quarterLabel || currentMonthYear}</p>
                     </div>
-                    <button
+                    <div className="flex items-center gap-2">
+                        {availableQuarters && availableQuarters.length > 0 && (
+                            <div className="relative">
+                                <select
+                                    value={selectedQuarter}
+                                    onChange={(e) => onSelectQuarter && onSelectQuarter(e.target.value)}
+                                    className="appearance-none bg-surface-50 border border-surface-200 text-xs font-bold text-surface-800 rounded-lg pl-3 pr-7 py-1.5 hover:bg-surface-100 cursor-pointer focus:ring-2 focus:ring-brand-500/20"
+                                    title="Pilih Quarter"
+                                >
+                                    {availableQuarters.map((q) => (
+                                        <option key={q.key} value={q.key}>
+                                            {q.fullLabel || q.label}
+                                        </option>
+                                    ))}
+                                </select>
+                                <ChevronDown className="w-3.5 h-3.5 absolute right-2 top-1/2 -translate-y-1/2 text-surface-400 pointer-events-none" />
+                            </div>
+                        )}
+                        <button
                         type="button"
                         onClick={() => setIsCollapsed(!isCollapsed)}
                         className="text-xs font-semibold text-surface-500 hover:text-surface-800 px-3 py-1.5 rounded-lg border border-surface-200 hover:bg-surface-50 transition-colors flex items-center gap-1.5 cursor-pointer"
@@ -365,6 +385,7 @@ function PersonalSalesDashboard({
                             </>
                         )}
                     </button>
+                    </div>
                 </div>
 
                 {!isCollapsed && (
@@ -787,6 +808,10 @@ export default function Dashboard({ stats, personalStats, salesUsers: incomingSa
         applyFilters({ personal_sales_id: id, basis: 'personal' });
     };
 
+    const handlePersonalQuarterChange = (qKey) => {
+        applyFilters({ personal_quarter: qKey, basis: 'personal' });
+    };
+
     const handlePeriodChange = (key) => {
         setPeriod(key);
         applyFilters({ period: key });
@@ -905,6 +930,7 @@ export default function Dashboard({ stats, personalStats, salesUsers: incomingSa
                         isManagerOrAdmin={isManagerOrAdmin}
                         selectedSalesId={personalSalesId}
                         onSelectSalesUser={handlePersonalSalesChange}
+                        onSelectQuarter={handlePersonalQuarterChange}
                     /> : <div role="status" className="rounded-2xl border border-surface-200 bg-white p-8 text-center text-sm text-surface-500">Data performa belum tersedia. Silakan muat ulang halaman.</div>
                 ) : (
                     <>

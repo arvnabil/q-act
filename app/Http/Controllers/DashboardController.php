@@ -25,6 +25,7 @@ class DashboardController extends Controller
             'custom_start' => 'nullable|date_format:Y-m-d',
             'custom_end' => 'nullable|date_format:Y-m-d|after_or_equal:custom_start',
             'sales_filter' => 'nullable|string', 'personal_sales_id' => 'nullable|string',
+            'personal_quarter' => 'nullable|in:q1,q2,q3,q4', 'personal_year' => 'nullable|integer',
         ]);
         $allowedUsers = DashboardScope::users($user)->where('is_active', true)->get();
         $allowedIds = $allowedUsers->pluck('id')->push($user->id)->unique();
@@ -248,7 +249,11 @@ class DashboardController extends Controller
 
         $targetUser = $salesUsers->firstWhere('id', $request->get('personal_sales_id', $user->id))
             ?? $salesUsers->firstWhere('id', $user->id) ?? $salesUsers->first() ?? $user;
-        $personalStats = $basis === 'personal' ? app(PersonalDashboard::class)->build($targetUser, ($poData['rows'] ?? collect())) : null;
+        $personalQuarter = $request->get('personal_quarter');
+        $personalYear = $request->get('personal_year', now()->year);
+        $personalStats = $basis === 'personal' 
+            ? app(PersonalDashboard::class)->build($targetUser, ($poData['rows'] ?? collect()), $personalQuarter, (int) $personalYear) 
+            : null;
 
         return Inertia::render('Dashboard', [
             'stats' => [
@@ -281,6 +286,8 @@ class DashboardController extends Controller
                 'periodEnd' => $periodEnd->toDateString(),
                 'basis' => $basis,
                 'personalSalesId' => $targetUser->id,
+                'personalQuarter' => $personalQuarter ?: ($personalStats['selectedQuarter'] ?? null),
+                'personalYear' => $personalYear ?: ($personalStats['selectedYear'] ?? null),
             ],
         ]);
     }

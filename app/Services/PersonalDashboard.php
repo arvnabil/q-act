@@ -6,7 +6,7 @@ use Carbon\Carbon;
 
 class PersonalDashboard
 {
-    public function build(User $target, $poRows): array
+    public function build(User $target, $poRows, ?string $selectedQuarter = null, ?int $selectedYear = null): array
     {
         $leads = DashboardScope::owned(Lead::query()->with('activities'), [$target->id])->get();
         $stages = collect(SystemSetting::find('lead_pipeline_settings')?->value['stages'] ?? []);
@@ -24,15 +24,22 @@ class PersonalDashboard
         };
         $within = fn ($date, $start, $end) => $date && Carbon::parse($date)->betweenIncluded($start, $end);
         $now = now();
+        $year = $selectedYear ?: $now->year;
+
+        // Tentukan nomor quarter (1, 2, 3, 4)
+        if ($selectedQuarter && in_array(strtolower($selectedQuarter), ['q1', 'q2', 'q3', 'q4'])) {
+            $quarterNum = (int) substr($selectedQuarter, 1);
+        } else {
+            $quarterNum = (int) ceil($now->month / 3);
+        }
+
         $start = $now->copy()->startOfMonth();
         $end = $now->copy()->endOfMonth();
 
-        // Quarter Berjalan (Q1: Jan-Mar, Q2: Apr-Jun, Q3: Jul-Sep, Q4: Okt-Des)
-        $quarterNum = (int) ceil($now->month / 3);
         $quarterStartMonth = ($quarterNum - 1) * 3 + 1;
-        $qStart = $now->copy()->month($quarterStartMonth)->startOfMonth();
-        $qEnd = $now->copy()->month($quarterStartMonth + 2)->endOfMonth();
-        $quarterLabel = 'Q' . $quarterNum . ' ' . $now->year . ' (' . $qStart->locale('id')->translatedFormat('M') . ' - ' . $qEnd->locale('id')->translatedFormat('M') . ')';
+        $qStart = Carbon::createFromDate($year, $quarterStartMonth, 1)->startOfMonth();
+        $qEnd = Carbon::createFromDate($year, $quarterStartMonth + 2, 1)->endOfMonth();
+        $quarterLabel = 'Q' . $quarterNum . ' ' . $year . ' (' . $qStart->locale('id')->translatedFormat('M') . ' - ' . $qEnd->locale('id')->translatedFormat('M') . ')';
 
         $monthlyWon = $won->filter(fn ($l) => $within($closedAt($l), $start, $end))->count();
         $monthlyLost = $lost->filter(fn ($l) => $within($closedAt($l), $start, $end))->count();
@@ -84,6 +91,14 @@ class PersonalDashboard
         return [
             'targetUser' => $target->only('id', 'name', 'email', 'role'),
             'quarterLabel' => $quarterLabel,
+            'selectedQuarter' => 'q' . $quarterNum,
+            'selectedYear' => $year,
+            'availableQuarters' => [
+                ['key' => 'q4', 'label' => 'Q4 (Okt - Des)', 'fullLabel' => 'Q4 ' . $year . ' (Okt - Des)'],
+                ['key' => 'q3', 'label' => 'Q3 (Jul - Sep)', 'fullLabel' => 'Q3 ' . $year . ' (Jul - Sep)'],
+                ['key' => 'q2', 'label' => 'Q2 (Apr - Jun)', 'fullLabel' => 'Q2 ' . $year . ' (Apr - Jun)'],
+                ['key' => 'q1', 'label' => 'Q1 (Jan - Mar)', 'fullLabel' => 'Q1 ' . $year . ' (Jan - Mar)'],
+            ],
             'revenueThisQuarter' => $revenueThisQuarter,
             'poCountThisQuarter' => $quarterPo->count(),
             'revenueThisMonth' => $monthPo->sum('grand_total'), 
