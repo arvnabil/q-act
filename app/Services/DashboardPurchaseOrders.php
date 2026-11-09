@@ -3,6 +3,7 @@ namespace App\Services;
 
 use App\Models\{Quotation, QuotationPurchaseOrder};
 use Illuminate\Support\Collection;
+use Carbon\Carbon;
 
 class DashboardPurchaseOrders
 {
@@ -55,9 +56,41 @@ class DashboardPurchaseOrders
             $row->grand_total = app(QuotationCalculator::class)->calculateTotals($q, $items)['grand_total'];
             $rows->push($row);
         }
-        $legacy = $quotations->where('status', 'approved')->whereNotIn('id', $records->pluck('quotation_id'));
-        $missingDate += $legacy->whereNull('po_date')->count();
-        $missingRecord = $legacy->whereNotNull('po_date')->count();
+
+        // Handle quotations that don't have a QuotationPurchaseOrder record
+        // (e.g. PO entered via Sales Order or legacy quotation PO fields)
+        $processedQuotIds = $records->pluck('quotation_id')->unique()->all();
+        $otherQuotations = $quotations->whereNotIn('id', $processedQuotIds)
+            ->filter(fn ($q) => !in_array($q->status, ['cancelled', 'superseded', 'rejected']));
+
+        foreach ($otherQuotations as $q) {
+            // Find PO date and number from Quotation or associated Sales Orders
+            $soWithPo = $q->salesOrders?->first(fn ($so) => !empty($so->po_date));
+            $soFallback = $q->salesOrders?->first(fn ($so) => !empty($so->po_number));
+            
+            $poDate = $q->po_date ?: $soWithPo?->po_date;
+            $poNumber = $q->po_number ?: ($soWithPo?->po_number ?: $soFallback?->po_number);
+            $poStatus = $q->po_status ?: ($soWithPo?->po_status ?: ($q->status === 'approved' ? 'Diterima' : null));
+
+            // Must have either approved status, or valid PO number/status
+            $hasPo = !empty($poNumber) || in_array($poStatus, ['Diterima', 'Sebagian']) || $q->status === 'approved';
+
+            if ($hasPo) {
+                if (!$poDate) {
+                    $missingDate++;
+                } else {
+                    $row = clone $q;
+                    $row->po_record_id = 'quot_' . $q->id;
+                    $row->po_date = $poDate instanceof Carbon ? $poDate : Carbon::parse($poDate);
+                    $row->po_number = $poNumber;
+                    $row->po_status = $poStatus ?: 'Diterima';
+                    $row->status = 'approved';
+                    $rows->push($row);
+                }
+            }
+        }
+
+        $missingRecord = 0;
         return compact('rows', 'missingDate', 'invalidAllocation', 'missingRecord');
     }
 }

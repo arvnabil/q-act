@@ -46,7 +46,7 @@ class DashboardController extends Controller
 
         [$periodStart, $periodEnd] = $this->getPeriodRange($period, $customStart, $customEnd);
 
-        $visible = DashboardScope::owned(Quotation::active()->with(['customer', 'sales', 'creator', 'items']), $allowedIds);
+        $visible = DashboardScope::owned(Quotation::active()->with(['customer', 'sales', 'creator', 'items', 'salesOrders']), $allowedIds);
         $allVisibleQuotations = $visible->get();
         $selectedQuotations = $salesFilter === 'all' ? $allVisibleQuotations : $allVisibleQuotations->filter(
             fn ($q) => ($q->sales_id ?: $q->created_by) === $salesFilter);
