@@ -34,12 +34,13 @@ class SyncLeadsFromQuotations extends Command
 
             $qDate = $q->date ? Carbon::parse($q->date) : ($q->created_at ? Carbon::parse($q->created_at) : null);
             $poDate = $soWithPo?->po_date ? Carbon::parse($soWithPo->po_date) : ($q->po_date ? Carbon::parse($q->po_date) : $qDate);
+            $leadCreatedAt = $lead->created_at ? Carbon::parse($lead->created_at) : null;
 
             $needsDateSync = false;
             $needsStageSync = false;
 
             // 1. Sinkronkan created_at lead jika lead dibuat setelah quotation
-            if ($qDate && $lead->created_at && $lead->created_at->greaterThan($qDate->copy()->addDay())) {
+            if ($qDate && $leadCreatedAt && $leadCreatedAt->greaterThan($qDate->copy()->addDay())) {
                 $needsDateSync = true;
             }
 
@@ -60,6 +61,7 @@ class SyncLeadsFromQuotations extends Command
                     // Catat activity deal_won jika belum ada
                     $hasWonAct = $lead->activities->some(fn($a) => $a->type === 'deal_won' || ($a->type === 'stage_change' && in_array($a->metadata['to'] ?? '', ['win', 'selesai_terbayar', 'proyek_deal', 'proyek_selesai'])));
                     if (!$hasWonAct) {
+                        $poDateStr = $poDate ? Carbon::parse($poDate)->toDateString() : null;
                         LeadActivity::create([
                             'lead_id' => $lead->id,
                             'user_id' => $lead->sales_id ?: $lead->created_by,
@@ -68,7 +70,7 @@ class SyncLeadsFromQuotations extends Command
                             'metadata' => [
                                 'quotation_id' => $q->id,
                                 'po_number' => $q->po_number,
-                                'po_date' => $poDate?->toDateString(),
+                                'po_date' => $poDateStr,
                                 'amount' => (float) $q->grand_total,
                             ],
                             'created_at' => $poDate ?: ($qDate ?: now()),
@@ -81,7 +83,8 @@ class SyncLeadsFromQuotations extends Command
                 $lead->save();
                 $updatedCount++;
 
-                $this->line("Synced Lead: [{$lead->lead_code}] {$lead->title} -> Stage: {$lead->stage}, Created: " . ($lead->created_at?->toDateString() ?? '-'));
+                $createdDisplay = $lead->created_at ? Carbon::parse($lead->created_at)->toDateString() : '-';
+                $this->line("Synced Lead: [{$lead->lead_code}] {$lead->title} -> Stage: {$lead->stage}, Created: {$createdDisplay}");
             }
         }
 
