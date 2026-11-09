@@ -347,6 +347,7 @@ class QuotationController extends Controller
         $quotations = $query->orderByDesc('created_at')->get()->map(fn ($q) => $this->serializeForList($q));
 
         $availableLeads = \App\Services\WorkflowAccess::leads($user)->active()
+            ->with('customer:id,name')
             ->select('id', 'title', 'lead_code', 'customer_id')
             ->orderBy('title')
             ->get();

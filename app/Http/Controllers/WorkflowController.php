@@ -93,11 +93,14 @@ class WorkflowController extends Controller
         }
         $payload = $this->payload($request, $lead, LeadVisit::whereIn('quotation_id', $visibleIds), $quotation);
         $payload['grandTotal'] = (float) $quotation->grand_total;
+        $payload['customerId'] = $quotation->customer_id;
         $payload['candidates'] = $this->matchingLeads($request->user(), $quotation)
-            ->orderByDesc('updated_at')->limit(20)->get(['id', 'title', 'lead_code']);
+            ->with('customer:id,name')
+            ->orderByDesc('updated_at')->limit(50)->get(['id', 'title', 'lead_code', 'customer_id']);
         $payload['allLeads'] = WorkflowAccess::leads($request->user())->active()
+            ->with('customer:id,name')
             ->select('id', 'title', 'lead_code', 'customer_id')
-            ->orderBy('title')->limit(100)->get();
+            ->orderBy('title')->limit(500)->get();
         $payload['otherQuotations'] = DocumentVisibility::apply(Quotation::query(), $request->user(), 'quotations')
             ->where('customer_id', $quotation->customer_id)->whereNull('parent_quotation_id')->whereNull('lead_id')
             ->whereNotIn('id', $ids)->orderByDesc('date')->limit(50)->get(['id', 'date', 'status']);

@@ -2,6 +2,7 @@ import useAgendaCancellation from '@/Components/useAgendaCancellation';
 import React, { useState, useEffect } from 'react';
 import { Head, router, Link, usePage } from '@inertiajs/react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
+import SearchableLeadSelect from '@/Components/SearchableLeadSelect';
 import {
     MapPin, Plus, X, Calendar, Clock, CheckCircle2, Navigation,
     Building2, User, ChevronDown, AlertCircle, FileText,
@@ -393,11 +394,12 @@ function AddVisitModal({ open, onClose, leads, customers, customerPics = [], goo
                     {/* Lead */}
                     <div>
                         <label className="block text-xs font-semibold text-surface-600 mb-1">Lead</label>
-                        <select className="w-full border border-surface-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 bg-white"
-                            value={form.lead_id} onChange={e => handleLeadChange(e.target.value)}>
-                            <option value="">-- Pilih Lead (atau kosongkan untuk kunjungan langsung) --</option>
-                            {leads.map(l => <option key={l.id} value={l.id}>{l.lead_code ? `[${l.lead_code}] ` : ''}{l.title}</option>)}
-                        </select>
+                        <SearchableLeadSelect
+                            leads={leads}
+                            value={form.lead_id}
+                            onChange={handleLeadChange}
+                            placeholder="-- Cari kode, judul lead, atau customer --"
+                        />
                     </div>
 
                     {/* Customer info or direct customer selector */}

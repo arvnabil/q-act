@@ -2,6 +2,7 @@ import useAgendaCancellation from '@/Components/useAgendaCancellation';
 import React, { useState, useMemo, useEffect } from 'react';
 import { Head, router, Link, usePage } from '@inertiajs/react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
+import SearchableLeadSelect from '@/Components/SearchableLeadSelect';
 import { toast } from 'react-hot-toast';
 import {
     Calendar as CalendarIcon, ChevronLeft, ChevronRight, Plus,
@@ -679,16 +680,12 @@ function AddCalendarVisitModal({ open, onClose, leads, customers, customerPics =
                     <div className="p-6 space-y-4 overflow-y-auto flex-1">
                     <div>
                         <label className="block text-xs font-semibold text-surface-700 mb-1">Tautkan ke Lead Prospek <span className="text-gray-400 font-normal">(opsional)</span></label>
-                        <select
+                        <SearchableLeadSelect
+                            leads={leads}
                             value={form.lead_id}
-                            onChange={e => handleLeadChange(e.target.value)}
-                            className="w-full border border-surface-200 rounded-lg px-3 py-2 text-xs text-surface-800 outline-none focus:ring-2 focus:ring-brand-500 bg-white"
-                        >
-                            <option value="">-- Kunjungan Langsung (Tanpa Lead) --</option>
-                            {leads.map(l => (
-                                <option key={l.id} value={l.id}>[{l.lead_code}] {l.title}</option>
-                            ))}
-                        </select>
+                            onChange={handleLeadChange}
+                            placeholder="-- Cari kode, nama lead, atau customer --"
+                        />
                     </div>
 
                     {!form.lead_id && (

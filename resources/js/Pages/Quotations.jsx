@@ -7,6 +7,7 @@ import { Search, Eye, Download, Copy, Trash2, Loader2, FileText, Plus, AlertTria
 import { formatMoney } from '@/utils/money';
 import { toast } from 'react-hot-toast';
 import axios from 'axios';
+import SearchableLeadSelect from '@/Components/SearchableLeadSelect';
 
 const PAGE_SIZE = 8;
 
@@ -838,8 +839,8 @@ export default function Quotations({ quotations, isFinance, availableLeads = [] 
                 {/* Modal Hubungkan ke Lead */}
                 {connectLeadQuot && ReactDOM.createPortal(
                     <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-surface-900/60 backdrop-blur-sm animate-fade-in">
-                        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-scale-in border border-surface-200">
-                            <div className="px-6 py-4 border-b border-surface-100 flex items-center justify-between bg-surface-50/60">
+                        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-visible animate-scale-in border border-surface-200">
+                            <div className="px-6 py-4 border-b border-surface-100 flex items-center justify-between bg-surface-50/60 rounded-t-2xl">
                                 <div className="flex items-center gap-2.5">
                                     <div className="w-8 h-8 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center">
                                         <Link2 className="w-4 h-4" />
@@ -923,39 +924,14 @@ export default function Quotations({ quotations, isFinance, availableLeads = [] 
                                 ) : (
                                     <div>
                                         <label className="block text-xs font-bold text-surface-600 uppercase tracking-wider mb-1.5">Pilih Lead Tujuan</label>
-                                        {(() => {
-                                            const matching = (availableLeads || []).filter(l => l.customer_id && l.customer_id === connectLeadQuot?.customer?.id);
-                                            const others = (availableLeads || []).filter(l => !l.customer_id || l.customer_id !== connectLeadQuot?.customer?.id);
-
-                                            return (
-                                                <select
-                                                    required
-                                                    value={selectedLeadId}
-                                                    onChange={e => setSelectedLeadId(e.target.value)}
-                                                    className="w-full text-sm bg-white border border-surface-300 rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500 outline-none font-medium"
-                                                >
-                                                    <option value="">-- Pilih Lead Aktif --</option>
-                                                    {matching.length > 0 && (
-                                                        <optgroup label="⭐ Lead Milik Customer Ini (Disarankan)">
-                                                            {matching.map(l => (
-                                                                <option key={l.id} value={l.id}>
-                                                                    {l.lead_code ? `[${l.lead_code}] ` : ''}{l.title} (Customer Ini)
-                                                                </option>
-                                                            ))}
-                                                        </optgroup>
-                                                    )}
-                                                    {others.length > 0 && (
-                                                        <optgroup label="Lead Lainnya">
-                                                            {others.map(l => (
-                                                                <option key={l.id} value={l.id}>
-                                                                    {l.lead_code ? `[${l.lead_code}] ` : ''}{l.title}
-                                                                </option>
-                                                            ))}
-                                                        </optgroup>
-                                                    )}
-                                                </select>
-                                            );
-                                        })()}
+                                        <SearchableLeadSelect
+                                            leads={availableLeads}
+                                            value={selectedLeadId}
+                                            onChange={id => setSelectedLeadId(id)}
+                                            customerId={connectLeadQuot?.customer?.id}
+                                            placeholder="-- Cari kode, nama lead, atau customer --"
+                                            required
+                                        />
                                     </div>
                                 )}
 

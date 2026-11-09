@@ -1,9 +1,10 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { Link, router } from "@inertiajs/react";
 import { DialogTitle } from "@headlessui/react";
 import axios from "axios";
 import toast from "react-hot-toast";
 import Modal from "@/Components/Modal";
+import SearchableLeadSelect from "@/Components/SearchableLeadSelect";
 import { Calendar, Link2, Plus, X, Check, ArrowRight, Users } from "lucide-react";
 
 const formatVisitPeriod = (v) => {
@@ -88,6 +89,18 @@ export default function WorkflowPanel({
     const [connectMode, setConnectMode] = useState("new");
     const [connectTitle, setConnectTitle] = useState("");
     const [connectSelectedId, setConnectSelectedId] = useState("");
+
+    const combinedLeads = useMemo(() => {
+        const list = [...(data?.candidates || [])];
+        const seen = new Set(list.map((l) => l.id));
+        (data?.allLeads || []).forEach((l) => {
+            if (!seen.has(l.id)) {
+                seen.add(l.id);
+                list.push(l);
+            }
+        });
+        return list;
+    }, [data?.candidates, data?.allLeads]);
 
     const addAttendeeEmail = (emailToAdd) => {
         const trimmed = (emailToAdd || customEmail).trim().toLowerCase();
@@ -387,34 +400,15 @@ export default function WorkflowPanel({
                                     <label className="block text-xs font-bold text-surface-600 uppercase tracking-wider mb-1.5">
                                         Pilih Lead Tujuan
                                     </label>
-                                    {/* Candidates from same customer first, then allLeads fallback */}
-                                    {(data.candidates?.length || data.allLeads?.length) ? (
-                                        <select
+                                    {combinedLeads.length > 0 ? (
+                                        <SearchableLeadSelect
+                                            leads={combinedLeads}
                                             value={connectSelectedId}
-                                            onChange={e => setConnectSelectedId(e.target.value)}
-                                            className="w-full text-sm bg-white border border-surface-300 rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500 outline-none font-medium"
-                                        >
-                                            <option value="">-- Pilih Lead Aktif --</option>
-                                            {/* Same-customer candidates shown first */}
-                                            {data.candidates?.length > 0 && (
-                                                <optgroup label="Lead customer ini">
-                                                    {data.candidates.map(l => (
-                                                        <option key={l.id} value={l.id}>
-                                                            {l.lead_code ? `[${l.lead_code}] ` : ""}{l.title}
-                                                        </option>
-                                                    ))}
-                                                </optgroup>
-                                            )}
-                                            {data.allLeads?.filter(l => !data.candidates?.some(c => c.id === l.id)).length > 0 && (
-                                                <optgroup label="Semua lead aktif">
-                                                    {data.allLeads.filter(l => !data.candidates?.some(c => c.id === l.id)).map(l => (
-                                                        <option key={l.id} value={l.id}>
-                                                            {l.lead_code ? `[${l.lead_code}] ` : ""}{l.title}
-                                                        </option>
-                                                    ))}
-                                                </optgroup>
-                                            )}
-                                        </select>
+                                            onChange={(id) => setConnectSelectedId(id)}
+                                            customerId={data.customerId}
+                                            placeholder="-- Cari kode, nama lead, atau customer --"
+                                            required
+                                        />
                                     ) : (
                                         <p className="text-xs text-surface-500 italic">Tidak ada lead aktif yang dapat dipilih.</p>
                                     )}
