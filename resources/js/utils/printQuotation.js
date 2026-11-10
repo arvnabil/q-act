@@ -241,7 +241,7 @@ export function generateQuotationHTML(q, withImage = false, bankAccount = null, 
           @page { margin: ${isPdfMode ? '0' : '25mm 20mm'}; size: A4 portrait; }
           body {
             font-family: Arial, Helvetica, sans-serif; color: #111; margin: 0;
-            padding: ${isPdfMode ? '25px 35px' : '0'};
+            padding: ${isPdfMode ? '16px 28px' : '0'};
             font-size: ${baseFontSize}; line-height: 1.2;
             width: ${isPdfMode ? '794px' : '100%'};
             box-sizing: border-box; background: #ffffff;
@@ -375,10 +375,10 @@ export function generateQuotationHTML(q, withImage = false, bankAccount = null, 
             </div>
           </div>
 
-          <div style="display: flex; justify-content: flex-end; margin-top: 10px; page-break-inside: avoid;">
+          <div style="display: flex; justify-content: flex-end; margin-top: ${isPdfMode ? '6px' : '10px'}; page-break-inside: avoid;">
             <div style="font-size: 8.5px; line-height: 1.2; text-align: right;">
               <strong>${t.approvalBy}</strong>
-              <div style="height: 32px;"></div>
+              <div style="height: ${isPdfMode ? '24px' : '32px'};"></div>
               <div style="font-weight: bold;">[ .................... ]</div>
               <div style="font-size: 7px; color: #666; font-style: italic;">${t.signatureStamp}</div>
             </div>
@@ -471,14 +471,13 @@ export async function downloadQuotationPDF(q, withImage = false, bankAccount = n
       checkReady();
     });
 
-    // Sesuaikan tinggi iframe dengan tinggi aktual konten
+    // Sesuaikan tinggi iframe dengan tinggi aktual konten secara presisi tanpa margin buatan
     const contentHeight = Math.max(
       iframeDoc.body.scrollHeight || 0,
       iframeDoc.body.offsetHeight || 0,
-      iframeDoc.documentElement.scrollHeight || 0,
-      1123
+      iframeDoc.documentElement.scrollHeight || 0
     );
-    iframe.style.height = `${contentHeight + 40}px`;
+    iframe.style.height = `${contentHeight}px`;
 
     // 5. Capture canvas menggunakan html2canvas
     const canvas = await html2canvas(iframeDoc.body, {
@@ -496,7 +495,7 @@ export async function downloadQuotationPDF(q, withImage = false, bankAccount = n
     // 6. Hapus iframe setelah canvas selesai di-render
     document.body.removeChild(iframe);
 
-    // 7. Konversi canvas ke dokumen PDF multi-halaman jika melebihi 1 halaman A4
+    // 7. Konversi canvas ke dokumen PDF
     const imgData = canvas.toDataURL('image/jpeg', 0.98);
     const pdf = new jsPDF({
       orientation: 'portrait',
@@ -509,19 +508,33 @@ export async function downloadQuotationPDF(q, withImage = false, bankAccount = n
     const imgWidth = pageWidth;
     const imgHeight = (canvas.height * pageWidth) / canvas.width;
 
-    let heightLeft = imgHeight;
-    let position = 0;
+    // Smart 1-Page Fitting:
+    // Jika tinggi dokumen mendekati 1 halaman A4 (toleransi s/d 15% overflow),
+    // sesuaikan skala agar 100% pas di 1 halaman tanpa terpotong tanda tangan
+    // dan tidak memunculkan halaman ke-2 yang kosong.
+    if (imgHeight <= pageHeight * 1.15) {
+      const scale = Math.min(1, pageHeight / imgHeight);
+      const finalWidth = imgWidth * scale;
+      const finalHeight = imgHeight * scale;
+      const posX = (pageWidth - finalWidth) / 2;
+      const posY = 0;
+      pdf.addImage(imgData, 'JPEG', posX, posY, finalWidth, finalHeight);
+    } else {
+      // Jika dokumen memang panjang (banyak baris produk) sehingga multi-halaman
+      let heightLeft = imgHeight;
+      let position = 0;
 
-    // Halaman 1
-    pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight);
-    heightLeft -= pageHeight;
-
-    // Halaman selanjutnya (jika konten lebih dari 1 halaman A4)
-    while (heightLeft > 5) {
-      position -= pageHeight;
-      pdf.addPage();
+      // Halaman 1
       pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight);
       heightLeft -= pageHeight;
+
+      // Halaman selanjutnya (hanya jika sisa konten masih signifikan > 15mm)
+      while (heightLeft > 15) {
+        position -= pageHeight;
+        pdf.addPage();
+        pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight);
+        heightLeft -= pageHeight;
+      }
     }
 
     // 8. Download file PDF langsung ke browser
