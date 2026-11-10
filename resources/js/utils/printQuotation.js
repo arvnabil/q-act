@@ -244,7 +244,7 @@ export function generateQuotationHTML(q, withImage = false, bankAccount = null, 
             padding: ${isPdfMode ? '25px 35px' : '0'};
             font-size: ${baseFontSize}; line-height: 1.2;
             width: ${isPdfMode ? '794px' : '100%'};
-            box-sizing: border-box; overflow: hidden; background: #ffffff;
+            box-sizing: border-box; background: #ffffff;
           }
           .header-table { width: 100%; border-collapse: collapse; margin-bottom: 8px; table-layout: fixed; }
           .header-left { vertical-align: top; text-align: left; width: 50%; font-size: ${baseFontSize}; }
@@ -415,62 +415,117 @@ export async function downloadQuotationPDF(q, withImage = false, bankAccount = n
   const rawFilename = custName ? `Quotation ${qId} - ${custName}.pdf` : `Quotation ${qId}.pdf`;
   const filename = rawFilename.replace(/[/\\?%*:|"<>]/g, '');
 
-  const toastId = toast.loading('Menyiapkan download PDF...');
+  const toastId = toast.loading('Menyiapkan file PDF...');
 
   try {
-    const html2pdfModule = await import('html2pdf.js');
-    const html2pdf = html2pdfModule.default || html2pdfModule;
+    // 1. Dynamic import html2canvas dan jsPDF
+    const [{ default: html2canvas }, { jsPDF }] = await Promise.all([
+      import('html2canvas'),
+      import('jspdf'),
+    ]);
 
-    // Gunakan mode PDF yang sudah dioptimalkan untuk ukuran A4 (794px)
+    // 2. Generate HTML lengkap dalam mode PDF A4
     const html = generateQuotationHTML(q, withImage, bankAccount, lang, false, true, null);
 
-    const parser = new DOMParser();
-    const doc = parser.parseFromString(html, 'text/html');
+    // 3. Render di dalam hidden iframe di posisi (0,0) agar seluruh styling & koordinat CSS akurat
+    const iframe = document.createElement('iframe');
+    iframe.style.position = 'fixed';
+    iframe.style.left = '0';
+    iframe.style.top = '0';
+    iframe.style.width = '794px';
+    iframe.style.height = '1123px';
+    iframe.style.border = 'none';
+    iframe.style.zIndex = '-9999';
+    iframe.style.opacity = '0.01'; // bukan 0 agar browser tetap me-render visual tree
+    iframe.style.pointerEvents = 'none';
 
-    const wrapper = document.createElement('div');
-    wrapper.style.position = 'fixed';
-    wrapper.style.left = '-9999px';
-    wrapper.style.top = '0';
-    wrapper.style.width = '794px';
-    wrapper.style.backgroundColor = '#ffffff';
-    wrapper.style.zIndex = '-9999';
+    document.body.appendChild(iframe);
 
-    // Salin elemen style
-    doc.querySelectorAll('style').forEach(s => wrapper.appendChild(s.cloneNode(true)));
+    const iframeDoc = iframe.contentWindow.document;
+    iframeDoc.open();
+    iframeDoc.write(html);
+    iframeDoc.close();
 
-    // Salin isi body
-    const bodyContent = doc.body;
-    while (bodyContent.firstChild) {
-      wrapper.appendChild(bodyContent.firstChild);
+    // 4. Tunggu dokumen dan seluruh gambar selesai dimuat
+    await new Promise((resolve) => {
+      const checkReady = () => {
+        if (iframeDoc.readyState === 'complete') {
+          const imgs = Array.from(iframeDoc.images || []);
+          const pending = imgs.filter(img => !img.complete);
+          if (pending.length === 0) {
+            setTimeout(resolve, 300);
+          } else {
+            let loaded = 0;
+            pending.forEach(img => {
+              img.onload = img.onerror = () => {
+                loaded++;
+                if (loaded >= pending.length) setTimeout(resolve, 300);
+              };
+            });
+            setTimeout(resolve, 2500); // timeout maksimal
+          }
+        } else {
+          setTimeout(checkReady, 50);
+        }
+      };
+      checkReady();
+    });
+
+    // Sesuaikan tinggi iframe dengan tinggi aktual konten
+    const contentHeight = Math.max(
+      iframeDoc.body.scrollHeight || 0,
+      iframeDoc.body.offsetHeight || 0,
+      iframeDoc.documentElement.scrollHeight || 0,
+      1123
+    );
+    iframe.style.height = `${contentHeight + 40}px`;
+
+    // 5. Capture canvas menggunakan html2canvas
+    const canvas = await html2canvas(iframeDoc.body, {
+      scale: 2, // 2x resolusi untuk hasil tajam (retina/print quality)
+      useCORS: true,
+      allowTaint: true,
+      backgroundColor: '#ffffff',
+      logging: false,
+      width: 794,
+      windowWidth: 794,
+      scrollX: 0,
+      scrollY: 0,
+    });
+
+    // 6. Hapus iframe setelah canvas selesai di-render
+    document.body.removeChild(iframe);
+
+    // 7. Konversi canvas ke dokumen PDF multi-halaman jika melebihi 1 halaman A4
+    const imgData = canvas.toDataURL('image/jpeg', 0.98);
+    const pdf = new jsPDF({
+      orientation: 'portrait',
+      unit: 'mm',
+      format: 'a4',
+    });
+
+    const pageWidth = 210; // mm
+    const pageHeight = 297; // mm
+    const imgWidth = pageWidth;
+    const imgHeight = (canvas.height * pageWidth) / canvas.width;
+
+    let heightLeft = imgHeight;
+    let position = 0;
+
+    // Halaman 1
+    pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight);
+    heightLeft -= pageHeight;
+
+    // Halaman selanjutnya (jika konten lebih dari 1 halaman A4)
+    while (heightLeft > 5) {
+      position -= pageHeight;
+      pdf.addPage();
+      pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight);
+      heightLeft -= pageHeight;
     }
 
-    document.body.appendChild(wrapper);
-
-    // Tunggu bila ada gambar yang masih loading
-    const images = Array.from(wrapper.querySelectorAll('img'));
-    if (images.length > 0) {
-      await Promise.all(
-        images.map(img => {
-          if (img.complete) return Promise.resolve();
-          return new Promise(resolve => {
-            img.onload = resolve;
-            img.onerror = resolve;
-          });
-        })
-      );
-    }
-
-    const opt = {
-      margin:       [4, 6, 4, 6], // mm
-      filename:     filename,
-      image:        { type: 'jpeg', quality: 0.98 },
-      html2canvas:  { scale: 2, useCORS: true, logging: false },
-      jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
-    };
-
-    await html2pdf().set(opt).from(wrapper).save();
-
-    document.body.removeChild(wrapper);
+    // 8. Download file PDF langsung ke browser
+    pdf.save(filename);
     toast.success('PDF berhasil didownload!', { id: toastId });
   } catch (err) {
     console.error('Error generating PDF direct download:', err);
