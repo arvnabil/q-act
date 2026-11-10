@@ -144,7 +144,7 @@ export default function QuotationDetail({ quotation, printDocuments = [], bankAc
     const printOptions = (printDocuments || []).map((documentQuotation) => ({
         quotation: documentQuotation,
         label: documentQuotation.id === quotation.id
-            ? 'Dokumen Utama'
+            ? (documentQuotation.relation_type === 'split' ? 'Sub Quotation Ini' : 'Quotation Utama (Dokumen Ini)')
             : documentQuotation.relation_type === 'split'
                 ? `Sub Quotation ${documentQuotation.id}`
                 : 'Quotation Utama',
@@ -372,66 +372,56 @@ export default function QuotationDetail({ quotation, printDocuments = [], bankAc
                                     </button>
                                 </>
                             )}
-                            {/* Tombol Download PDF Langsung */}
-                            <button
-                                type="button"
-                                onClick={() => handleDownloadPdf(quotation)}
-                                className="flex items-center gap-1.5 rounded-lg bg-emerald-600 px-4 py-2 text-xs font-bold text-white shadow-xs transition-all hover:bg-emerald-700 active:scale-95 cursor-pointer"
-                                title="Download file PDF langsung ke komputer Anda"
-                            >
-                                <Download className="w-4 h-4" />
-                                Download PDF
-                            </button>
-
-                            {/* Tombol Cetak Browser */}
+                            {/* Tombol Download PDF Langsung (dengan opsi sub-quotation jika ada) */}
                             <div className="relative flex items-stretch">
                                 <button
                                     type="button"
-                                    onClick={() => handlePrint(quotation)}
-                                    className={`flex items-center gap-1.5 ${printOptions.length > 1 ? 'rounded-l-lg' : 'rounded-lg'} bg-brand-500 px-4 py-2 text-xs font-bold text-white shadow-xs transition-all hover:bg-brand-600 active:scale-95 cursor-pointer`}
-                                    title="Buka dialog cetak browser (Ctrl + P)"
+                                    onClick={() => handleDownloadPdf(quotation)}
+                                    className={`flex items-center gap-1.5 ${printOptions.length > 1 ? 'rounded-l-lg' : 'rounded-lg'} bg-emerald-600 px-4 py-2 text-xs font-bold text-white shadow-xs transition-all hover:bg-emerald-700 active:scale-95 cursor-pointer`}
+                                    title={`Download file PDF ${quotation.id}`}
                                 >
-                                    <Printer className="w-4 h-4" />
-                                    Cetak PDF
+                                    <Download className="w-4 h-4" />
+                                    Download PDF {quotation.relation_type === 'split' ? `(${quotation.id})` : ''}
                                 </button>
                                 {printOptions.length > 1 && (
                                     <button
                                         type="button"
                                         onClick={() => setShowPrintMenu(prev => !prev)}
-                                        className="rounded-r-lg border-l border-white/30 bg-brand-500 px-2 text-white shadow-xs transition-all hover:bg-brand-600 cursor-pointer"
-                                        aria-label="Pilih dokumen PDF lainnya"
+                                        className="rounded-r-lg border-l border-white/30 bg-emerald-600 px-2 text-white shadow-xs transition-all hover:bg-emerald-700 cursor-pointer"
+                                        aria-label="Pilih dokumen Quotation / Sub-Quotation untuk didownload"
+                                        title="Pilih Sub Quotation untuk didownload"
                                     >
                                         <ChevronDown className="h-4 w-4" />
                                     </button>
                                 )}
                                 {showPrintMenu && printOptions.length > 1 && (
                                     <div className="absolute right-0 top-full z-50 mt-2 w-80 overflow-hidden rounded-xl border border-surface-200 bg-white p-2 shadow-xl">
-                                        <div className="px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-surface-400">Pilih dokumen untuk diunduh / dicetak</div>
-                                        <div className="space-y-1.5 mt-1">
-                                            {printOptions.map(({ quotation: documentQuotation, label }) => (
-                                                <div key={documentQuotation.id} className="p-2 rounded-lg bg-surface-50 border border-surface-100 hover:border-surface-200 transition-colors">
-                                                    <div className="flex items-center justify-between">
-                                                        <span className="font-mono font-bold text-xs text-surface-900">{documentQuotation.id}</span>
-                                                        <span className="text-[10px] text-surface-500">{label}</span>
-                                                    </div>
-                                                    <div className="mt-2 flex items-center gap-2">
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => handleDownloadPdf(documentQuotation)}
-                                                            className="flex-1 flex items-center justify-center gap-1.5 rounded-md bg-emerald-600 px-2 py-1.5 text-[11px] font-bold text-white hover:bg-emerald-700 cursor-pointer transition-colors"
-                                                        >
-                                                            <Download className="w-3.5 h-3.5" /> Download
-                                                        </button>
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => handlePrint(documentQuotation)}
-                                                            className="flex-1 flex items-center justify-center gap-1.5 rounded-md bg-brand-500 px-2 py-1.5 text-[11px] font-bold text-white hover:bg-brand-600 cursor-pointer transition-colors"
-                                                        >
-                                                            <Printer className="w-3.5 h-3.5" /> Cetak
-                                                        </button>
-                                                    </div>
-                                                </div>
-                                            ))}
+                                        <div className="px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-surface-400">Pilih dokumen untuk di-download</div>
+                                        <div className="space-y-1 mt-1">
+                                            {printOptions.map(({ quotation: documentQuotation, label }) => {
+                                                const isCurrent = documentQuotation.id === quotation.id;
+                                                return (
+                                                    <button
+                                                        key={documentQuotation.id}
+                                                        type="button"
+                                                        onClick={() => handleDownloadPdf(documentQuotation)}
+                                                        className={`w-full flex items-center justify-between p-2.5 rounded-lg border transition-all text-left cursor-pointer ${
+                                                            isCurrent
+                                                                ? 'bg-emerald-50/80 border-emerald-200 text-emerald-900 font-bold'
+                                                                : 'bg-white border-surface-100 hover:bg-surface-50 hover:border-surface-200 text-surface-700'
+                                                        }`}
+                                                    >
+                                                        <div>
+                                                            <div className="font-mono text-xs">{documentQuotation.id}</div>
+                                                            <div className="text-[11px] text-surface-500 font-normal">{label}</div>
+                                                        </div>
+                                                        <div className="flex items-center gap-1 text-[11px] font-bold text-emerald-600 bg-emerald-100/60 px-2 py-1 rounded">
+                                                            <Download className="w-3 h-3" />
+                                                            <span>Download</span>
+                                                        </div>
+                                                    </button>
+                                                );
+                                            })}
                                         </div>
                                     </div>
                                 )}
