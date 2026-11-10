@@ -152,6 +152,13 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/{id}/download', [\App\Http\Controllers\DownloadCenterController::class, 'download'])->name('download');
         Route::delete('/{id}', [\App\Http\Controllers\DownloadCenterController::class, 'destroy'])->name('destroy');
     });
+    // Document Center (Microsoft 365 SharePoint Integration)
+    Route::middleware('permission:sharepoint_view')->prefix('documents')->name('documents.')->group(function () {
+        Route::get('/', [\App\Http\Controllers\DocumentCenterController::class, 'index'])->name('index');
+        Route::get('/sync-monitor', [\App\Http\Controllers\DocumentCenterController::class, 'syncMonitor'])->name('sync-monitor')->middleware('permission:sharepoint_upload');
+        Route::post('/{document}/retry', [\App\Http\Controllers\DocumentCenterController::class, 'retrySync'])->name('retry')->middleware('permission:sharepoint_upload');
+    });
+
 
     // Lead Pipeline
     Route::prefix('leads')->name('leads.')->group(function () {
@@ -215,6 +222,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('/settings/integrations/google-calendar', [SettingController::class, 'updateGoogleCalendar'])->name('settings.google-calendar');
         Route::post('/settings/integrations/zoom', [SettingController::class, 'updateZoom'])->name('settings.zoom');
         Route::post('/settings/users/{user}/integrations', [SettingController::class, 'updateUserIntegrations'])->name('settings.users.integrations');
+        Route::post('/settings/integrations/sharepoint', [SettingController::class, 'updateSharePoint'])->name('settings.sharepoint');
+        Route::post('/settings/integrations/sharepoint/test', [SettingController::class, 'testSharePointConnection'])->name('settings.sharepoint.test');
     });
 });
 

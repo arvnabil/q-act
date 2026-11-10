@@ -4,7 +4,7 @@ import ReactDOM from 'react-dom';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head, Link, router } from '@inertiajs/react';
 import {
-    ArrowLeft, Edit, Download, Printer, CheckCircle2, Clock, XCircle,
+    ArrowLeft, ExternalLink, Edit, Download, Printer, CheckCircle2, Clock, XCircle,
     AlertCircle, FileText, CreditCard, Loader2, Trash2, AlertTriangle, Copy, Layers, ChevronDown, X, UploadCloud, History
 } from 'lucide-react';
 import { printQuotation, downloadQuotationPDF } from '@/utils/printQuotation';
@@ -609,7 +609,25 @@ export default function QuotationDetail({ quotation, printDocuments = [], bankAc
                                         <div className="text-xs text-surface-500 mt-0.5">{formatDateStr(po.po_date)} · {po.quotation_item_ids?.length || 0} item</div>
                                     </div>
                                     <span className="text-[10px] font-bold uppercase tracking-wide text-emerald-700 bg-emerald-50 border border-emerald-100 rounded-full px-2 py-1">{po.status}</span>
-                                    {po.document_path && <a href={`/storage/${po.document_path}`} target="_blank" rel="noreferrer" className="text-xs font-semibold text-brand-600 hover:text-brand-700">Dokumen</a>}
+                                    <div className="flex items-center gap-2">
+                                        {po.document_path && (
+                                            <a href={`/storage/${po.document_path}`} target="_blank" rel="noreferrer" className="text-xs font-semibold text-brand-600 hover:text-brand-700">
+                                                Dokumen
+                                            </a>
+                                        )}
+                                        {po.sharepoint_document?.web_url && (
+                                            <a
+                                                href={po.sharepoint_document.web_url}
+                                                target="_blank"
+                                                rel="noreferrer"
+                                                className="inline-flex items-center gap-1 text-[11px] font-semibold text-sky-700 bg-sky-50 hover:bg-sky-100 px-2 py-0.5 rounded border border-sky-200 transition"
+                                                title="Buka dokumen di Microsoft 365 SharePoint"
+                                            >
+                                                <span>SharePoint</span>
+                                                <ExternalLink className="w-2.5 h-2.5" />
+                                            </a>
+                                        )}
+                                    </div>
                                 </div>
                             ))}
                         </div>

@@ -11,6 +11,7 @@ use App\Models\Lead;
 use App\Models\LeadActivity;
 use App\Models\Product;
 use App\Models\Quotation;
+use App\Jobs\SyncDocumentsToSharePoint;
 use App\Models\QuotationItem;
 use App\Models\QuotationSalesNote;
 use App\Models\QuotationPurchaseOrder;
@@ -204,6 +205,21 @@ class QuotationController extends Controller
                 'po_date' => $po->po_date?->toDateString(),
                 'document_path' => $po->document_path,
                 'quotation_item_ids' => $po->quotation_item_ids ?? [],
+                'sharepoint_document' => $po->sharePointDocuments->first() ? [
+                    'id' => $po->sharePointDocuments->first()->id,
+                    'status' => $po->sharePointDocuments->first()->status,
+                    'web_url' => $po->sharePointDocuments->first()->sharepoint_web_url,
+                    'synced_at' => $po->sharePointDocuments->first()->synced_at?->toISOString(),
+                ] : null,
+            ])->values()->toArray(),
+            'sharepoint_documents' => $q->sharePointDocuments->map(fn ($d) => [
+                'id' => $d->id,
+                'document_type' => $d->document_type,
+                'original_filename' => $d->original_filename,
+                'sharepoint_web_url' => $d->sharepoint_web_url,
+                'status' => $d->status,
+                'synced_at' => $d->synced_at?->toISOString(),
+                'error_message' => $d->error_message,
             ])->values()->toArray(),
             'change_requests' => $q->changeRequests->map(fn ($cr) => [
                 'id' => $cr->id, 'type' => $cr->type, 'status' => $cr->status,
@@ -598,7 +614,7 @@ class QuotationController extends Controller
                 ->with('message', 'Quotation tersebut sudah berada di Sampah.');
         }
 
-        $quotation->load(['customer.pics', 'pic', 'sales', 'creator.businessUnit.defaultSales', 'businessUnit.defaultSales', 'items.product.brand', 'bankAccount', 'parentQuotation', 'revisions', 'salesOrders', 'purchaseOrders', 'changeRequests.requester', 'changeRequests.approver', 'lead']);
+        $quotation->load(['customer.pics', 'pic', 'sales', 'creator.businessUnit.defaultSales', 'businessUnit.defaultSales', 'items.product.brand', 'bankAccount', 'parentQuotation', 'revisions', 'salesOrders', 'purchaseOrders.sharePointDocuments', 'sharePointDocuments', 'changeRequests.requester', 'changeRequests.approver', 'lead']);
 
         $rootQuotationId = ($quotation->relation_type ?? 'main') === 'split' && $quotation->parent_quotation_id
             ? $quotation->parent_quotation_id
@@ -609,7 +625,7 @@ class QuotationController extends Controller
                     ->orWhere('parent_quotation_id', $rootQuotationId);
             })
             ->where('is_deleted', false)
-            ->with(['customer.pics', 'pic', 'sales', 'creator', 'items.product.brand', 'bankAccount', 'parentQuotation', 'revisions', 'salesOrders', 'purchaseOrders', 'changeRequests.requester', 'changeRequests.approver'])
+            ->with(['customer.pics', 'pic', 'sales', 'creator', 'items.product.brand', 'bankAccount', 'parentQuotation', 'revisions', 'salesOrders', 'purchaseOrders.sharePointDocuments', 'sharePointDocuments', 'changeRequests.requester', 'changeRequests.approver'])
             ->get()
             ->sortBy(fn ($item) => $item->id === $rootQuotationId ? 0 : 1)
             ->values()
@@ -960,13 +976,21 @@ class QuotationController extends Controller
         }
 
         if ($quotation->status === 'approved') {
-            $this->ensurePrimaryPurchaseOrder($quotation, $request->user()->id);
+            $poRecord = $this->ensurePrimaryPurchaseOrder($quotation, $request->user()->id);
             SalesOrder::where('quotation_id', $quotation->id)->update([
                 'po_number' => $quotation->po_number,
                 'po_date' => $quotation->po_date,
                 'po_status' => $quotation->po_status,
                 'po_document_path' => $quotation->po_document_path,
             ]);
+
+            if ($poRecord && ($poRecord->document_path || $quotation->po_document_path)) {
+                dispatch(new SyncDocumentsToSharePoint(
+                    quotationId: $quotation->id,
+                    purchaseOrderId: $poRecord->id,
+                    uploadedBy: $request->user()->id,
+                ));
+            }
         }
 
         $message = ($quotation->status === 'approved' && $previousStatus !== 'approved')
@@ -1033,13 +1057,17 @@ class QuotationController extends Controller
         ]);
     }
 
-    private function ensurePrimaryPurchaseOrder(Quotation $quotation, string $userId): void
+    private function ensurePrimaryPurchaseOrder(Quotation $quotation, string $userId): ?QuotationPurchaseOrder
     {
-        if ($quotation->purchaseOrders()->exists()) {
-            return;
+        $existing = $quotation->purchaseOrders()->first();
+        if ($existing) {
+            if ($quotation->po_document_path && !$existing->document_path) {
+                $existing->update(['document_path' => $quotation->po_document_path]);
+            }
+            return $existing;
         }
 
-        QuotationPurchaseOrder::create([
+        return QuotationPurchaseOrder::create([
             'id' => (string) Str::uuid(),
             'quotation_id' => $quotation->id,
             'status' => $quotation->po_status ?: 'Diterima',
@@ -1073,6 +1101,7 @@ class QuotationController extends Controller
         $quotation->load(['items.product', 'revisions.items.product', 'purchaseOrders']);
         $units = collect([$quotation])->merge($quotation->revisions->where('relation_type', 'split'));
         $entries = collect($data['entries']);
+        $syncedPOs = [];
         $entryIds = $entries->pluck('quotation_id')->unique();
 
         if ($entryIds->count() !== $entries->count() || $entryIds->diff($units->pluck('id'))->isNotEmpty()) {
@@ -1120,9 +1149,11 @@ class QuotationController extends Controller
                         'document_path' => $documentPath,
                         'quotation_item_ids' => $items->pluck('id')->values()->all(),
                     ]);
+                    $poId = $po->id;
                 } else {
+                    $poId = (string) Str::uuid();
                     QuotationPurchaseOrder::create([
-                        'id' => (string) Str::uuid(),
+                        'id' => $poId,
                         'quotation_id' => $target->id,
                         'status' => $entry['status'],
                         'po_number' => $entry['po_number'],
@@ -1132,6 +1163,12 @@ class QuotationController extends Controller
                         'created_by' => $request->user()->id,
                     ]);
                 }
+
+                $syncedPOs[] = [
+                    'quotation_id'  => $target->id,
+                    'po_id'         => $poId,
+                    'document_path' => $documentPath,
+                ];
 
                 if ($status === 'approved' && $items->isNotEmpty()) {
                     $this->autoGenerateSalesOrder($target, $items);
@@ -1153,6 +1190,16 @@ class QuotationController extends Controller
                 ]);
             }
         });
+
+        foreach ($syncedPOs as $pInfo) {
+            if (!empty($pInfo['document_path'])) {
+                dispatch(new SyncDocumentsToSharePoint(
+                    quotationId: $pInfo['quotation_id'],
+                    purchaseOrderId: $pInfo['po_id'],
+                    uploadedBy: $request->user()->id,
+                ));
+            }
+        }
 
         return back()->with('message', 'Data PO utama dan sub quotation berhasil disimpan. SO dibuat hanya untuk unit yang memiliki item dan belum memiliki SO.');
     }

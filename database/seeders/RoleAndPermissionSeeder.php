@@ -29,6 +29,7 @@ class RoleAndPermissionSeeder extends Seeder
             'quotations_view_bu', 'quotations_view_all',
             'sales_orders_view_bu', 'sales_orders_view_all',
             'customers_view_bu', 'customers_view_all',
+            'sharepoint_view', 'sharepoint_upload', 'sharepoint_settings',
         ];
 
         foreach ($permissions as $permission) {
@@ -56,10 +57,10 @@ class RoleAndPermissionSeeder extends Seeder
         $defaults = [
             'Administrator' => $permissions,
             'Manager' => array_diff($permissions, ['user_management', 'manage_roles']),
-            'Sales Manager' => ['dashboard', 'dashboard_view', 'dashboard_view_all', 'calendar_view', 'calendar_view_all', 'leads_view', 'leads_view_all', 'leads_manage', 'leads_manage_all', 'leads_visits', 'leads_visits_all', 'quotations_view', 'quotations_create', 'quotations_edit', 'quotations_delete', 'quotations_import_legacy', 'sales_orders_view', 'sales_orders_edit', 'customers_view', 'customers_create', 'customers_edit', 'products_view', 'view_reports', 'manager_view'],
-            'Sales' => ['dashboard', 'dashboard_view', 'calendar_view', 'leads_view', 'leads_view_bu', 'leads_manage', 'leads_manage_bu', 'leads_visits', 'leads_visits_bu', 'quotations_view', 'quotations_create', 'quotations_edit', 'quotations_delete', 'quotations_import_legacy', 'sales_orders_view', 'sales_orders_edit', 'customers_view', 'customers_create', 'customers_edit', 'products_view'],
-            'Presales' => ['dashboard', 'dashboard_view', 'calendar_view', 'leads_view', 'leads_view_bu', 'leads_manage', 'leads_manage_bu', 'leads_visits', 'leads_visits_bu', 'quotations_view', 'quotations_create', 'quotations_edit', 'quotations_import_legacy', 'sales_orders_view', 'customers_view', 'products_view'],
-            'Finance' => ['dashboard', 'dashboard_view', 'calendar_view', 'quotations_view', 'sales_orders_view', 'sales_orders_edit', 'view_reports'],
+            'Sales Manager' => ['dashboard', 'dashboard_view', 'dashboard_view_all', 'calendar_view', 'calendar_view_all', 'leads_view', 'leads_view_all', 'leads_manage', 'leads_manage_all', 'leads_visits', 'leads_visits_all', 'quotations_view', 'quotations_create', 'quotations_edit', 'quotations_delete', 'quotations_import_legacy', 'sales_orders_view', 'sales_orders_edit', 'customers_view', 'customers_create', 'customers_edit', 'products_view', 'view_reports', 'manager_view', 'sharepoint_view'],
+            'Sales' => ['dashboard', 'dashboard_view', 'calendar_view', 'leads_view', 'leads_view_bu', 'leads_manage', 'leads_manage_bu', 'leads_visits', 'leads_visits_bu', 'quotations_view', 'quotations_create', 'quotations_edit', 'quotations_delete', 'quotations_import_legacy', 'sales_orders_view', 'sales_orders_edit', 'customers_view', 'customers_create', 'customers_edit', 'products_view', 'sharepoint_view'],
+            'Presales' => ['dashboard', 'dashboard_view', 'calendar_view', 'leads_view', 'leads_view_bu', 'leads_manage', 'leads_manage_bu', 'leads_visits', 'leads_visits_bu', 'quotations_view', 'quotations_create', 'quotations_edit', 'quotations_import_legacy', 'sales_orders_view', 'customers_view', 'products_view', 'sharepoint_view'],
+            'Finance' => ['dashboard', 'dashboard_view', 'calendar_view', 'quotations_view', 'sales_orders_view', 'sales_orders_edit', 'view_reports', 'sharepoint_view'],
         ];
 
         foreach ($defaults as $roleName => $rolePermissions) {

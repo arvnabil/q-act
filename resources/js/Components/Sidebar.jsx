@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Link, usePage } from '@inertiajs/react';
-import { LayoutDashboard, FileText, Users, Box, Settings, LogOut, ChevronRight, ChevronDown, BarChart2, ShieldCheck, UserCog, FileStack, TrendingUp, MapPin, Trophy, Calendar, Sparkles } from 'lucide-react';
+import { LayoutDashboard, FolderOpen, FileText, Users, Box, Settings, LogOut, ChevronRight, ChevronDown, BarChart2, ShieldCheck, UserCog, FileStack, TrendingUp, MapPin, Trophy, Calendar, Sparkles } from 'lucide-react';
 
 export default function Sidebar({ mobileOpen, setMobileOpen }) {
     const { auth } = usePage().props;
@@ -31,7 +31,7 @@ export default function Sidebar({ mobileOpen, setMobileOpen }) {
             return !['user_management', 'manage_roles'].includes(perm);
         }
         if (effectiveRole === 'Finance') {
-            return ['dashboard', 'quotations_view', 'sales_orders_view', 'view_reports'].includes(perm);
+            return ['dashboard', 'quotations_view', 'sales_orders_view', 'view_reports', 'sharepoint_view'].includes(perm);
         }
         return false;
     };
@@ -76,6 +76,16 @@ export default function Sidebar({ mobileOpen, setMobileOpen }) {
         { path: '/team-calendar', label: 'Kalender', icon: Calendar, calendarAccess: true },
         { path: '/quotations', label: 'Quotations', icon: FileText, badge: quotationsCount, permission: 'quotations_view' },
         { path: '/sales-orders', label: 'Sales Orders', icon: FileStack, permission: 'sales_orders_view' },
+        { 
+            path: '/documents-group', 
+            label: 'Dokumen', 
+            icon: FolderOpen,
+            permission: 'sharepoint_view',
+            submenu: [
+                { path: '/documents', label: 'Semua Dokumen', permission: 'sharepoint_view' },
+                { path: '/documents/sync-monitor', label: 'Monitor Sinkronisasi', permission: 'sharepoint_upload' },
+            ]
+        },
         { path: '/customers', label: 'Customers', icon: Users, hideForFinance: true, permission: 'customers_view' },
         { 
             path: '/products-group', 

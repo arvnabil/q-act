@@ -83,6 +83,29 @@ class SettingController extends Controller
             'has_client_secret' => !empty($zoomVal['client_secret']),
         ];
 
+        // SharePoint Storage Integration
+        $spSetting = SystemSetting::find('sharepoint_integration');
+        $spVal = $spSetting ? (array) $spSetting->value : [];
+        $graphConfig = config('mail.mailers.microsoft-graph', []);
+        $tenantId = $graphConfig['tenant_id'] ?? env('GRAPH_TENANT_ID');
+        $clientId = $graphConfig['client_id'] ?? env('GRAPH_CLIENT_ID');
+        $hasClientSecret = !empty($graphConfig['client_secret'] ?? env('GRAPH_CLIENT_SECRET'));
+
+        $sharePointSettings = [
+            'is_configured'               => (new SharePointService())->isConfigured(),
+            'enabled'                     => (bool) ($spVal['enabled'] ?? false),
+            'site_id'                     => $spVal['site_id'] ?? '',
+            'drive_id'                    => $spVal['drive_id'] ?? '',
+            'base_folder'                 => $spVal['base_folder'] ?? 'Documents/Purchase Orders',
+            'last_sync_at'                => $spVal['last_sync_at'] ?? null,
+            'last_sync_status'            => $spVal['last_sync_status'] ?? null,
+            'last_sync_error'             => $spVal['last_sync_error'] ?? null,
+            'notification_finance_email'  => $spVal['notification_finance_email'] ?? env('NOTIFICATION_FINANCE_EMAIL', 'finance@activ.co.id'),
+            'notification_director_email' => $spVal['notification_director_email'] ?? env('NOTIFICATION_DIRECTOR_EMAIL', 'director@activ.co.id'),
+            'graph_configured'            => !empty($tenantId) && !empty($clientId) && $hasClientSecret,
+            'tenant_masked'               => $tenantId ? substr($tenantId, 0, 8) . '****' : '',
+            'client_masked'               => $clientId ? substr($clientId, 0, 8) . '****' : '',
+        ];
         $teamUsers = User::select('id', 'name', 'email', 'role', 'has_zoom_license', 'google_calendar_email')
             ->orderBy('name')
             ->get();
@@ -370,5 +393,60 @@ class SettingController extends Controller
         ]);
 
         return back()->with('message', "Pengaturan integrasi user {$user->name} berhasil diperbarui!");
+    }
+
+    public function updateSharePoint(Request $request)
+    {
+        $data = $request->validate([
+            'enabled'                     => 'required|boolean',
+            'site_id'                     => 'nullable|string|max:500',
+            'drive_id'                    => 'nullable|string|max:500',
+            'base_folder'                 => 'nullable|string|max:255',
+            'notification_finance_email'  => 'nullable|email|max:255',
+            'notification_director_email' => 'nullable|email|max:255',
+        ]);
+
+        $existing = SystemSetting::find('sharepoint_integration')?->value ?? [];
+
+        $existing['enabled'] = (bool) $data['enabled'];
+        $existing['site_id'] = trim($data['site_id'] ?? '');
+        $existing['drive_id'] = trim($data['drive_id'] ?? '');
+        $existing['base_folder'] = trim($data['base_folder'] ?? 'Documents/Purchase Orders', '/');
+        $existing['notification_finance_email'] = trim($data['notification_finance_email'] ?? '');
+        $existing['notification_director_email'] = trim($data['notification_director_email'] ?? '');
+
+        SystemSetting::updateOrCreate(
+            ['key' => 'sharepoint_integration'],
+            ['value' => $existing]
+        );
+
+        return back()->with('message', 'Pengaturan Microsoft 365 SharePoint berhasil disimpan!');
+    }
+
+    public function testSharePointConnection(Request $request, SharePointService $sharePoint)
+    {
+        $action = $request->input('action', 'connection');
+
+        if ($action === 'upload') {
+            $result = $sharePoint->testUpload();
+        } else {
+            $result = $sharePoint->testConnection();
+        }
+
+        $existing = SystemSetting::find('sharepoint_integration')?->value ?? [];
+        $existing['last_sync_at'] = now()->toISOString();
+        $existing['last_sync_status'] = $result['success'] ? 'success' : 'failed';
+        $existing['last_sync_error'] = $result['success'] ? null : ($result['message'] ?? 'Error testing connection');
+
+        SystemSetting::updateOrCreate(
+            ['key' => 'sharepoint_integration'],
+            ['value' => $existing]
+        );
+
+        if ($result['success']) {
+            return back()->with('message', $result['message']);
+        }
+
+        return back()->withErrors(['sharepoint_test' => $result['message']]);
     }
 }

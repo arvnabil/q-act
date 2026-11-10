@@ -121,6 +121,7 @@ class Quotation extends Model
     public function changeRequests(): HasMany { return $this->hasMany(ChangeRequest::class); }
     public function salesOrders(): HasMany { return $this->hasMany(SalesOrder::class); }
     public function purchaseOrders(): HasMany { return $this->hasMany(QuotationPurchaseOrder::class); }
+    public function sharePointDocuments(): HasMany { return $this->hasMany(SharePointDocument::class, 'quotation_id'); }
 
     public function getSubtotalAttribute($value)
     {

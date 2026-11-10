@@ -38,40 +38,15 @@ class MicrosoftGraphTransport extends AbstractTransport
     }
 
     /**
-     * Get OAuth2 access token from Microsoft Entra using client credentials flow.
+     * Get OAuth2 access token from Microsoft Entra using client credentials flow (cached).
      */
     protected function getAccessToken(): string
     {
-        $url = "https://login.microsoftonline.com/{$this->tenantId}/oauth2/v2.0/token";
-
-        $ch = curl_init($url);
-        curl_setopt_array($ch, [
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_POST           => true,
-            CURLOPT_POSTFIELDS     => http_build_query([
-                'grant_type'    => 'client_credentials',
-                'client_id'     => $this->clientId,
-                'client_secret' => $this->clientSecret,
-                'scope'         => 'https://graph.microsoft.com/.default',
-            ]),
-            CURLOPT_HTTPHEADER => ['Content-Type: application/x-www-form-urlencoded'],
-        ]);
-
-        $response = curl_exec($ch);
-        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
-
-        if ($httpCode !== 200) {
-            throw new \RuntimeException("Failed to get Microsoft Graph token (HTTP {$httpCode}): {$response}");
-        }
-
-        $data = json_decode($response, true);
-
-        if (empty($data['access_token'])) {
-            throw new \RuntimeException("No access_token in response: {$response}");
-        }
-
-        return $data['access_token'];
+        return (new \App\Services\MicrosoftGraphTokenService(
+            $this->tenantId,
+            $this->clientId,
+            $this->clientSecret
+        ))->getAccessToken();
     }
 
     /**

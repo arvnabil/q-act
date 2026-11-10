@@ -3,7 +3,7 @@ import ReactDOM from 'react-dom';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head, Link, router, usePage } from '@inertiajs/react';
 import {
-    ArrowLeft, Plus, Trash2, Loader2, FileText, CheckCircle2, Box,
+    ArrowLeft, ExternalLink, Plus, Trash2, Loader2, FileText, CheckCircle2, Box,
     Printer, Tag, FolderPlus, Pencil, Check, X, FileSpreadsheet, UploadCloud, Paperclip
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
@@ -541,9 +541,16 @@ export default function SalesOrderDetail({ so, costCategories = [], isFinance })
                             <div className="rounded-xl border border-surface-100 bg-surface-50 p-4">
                                 <div className="mb-1 text-xs font-semibold text-surface-500">Dokumen PO</div>
                                 {so.po_document_path ? (
-                                    <a href={`/storage/${so.po_document_path}`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 text-xs font-bold text-brand-600 hover:underline">
-                                        <FileText className="h-4 w-4" /> Lihat / Buka File PO
-                                    </a>
+                                    <div className="flex flex-col gap-1.5">
+                                        <a href={`/storage/${so.po_document_path}`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 text-xs font-bold text-brand-600 hover:underline">
+                                            <FileText className="h-4 w-4" /> Lihat Dokumen PO
+                                        </a>
+                                        {so.sharepoint_document?.sharepoint_web_url && (
+                                            <a href={so.sharepoint_document.sharepoint_web_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 text-xs font-bold text-sky-600 hover:underline">
+                                                <ExternalLink className="h-3.5 w-3.5" /> Buka di SharePoint
+                                            </a>
+                                        )}
+                                    </div>
                                 ) : (
                                     <span className="text-xs text-surface-400">Belum di-upload</span>
                                 )}

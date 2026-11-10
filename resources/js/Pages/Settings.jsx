@@ -5,7 +5,7 @@ import { Head, usePage, router } from '@inertiajs/react';
 import axios from 'axios';
 import { 
   Plus, Edit, Trash2, Star, Building2, CreditCard, Loader2, X, FileText, Wrench, ImageIcon, Globe,
-  Calendar, Video, CheckCircle2, AlertCircle, Key, Link2, ShieldCheck
+  Calendar, Video, CheckCircle2, FolderOpen, Cloud, AlertCircle, Key, Link2, ShieldCheck
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 
@@ -17,6 +17,7 @@ export default function Settings({
   maintenanceMode = { enabled: false, domains: [] },
   googleCalendarSettings = { is_configured: false },
   zoomSettings = { is_configured: false },
+  sharePointSettings = { is_configured: false, enabled: false, site_id: '', drive_id: '', base_folder: 'Documents/Purchase Orders' },
   teamUsers = []
 }) {
   const { auth } = usePage().props;
@@ -42,6 +43,56 @@ export default function Settings({
         setIsSavingCompany(false);
         setIsEditingCompany(false);
       }
+    });
+  };
+
+  
+  // SharePoint Integration State
+  const [spForm, setSpForm] = useState({
+    enabled: sharePointSettings?.enabled ?? false,
+    site_id: sharePointSettings?.site_id || '',
+    drive_id: sharePointSettings?.drive_id || '',
+    base_folder: sharePointSettings?.base_folder || 'Documents/Purchase Orders',
+    notification_finance_email: sharePointSettings?.notification_finance_email || '',
+    notification_director_email: sharePointSettings?.notification_director_email || '',
+  });
+  const [isSavingSp, setIsSavingSp] = useState(false);
+  const [isTestingSp, setIsTestingSp] = useState(false);
+  const [isTestingUpload, setIsTestingUpload] = useState(false);
+
+  useEffect(() => {
+    setSpForm({
+      enabled: sharePointSettings?.enabled ?? false,
+      site_id: sharePointSettings?.site_id || '',
+      drive_id: sharePointSettings?.drive_id || '',
+      base_folder: sharePointSettings?.base_folder || 'Documents/Purchase Orders',
+      notification_finance_email: sharePointSettings?.notification_finance_email || '',
+      notification_director_email: sharePointSettings?.notification_director_email || '',
+    });
+  }, [sharePointSettings]);
+
+  const handleSaveSharePoint = (e) => {
+    e.preventDefault();
+    setIsSavingSp(true);
+    router.post(route('settings.sharepoint'), spForm, {
+      preserveScroll: true,
+      onFinish: () => setIsSavingSp(false),
+      onSuccess: () => toast.success('Pengaturan SharePoint berhasil disimpan!'),
+    });
+  };
+
+  const handleTestSharePoint = (action = 'connection') => {
+    if (action === 'upload') {
+      setIsTestingUpload(true);
+    } else {
+      setIsTestingSp(true);
+    }
+    router.post(route('settings.sharepoint.test'), { action }, {
+      preserveScroll: true,
+      onFinish: () => {
+        setIsTestingSp(false);
+        setIsTestingUpload(false);
+      },
     });
   };
 
@@ -981,6 +1032,201 @@ export default function Settings({
 
         </div>
       </div>
+
+          {/* Microsoft 365 SharePoint Storage Integration */}
+          <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+            <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between bg-gray-50/50">
+              <div className="flex items-center gap-2">
+                <FolderOpen className="w-5 h-5 text-sky-600" />
+                <h2 className="text-sm font-bold text-gray-800">Penyimpanan Dokumen Cloud (Microsoft 365 SharePoint)</h2>
+                {sharePointSettings?.is_configured ? (
+                  <span className="inline-flex items-center gap-1 text-[11px] font-bold bg-emerald-50 text-emerald-700 px-2.5 py-0.5 rounded-full border border-emerald-200">
+                    <CheckCircle2 className="w-3 h-3 text-emerald-600" /> Aktif & Terhubung
+                  </span>
+                ) : sharePointSettings?.enabled ? (
+                  <span className="inline-flex items-center gap-1 text-[11px] font-bold bg-amber-50 text-amber-700 px-2.5 py-0.5 rounded-full border border-amber-200">
+                    <AlertCircle className="w-3 h-3 text-amber-600" /> Konfigurasi Belum Lengkap
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1 text-[11px] font-bold bg-gray-100 text-gray-500 px-2.5 py-0.5 rounded-full">
+                    Nonaktif
+                  </span>
+                )}
+              </div>
+            </div>
+
+            <div className="p-6 space-y-6">
+              <form onSubmit={handleSaveSharePoint} className="space-y-6">
+                {/* Master Switch */}
+                <div className="flex items-center justify-between p-4 bg-sky-50/50 border border-sky-100 rounded-xl">
+                  <div>
+                    <h3 className="text-sm font-bold text-gray-900">Aktifkan Integrasi SharePoint</h3>
+                    <p className="text-xs text-gray-500 mt-0.5">
+                      Dokumen PO yang diunggah pada penawaran disetujui akan diunggah otomatis ke library SharePoint.
+                    </p>
+                  </div>
+                  <label className="relative inline-flex items-center cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={spForm.enabled}
+                      onChange={(e) => setSpForm({ ...spForm, enabled: e.target.checked })}
+                      className="sr-only peer"
+                    />
+                    <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-sky-600"></div>
+                  </label>
+                </div>
+
+                {/* Microsoft Entra OAuth status */}
+                <div className="bg-gray-50 rounded-xl p-4 border border-gray-200 text-xs space-y-2">
+                  <div className="flex items-center justify-between font-semibold text-gray-700">
+                    <span className="flex items-center gap-1.5">
+                      <Key className="w-3.5 h-3.5 text-gray-500" />
+                      Status Kredensial Microsoft Entra (OAuth2 App)
+                    </span>
+                    <span className={sharePointSettings?.graph_configured ? 'text-emerald-700 font-bold' : 'text-amber-700 font-bold'}>
+                      {sharePointSettings?.graph_configured ? '✓ Terkonfigurasi via .env' : '⚠ Belum diatur di file .env'}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-gray-600 font-mono text-[11px] pt-1">
+                    <div>Tenant ID: {sharePointSettings?.tenant_masked || '-'}</div>
+                    <div>Client ID: {sharePointSettings?.client_masked || '-'}</div>
+                  </div>
+                  <p className="text-[11px] text-gray-500 italic pt-1 border-t border-gray-200">
+                    Kredensial rahasia (Client Secret & Tenant ID) dikelola secara aman di file environment server (.env) dan tidak terekspos ke browser.
+                  </p>
+                </div>
+
+                {/* Configuration Inputs */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-xs font-semibold text-gray-700 block mb-1">
+                      SharePoint Site ID <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={spForm.site_id}
+                      onChange={(e) => setSpForm({ ...spForm, site_id: e.target.value })}
+                      placeholder="e.g. activcoid.sharepoint.com,site-guid,web-guid"
+                      className="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-xs font-mono outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-100"
+                    />
+                    <p className="text-[10px] text-gray-400 mt-1">Format Graph Site Identifier: domain.sharepoint.com,siteId,webId</p>
+                  </div>
+
+                  <div>
+                    <label className="text-xs font-semibold text-gray-700 block mb-1">
+                      SharePoint Drive (Library) ID <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={spForm.drive_id}
+                      onChange={(e) => setSpForm({ ...spForm, drive_id: e.target.value })}
+                      placeholder="e.g. b!xxxxxx_drive_guid"
+                      className="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-xs font-mono outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-100"
+                    />
+                    <p className="text-[10px] text-gray-400 mt-1">ID Document Library tempat arsip PO disimpan</p>
+                  </div>
+
+                  <div className="md:col-span-2">
+                    <label className="text-xs font-semibold text-gray-700 block mb-1">
+                      Folder Dasar (Base Folder Path)
+                    </label>
+                    <input
+                      type="text"
+                      value={spForm.base_folder}
+                      onChange={(e) => setSpForm({ ...spForm, base_folder: e.target.value })}
+                      placeholder="Documents/Purchase Orders"
+                      className="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-xs outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-100"
+                    />
+                    <p className="text-[10px] text-gray-400 mt-1">
+                      Struktur folder otomatis: <span className="font-mono">{spForm.base_folder || 'Documents/Purchase Orders'}/&#123;TAHUN&#125;/&#123;QUOTATION_PO_SUFFIX&#125;</span>
+                    </p>
+                  </div>
+
+                  <div>
+                    <label className="text-xs font-semibold text-gray-700 block mb-1">
+                      Email Notifikasi Tim Finance
+                    </label>
+                    <input
+                      type="email"
+                      value={spForm.notification_finance_email}
+                      onChange={(e) => setSpForm({ ...spForm, notification_finance_email: e.target.value })}
+                      placeholder="finance@activ.co.id"
+                      className="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-xs outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-100"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-xs font-semibold text-gray-700 block mb-1">
+                      Email Notifikasi Direktur / Manajemen
+                    </label>
+                    <input
+                      type="email"
+                      value={spForm.notification_director_email}
+                      onChange={(e) => setSpForm({ ...spForm, notification_director_email: e.target.value })}
+                      placeholder="director@activ.co.id"
+                      className="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-xs outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-100"
+                    />
+                  </div>
+                </div>
+
+                {/* Last Sync Info & Diagnostics */}
+                {sharePointSettings?.last_sync_at && (
+                  <div className={`p-3 rounded-lg border text-xs flex items-center justify-between ${
+                    sharePointSettings.last_sync_status === 'success'
+                      ? 'bg-emerald-50/60 border-emerald-200 text-emerald-800'
+                      : 'bg-rose-50/60 border-rose-200 text-rose-800'
+                  }`}>
+                    <div>
+                      <span className="font-semibold">Uji Sinkronisasi Terakhir: </span>
+                      <span>{new Date(sharePointSettings.last_sync_at).toLocaleString('id-ID')}</span>
+                      {sharePointSettings.last_sync_error && (
+                        <p className="font-mono text-[11px] mt-1 text-rose-700">{sharePointSettings.last_sync_error}</p>
+                      )}
+                    </div>
+                    <span className="text-[11px] font-bold uppercase tracking-wider">
+                      {sharePointSettings.last_sync_status}
+                    </span>
+                  </div>
+                )}
+
+                {/* Actions */}
+                <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-gray-100">
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => handleTestSharePoint('connection')}
+                      disabled={isTestingSp || !spForm.site_id}
+                      className="inline-flex items-center gap-2 px-3.5 py-2 text-xs font-semibold bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition disabled:opacity-50"
+                    >
+                      {isTestingSp ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Link2 className="w-3.5 h-3.5 text-gray-500" />}
+                      <span>Uji Koneksi SharePoint</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => handleTestSharePoint('upload')}
+                      disabled={isTestingUpload || !spForm.site_id || !spForm.drive_id}
+                      className="inline-flex items-center gap-2 px-3.5 py-2 text-xs font-semibold bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition disabled:opacity-50"
+                    >
+                      {isTestingUpload ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Cloud className="w-3.5 h-3.5 text-gray-500" />}
+                      <span>Uji Upload & Hapus File Test</span>
+                    </button>
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={isSavingSp}
+                    className="inline-flex items-center gap-2 px-5 py-2 text-xs font-bold bg-sky-600 text-white rounded-lg hover:bg-sky-700 transition shadow-sm disabled:opacity-50"
+                  >
+                    {isSavingSp && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                    <span>Simpan Pengaturan SharePoint</span>
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+
+
 
       {/* Bank Account Modal */}
       {showBankModal && ReactDOM.createPortal(
