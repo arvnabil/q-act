@@ -389,14 +389,12 @@ export default function Settings({
   ];
 
   return (
-    <AuthenticatedLayout
-      header={<h2 className="font-semibold text-xl text-gray-800 leading-tight">Pengaturan Sistem</h2>}
-    >
+    <AuthenticatedLayout>
       <Head title="Pengaturan Sistem" />
 
-      <div className="py-6 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto space-y-6">
+      <div className="animate-fade-in-up w-full min-w-0 space-y-6">
         {/* Header */}
-        <div className="flex flex-wrap items-start justify-between gap-4 mb-2">
+        <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <div className="text-xs uppercase tracking-wider text-surface-400 font-semibold mb-1">
               PENGATURAN SISTEM
@@ -412,9 +410,9 @@ export default function Settings({
         </div>
 
         {/* 2-Column Sidebar & Content Layout */}
-        <div className="flex flex-col lg:flex-row gap-6 items-start">
+        <div className="flex flex-col lg:flex-row gap-6 items-start w-full">
           {/* Left Vertical Navigation */}
-          <nav className="w-full lg:w-64 shrink-0 flex lg:flex-col overflow-x-auto gap-1 bg-white p-2.5 rounded-2xl border border-surface-200 shadow-sm">
+          <nav className="w-full lg:w-72 shrink-0 flex lg:flex-col overflow-x-auto gap-1 bg-white p-2.5 rounded-2xl border border-surface-200 shadow-sm">
             {settingsTabs.map((t) => {
               const Icon = t.icon;
               const isActive = activeTab === t.id;
