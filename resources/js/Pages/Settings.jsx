@@ -5,7 +5,8 @@ import { Head, usePage, router } from '@inertiajs/react';
 import axios from 'axios';
 import { 
   Plus, Edit, Trash2, Star, Building2, CreditCard, Loader2, X, FileText, Wrench, ImageIcon, Globe,
-  Calendar, Video, CheckCircle2, FolderOpen, Cloud, AlertCircle, Key, Link2, ShieldCheck
+  Calendar, Video, CheckCircle2, FolderOpen, Cloud, AlertCircle, Key, Link2, ShieldCheck,
+  Settings as SettingsIcon
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 
@@ -24,6 +25,15 @@ export default function Settings({
   const user = auth?.user || {};
   const userRole = user.spatie_role || user.role || '';
   const isAdmin = !userRole || ['admin', 'Administrator', 'Sales Manager', 'Manager', 'super-admin'].includes(userRole);
+
+  const urlTab = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('tab') : null;
+  const [activeTab, setActiveTab] = useState(urlTab || 'company');
+
+  useEffect(() => {
+    if (!isAdmin && ['terms', 'domains', 'maintenance', 'integrations', 'sharepoint'].includes(activeTab)) {
+      setActiveTab('company');
+    }
+  }, [isAdmin, activeTab]);
 
   // Company Info State
   const [company, setCompany] = useState(initialCompanyInfo);
@@ -366,16 +376,87 @@ export default function Settings({
     }, { preserveScroll: true });
   };
 
+  const settingsTabs = [
+    { id: 'company', label: 'Informasi Perusahaan', icon: Building2, badge: company?.company_name ? 'Lengkap' : undefined },
+    { id: 'bank', label: 'Rekening Bank', icon: CreditCard, badge: bankAccounts?.length || 0 },
+    ...(isAdmin ? [
+      { id: 'terms', label: 'Terms & Conditions', icon: FileText, badge: masterTemplatesList?.length || 0 },
+      { id: 'domains', label: 'Pemetaan Logo Domain', icon: ImageIcon, badge: domainMapList?.length || 0 },
+      { id: 'maintenance', label: 'Mode Maintenance', icon: Wrench, badge: maintenanceMode?.enabled ? 'Aktif' : 'Nonaktif', badgeColor: maintenanceMode?.enabled ? 'bg-amber-100 text-amber-800' : 'bg-surface-100 text-surface-500' },
+      { id: 'integrations', label: 'Integrasi Eksternal', icon: Globe, badge: `${(googleCalendarSettings?.is_configured ? 1 : 0) + (zoomSettings?.is_configured ? 1 : 0)} Aktif` },
+      { id: 'sharepoint', label: 'SharePoint Storage', icon: FolderOpen, badge: sharePointSettings?.is_configured ? 'Terhubung' : (sharePointSettings?.enabled ? 'Config' : 'Nonaktif'), badgeColor: sharePointSettings?.is_configured ? 'bg-emerald-100 text-emerald-800' : (sharePointSettings?.enabled ? 'bg-amber-100 text-amber-800' : 'bg-surface-100 text-surface-500') },
+    ] : [])
+  ];
+
   return (
     <AuthenticatedLayout
       header={<h2 className="font-semibold text-xl text-gray-800 leading-tight">Pengaturan Sistem</h2>}
     >
       <Head title="Pengaturan Sistem" />
 
-      <div className="py-6 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="max-w-5xl space-y-6">
+      <div className="py-6 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto space-y-6">
+        {/* Header */}
+        <div className="flex flex-wrap items-start justify-between gap-4 mb-2">
+          <div>
+            <div className="text-xs uppercase tracking-wider text-surface-400 font-semibold mb-1">
+              PENGATURAN SISTEM
+            </div>
+            <h1 className="flex items-center gap-2.5 text-2xl font-bold tracking-tight text-surface-900">
+              <SettingsIcon className="w-6 h-6 text-brand-600" />
+              Pengaturan Sistem
+            </h1>
+            <p className="mt-1 text-sm text-surface-500">
+              Kelola informasi perusahaan, rekening bank, master terms, integrasi, dan penyimpanan cloud.
+            </p>
+          </div>
+        </div>
 
-          {/* Company Info */}
+        {/* 2-Column Sidebar & Content Layout */}
+        <div className="flex flex-col lg:flex-row gap-6 items-start">
+          {/* Left Vertical Navigation */}
+          <nav className="w-full lg:w-64 shrink-0 flex lg:flex-col overflow-x-auto gap-1 bg-white p-2.5 rounded-2xl border border-surface-200 shadow-sm">
+            {settingsTabs.map((t) => {
+              const Icon = t.icon;
+              const isActive = activeTab === t.id;
+              return (
+                <button
+                  key={t.id}
+                  type="button"
+                  onClick={() => {
+                    setActiveTab(t.id);
+                    if (typeof window !== 'undefined' && window.history) {
+                      const url = new URL(window.location);
+                      url.searchParams.set('tab', t.id);
+                      window.history.replaceState({}, '', url);
+                    }
+                  }}
+                  className={`flex items-center justify-between gap-3 whitespace-nowrap px-4 py-3 rounded-xl text-sm text-left transition cursor-pointer ${
+                    isActive
+                      ? 'bg-brand-50 text-brand-700 font-bold shadow-xs'
+                      : 'text-surface-600 hover:bg-surface-50 hover:text-surface-900'
+                  }`}
+                >
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <Icon className={`w-4 h-4 shrink-0 ${isActive ? 'text-brand-600' : 'text-surface-400'}`} />
+                    <span className="truncate">{t.label}</span>
+                  </div>
+                  {t.badge !== undefined && (
+                    <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full shrink-0 ${
+                      t.badgeColor || (isActive ? 'bg-brand-100 text-brand-800' : 'bg-surface-100 text-surface-500')
+                    }`}>
+                      {t.badge}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </nav>
+
+          {/* Right Content Panel */}
+          <div className="flex-1 min-w-0 w-full space-y-6">
+
+                    {/* Company Info */}
+          {activeTab === 'company' && (
           <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
             <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between bg-gray-50/50">
               <div className="flex items-center gap-2">
@@ -434,8 +515,12 @@ export default function Settings({
               )}
             </form>
           </div>
+          )}
 
-          {/* Bank Accounts */}
+          
+
+                    {/* Bank Accounts */}
+          {activeTab === 'bank' && (
           <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
             <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between bg-gray-50/50">
               <div className="flex items-center gap-2">
@@ -521,9 +606,12 @@ export default function Settings({
               )}
             </div>
           </div>
+          )}
 
-          {/* Master Terms Templates Card (Admin Only) */}
-          {isAdmin && (
+          
+
+                    {/* Master Terms Templates Card (Admin Only) */}
+          {activeTab === 'terms' && isAdmin && (
             <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
               <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
                 <div>
@@ -585,7 +673,7 @@ export default function Settings({
           )}
 
           {/* Domain Logo Mapping (Admin Only) */}
-          {isAdmin && (
+          {activeTab === 'domains' && isAdmin && (
             <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
               <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between bg-gray-50/50">
                 <div className="flex items-center gap-2">
@@ -699,7 +787,7 @@ export default function Settings({
           )}
 
           {/* Pengaturan Sistem - Maintenance Mode */}
-          {isAdmin && (
+          {activeTab === 'maintenance' && isAdmin && (
             <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
               <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between bg-gray-50/50">
                 <div className="flex items-center gap-2">
@@ -780,6 +868,7 @@ export default function Settings({
           )}
 
           {/* Integrasi Eksternal: Google Calendar & Zoom Section */}
+          {activeTab === 'integrations' && isAdmin && (
           <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
             <div className="px-6 py-4 border-b border-gray-100 bg-gray-50/50 flex items-center justify-between">
               <div>
@@ -1029,11 +1118,10 @@ export default function Settings({
               </div>
             </div>
           </div>
-
-        </div>
-      </div>
+          )}
 
           {/* Microsoft 365 SharePoint Storage Integration */}
+          {activeTab === 'sharepoint' && isAdmin && (
           <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
             <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between bg-gray-50/50">
               <div className="flex items-center gap-2">
@@ -1225,8 +1313,11 @@ export default function Settings({
               </form>
             </div>
           </div>
+          )}
 
-
+          </div>
+        </div>
+      </div>
 
       {/* Bank Account Modal */}
       {showBankModal && ReactDOM.createPortal(
