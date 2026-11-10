@@ -119,6 +119,7 @@ class SettingController extends Controller
             'maintenanceMode'        => $maintenanceMode,
             'googleCalendarSettings' => $googleCalendarSettings,
             'zoomSettings'           => $zoomSettings,
+            'sharePointSettings'     => $sharePointSettings,
             'teamUsers'              => $teamUsers,
         ]);
     }
