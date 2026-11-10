@@ -238,22 +238,23 @@ export function generateQuotationHTML(q, withImage = false, bankAccount = null, 
             print-color-adjust: exact !important;
             box-sizing: border-box;
           }
-          @page { margin: ${isPdfMode ? '0' : '25mm 20mm'}; size: A4 portrait; }
+          @page { margin: 15mm 15mm 15mm 15mm; size: A4 portrait; }
           body {
-            font-family: Arial, Helvetica, sans-serif; color: #111; margin: 0;
-            padding: ${isPdfMode ? '16px 28px' : '0'};
-            font-size: ${baseFontSize}; line-height: 1.2;
-            width: ${isPdfMode ? '794px' : '100%'};
-            box-sizing: border-box; background: #ffffff;
+            font-family: Arial, Helvetica, sans-serif; color: #111; margin: 0; padding: 0;
+            font-size: ${baseFontSize}; line-height: 1.25;
+            width: 100%; box-sizing: border-box; background: #ffffff;
           }
           .header-table { width: 100%; border-collapse: collapse; margin-bottom: 8px; table-layout: fixed; }
           .header-left { vertical-align: top; text-align: left; width: 50%; font-size: ${baseFontSize}; }
           .header-right { vertical-align: top; text-align: left; width: 50%; font-size: ${tdFontSize}; color: #333; line-height: 1.25; }
           .table-container { width: 100%; box-sizing: border-box; }
           .table-items { width: 100%; border-collapse: collapse; margin-bottom: 0px; table-layout: fixed; }
+          .table-items thead { display: table-header-group; }
+          .table-items tr { page-break-inside: avoid; }
           .table-items th, .table-items td { border: 1px solid ${tableBorderColor} !important; padding: ${tdPadding}; box-sizing: border-box; }
           .table-items th { background-color: #f1f5f9 !important; color: #000000 !important; padding: ${thPadding}; font-size: ${tdFontSize}; font-weight: bold; text-transform: uppercase; text-align: center; }
-          .terms { font-size: ${termsFontSize}; margin-top: 8px; line-height: 1.35; color: #222; }
+          .terms { font-size: ${termsFontSize}; margin-top: 10px; line-height: 1.35; color: #222; page-break-inside: avoid; }
+          .signature-table { width: 100%; border: none !important; margin-top: 15px; page-break-inside: avoid; border-collapse: collapse; }
         </style>
       </head>
       <body>
@@ -359,30 +360,33 @@ export function generateQuotationHTML(q, withImage = false, bankAccount = null, 
             </table>
           </div>
 
-          <div class="terms" style="margin-top: 8px; page-break-inside: avoid;">
-            <div style="font-weight: bold; margin-bottom: 2px;">${t.termsTitle}</div>
-            <div style="margin-top: 2px; font-size: ${termsFontSize}; line-height: 1.35; color: #222;">
+          <div class="terms" style="margin-top: 10px; page-break-inside: avoid;">
+            <div style="font-weight: bold; margin-bottom: 3px;">${t.termsTitle}</div>
+            <table style="width: 100%; border: none !important; font-size: ${termsFontSize}; line-height: 1.35; color: #222; border-collapse: collapse;">
               ${termsList.map((term, idx) => `
-                <div style="display: flex; gap: 4px; align-items: flex-start; margin-bottom: 1.5px;">
-                  <span style="font-weight: bold; min-width: 14px;">${idx + 1}.</span>
-                  <div style="flex: 1;">${term}</div>
-                </div>
+                <tr>
+                  <td style="width: 18px; vertical-align: top; font-weight: bold; border: none !important; padding: 1.5px 0;">${idx + 1}.</td>
+                  <td style="vertical-align: top; border: none !important; padding: 1.5px 0;">${term}</td>
+                </tr>
               `).join('')}
-              <div style="display: flex; gap: 4px; align-items: flex-start; margin-bottom: 1.5px;">
-                <span style="font-weight: bold; min-width: 14px;">${termsList.length + 1}.</span>
-                <div style="flex: 1;">${t.bankAcc}<br/><strong>${bankName} : ${bankNum} - ${bankHolder}<br/>${branchText}</strong></div>
-              </div>
-            </div>
+              <tr>
+                <td style="width: 18px; vertical-align: top; font-weight: bold; border: none !important; padding: 1.5px 0;">${termsList.length + 1}.</td>
+                <td style="vertical-align: top; border: none !important; padding: 1.5px 0;">${t.bankAcc}<br/><strong>${bankName} : ${bankNum} - ${bankHolder}<br/>${branchText}</strong></td>
+              </tr>
+            </table>
           </div>
 
-          <div style="display: flex; justify-content: flex-end; margin-top: ${isPdfMode ? '6px' : '10px'}; page-break-inside: avoid;">
-            <div style="font-size: 8.5px; line-height: 1.2; text-align: right;">
-              <strong>${t.approvalBy}</strong>
-              <div style="height: ${isPdfMode ? '24px' : '32px'};"></div>
-              <div style="font-weight: bold;">[ .................... ]</div>
-              <div style="font-size: 7px; color: #666; font-style: italic;">${t.signatureStamp}</div>
-            </div>
-          </div>
+          <table class="signature-table" style="width: 100%; border: none !important; margin-top: 15px; page-break-inside: avoid; border-collapse: collapse;">
+            <tr>
+              <td style="width: 60%; border: none !important; background: transparent !important;"></td>
+              <td style="width: 40%; border: none !important; background: transparent !important; text-align: right; font-size: 8.5px; line-height: 1.25;">
+                <strong>${t.approvalBy}</strong>
+                <div style="height: 35px;"></div>
+                <div style="font-weight: bold;">[ .................... ]</div>
+                <div style="font-size: 7px; color: #666; font-style: italic; margin-top: 2px;">${t.signatureStamp}</div>
+              </td>
+            </tr>
+          </table>
         </div>
         ${includePrintScript ? `
           <script>
@@ -415,134 +419,45 @@ export async function downloadQuotationPDF(q, withImage = false, bankAccount = n
   const rawFilename = custName ? `Quotation ${qId} - ${custName}.pdf` : `Quotation ${qId}.pdf`;
   const filename = rawFilename.replace(/[/\\?%*:|"<>]/g, '');
 
-  const toastId = toast.loading('Menyiapkan file PDF...');
+  const toastId = toast.loading('Menyiapkan file PDF dari server...');
 
   try {
-    // 1. Dynamic import html2canvas dan jsPDF
-    const [{ default: html2canvas }, { jsPDF }] = await Promise.all([
-      import('html2canvas'),
-      import('jspdf'),
-    ]);
+    const html = generateQuotationHTML(q, withImage, bankAccount, lang, false, false, null);
 
-    // 2. Generate HTML lengkap dalam mode PDF A4
-    const html = generateQuotationHTML(q, withImage, bankAccount, lang, false, true, null);
-
-    // 3. Render di dalam hidden iframe di posisi (0,0) agar seluruh styling & koordinat CSS akurat
-    const iframe = document.createElement('iframe');
-    iframe.style.position = 'fixed';
-    iframe.style.left = '0';
-    iframe.style.top = '0';
-    iframe.style.width = '794px';
-    iframe.style.height = '1123px';
-    iframe.style.border = 'none';
-    iframe.style.zIndex = '-9999';
-    iframe.style.opacity = '0.01'; // bukan 0 agar browser tetap me-render visual tree
-    iframe.style.pointerEvents = 'none';
-
-    document.body.appendChild(iframe);
-
-    const iframeDoc = iframe.contentWindow.document;
-    iframeDoc.open();
-    iframeDoc.write(html);
-    iframeDoc.close();
-
-    // 4. Tunggu dokumen dan seluruh gambar selesai dimuat
-    await new Promise((resolve) => {
-      const checkReady = () => {
-        if (iframeDoc.readyState === 'complete') {
-          const imgs = Array.from(iframeDoc.images || []);
-          const pending = imgs.filter(img => !img.complete);
-          if (pending.length === 0) {
-            setTimeout(resolve, 300);
-          } else {
-            let loaded = 0;
-            pending.forEach(img => {
-              img.onload = img.onerror = () => {
-                loaded++;
-                if (loaded >= pending.length) setTimeout(resolve, 300);
-              };
-            });
-            setTimeout(resolve, 2500); // timeout maksimal
-          }
-        } else {
-          setTimeout(checkReady, 50);
-        }
-      };
-      checkReady();
+    // Call Laravel backend Dompdf endpoint
+    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+    const response = await fetch(`/quotations/${encodeURIComponent(qId)}/download-pdf`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRF-TOKEN': csrfToken || '',
+        'Accept': 'application/pdf',
+      },
+      body: JSON.stringify({
+        html: html,
+        filename: filename,
+      }),
     });
 
-    // Sesuaikan tinggi iframe dengan tinggi aktual konten secara presisi tanpa margin buatan
-    const contentHeight = Math.max(
-      iframeDoc.body.scrollHeight || 0,
-      iframeDoc.body.offsetHeight || 0,
-      iframeDoc.documentElement.scrollHeight || 0
-    );
-    iframe.style.height = `${contentHeight}px`;
-
-    // 5. Capture canvas menggunakan html2canvas
-    const canvas = await html2canvas(iframeDoc.body, {
-      scale: 2, // 2x resolusi untuk hasil tajam (retina/print quality)
-      useCORS: true,
-      allowTaint: true,
-      backgroundColor: '#ffffff',
-      logging: false,
-      width: 794,
-      windowWidth: 794,
-      scrollX: 0,
-      scrollY: 0,
-    });
-
-    // 6. Hapus iframe setelah canvas selesai di-render
-    document.body.removeChild(iframe);
-
-    // 7. Konversi canvas ke dokumen PDF
-    const imgData = canvas.toDataURL('image/jpeg', 0.98);
-    const pdf = new jsPDF({
-      orientation: 'portrait',
-      unit: 'mm',
-      format: 'a4',
-    });
-
-    const pageWidth = 210; // mm
-    const pageHeight = 297; // mm
-    const imgWidth = pageWidth;
-    const imgHeight = (canvas.height * pageWidth) / canvas.width;
-
-    // Smart 1-Page Fitting:
-    // Jika tinggi dokumen mendekati 1 halaman A4 (toleransi s/d 15% overflow),
-    // sesuaikan skala agar 100% pas di 1 halaman tanpa terpotong tanda tangan
-    // dan tidak memunculkan halaman ke-2 yang kosong.
-    if (imgHeight <= pageHeight * 1.15) {
-      const scale = Math.min(1, pageHeight / imgHeight);
-      const finalWidth = imgWidth * scale;
-      const finalHeight = imgHeight * scale;
-      const posX = (pageWidth - finalWidth) / 2;
-      const posY = 0;
-      pdf.addImage(imgData, 'JPEG', posX, posY, finalWidth, finalHeight);
-    } else {
-      // Jika dokumen memang panjang (banyak baris produk) sehingga multi-halaman
-      let heightLeft = imgHeight;
-      let position = 0;
-
-      // Halaman 1
-      pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight);
-      heightLeft -= pageHeight;
-
-      // Halaman selanjutnya (hanya jika sisa konten masih signifikan > 15mm)
-      while (heightLeft > 15) {
-        position -= pageHeight;
-        pdf.addPage();
-        pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight);
-        heightLeft -= pageHeight;
-      }
+    if (!response.ok) {
+      const errData = await response.json().catch(() => ({}));
+      throw new Error(errData.message || `Server error (${response.status})`);
     }
 
-    // 8. Download file PDF langsung ke browser
-    pdf.save(filename);
+    const blob = await response.blob();
+    const blobUrl = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = blobUrl;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(blobUrl);
+
     toast.success('PDF berhasil didownload!', { id: toastId });
   } catch (err) {
-    console.error('Error generating PDF direct download:', err);
-    toast.error('Gagal download langsung. Membuka dialog cetak...', { id: toastId });
+    console.error('Error downloading PDF from server:', err);
+    toast.error('Gagal generate PDF dari server. Membuka dialog cetak...', { id: toastId });
     printQuotation(q, withImage, bankAccount, lang);
   }
 }

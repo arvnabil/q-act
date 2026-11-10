@@ -1964,4 +1964,53 @@ class QuotationController extends Controller
 
         return 'C'.str_pad($num, 6, '0', STR_PAD_LEFT);
     }
+
+    public function downloadPdf(Request $request, Quotation $quotation)
+    {
+        \App\Services\DocumentVisibility::authorize($request->user(), 'quotations', $quotation);
+
+        $html = $request->input('html');
+        if (! $html) {
+            return response()->json(['message' => 'HTML content is required.'], 422);
+        }
+
+        $filename = $request->input('filename') ?: "Quotation-{$quotation->id}.pdf";
+        if (! str_ends_with(strtolower($filename), '.pdf')) {
+            $filename .= '.pdf';
+        }
+
+        // Konversi path gambar relatif / URL lokal ke base64 data URI agar Dompdf memuatnya instan tanpa cURL
+        $html = preg_replace_callback('/<img([^>]+)src=["\']([^"\']+)["\']/i', function ($matches) {
+            $src = $matches[2];
+            if (str_starts_with($src, 'data:image/')) {
+                return $matches[0];
+            }
+            $parsed = parse_url($src);
+            $path = $parsed['path'] ?? $src;
+            $localFile = public_path(ltrim($path, '/'));
+            if (file_exists($localFile) && ! is_dir($localFile)) {
+                $ext = pathinfo($localFile, PATHINFO_EXTENSION);
+                $mime = in_array(strtolower($ext), ['jpg', 'jpeg']) ? 'image/jpeg' : (strtolower($ext) === 'svg' ? 'image/svg+xml' : 'image/png');
+                $base64 = base64_encode(file_get_contents($localFile));
+
+                return '<img'.$matches[1].'src="data:'.$mime.';base64,'.$base64.'"';
+            }
+
+            return $matches[0];
+        }, $html);
+
+        $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadHTML($html);
+        $pdf->setPaper('a4', 'portrait');
+        $pdf->getDomPDF()->getOptions()->set([
+            'isHtml5ParserEnabled' => true,
+            'isRemoteEnabled'      => true,
+            'defaultFont'          => 'sans-serif',
+            'dpi'                  => 96,
+        ]);
+
+        return response($pdf->output(), 200, [
+            'Content-Type'        => 'application/pdf',
+            'Content-Disposition' => 'attachment; filename="'.$filename.'"',
+        ]);
+    }
 }

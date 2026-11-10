@@ -83,6 +83,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::put('/quotations/{quotation}', [QuotationController::class, 'update'])->name('quotations.update');
     Route::post('/quotations/{quotation}/reorder-items', [QuotationController::class, 'reorderItems'])->name('quotations.reorder-items');
     Route::post('/quotations/{quotation}/duplicate', [QuotationController::class, 'duplicate'])->name('quotations.duplicate');
+    Route::post('/quotations/{quotation}/download-pdf', [QuotationController::class, 'downloadPdf'])->name('quotations.download-pdf');
     Route::post('/quotations/{quotation}/sub-quotation', [QuotationController::class, 'createSubQuotation'])->name('quotations.sub-quotation.store');
     Route::post('/quotations/{quotation}/items/{item}/move', [QuotationController::class, 'moveItemToSubQuotation'])->name('quotations.items.move');
     Route::post('/quotations/{quotation}/purchase-orders', [QuotationController::class, 'addPurchaseOrder'])->name('quotations.purchase-orders.store');
