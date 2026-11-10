@@ -4,10 +4,10 @@ import ReactDOM from 'react-dom';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head, Link, router } from '@inertiajs/react';
 import {
-    ArrowLeft, Edit, Download, CheckCircle2, Clock, XCircle,
+    ArrowLeft, Edit, Download, Printer, CheckCircle2, Clock, XCircle,
     AlertCircle, FileText, CreditCard, Loader2, Trash2, AlertTriangle, Copy, Layers, ChevronDown, X, UploadCloud, History
 } from 'lucide-react';
-import { printQuotation } from '@/utils/printQuotation';
+import { printQuotation, downloadQuotationPDF } from '@/utils/printQuotation';
 import { format, parseISO, isValid, differenceInDays } from 'date-fns';
 import { id as idLocale } from 'date-fns/locale';
 import { formatMoney, roundMoney } from '@/utils/money';
@@ -118,30 +118,36 @@ export default function QuotationDetail({ quotation, printDocuments = [], bankAc
         ? quotation.terms
         : (quotation.notes ? quotation.notes.split('\n').filter(Boolean) : DEFAULT_TERMS);
 
+    const enrichQuotation = (documentQuotation = quotation) => ({
+        ...documentQuotation,
+        company_info: companyInfo,
+        domain_logo_map: domainLogoMap,
+        creator: {
+            ...(documentQuotation.creator || {}),
+            ...(currentUser?.id === documentQuotation.sales_id ? {
+                name: currentUser.name,
+                email: currentUser.email,
+            } : {}),
+        },
+    });
+
     const handlePrint = (documentQuotation = quotation) => {
-        const enrichedQuotation = {
-            ...documentQuotation,
-            company_info: companyInfo,
-            domain_logo_map: domainLogoMap,
-            creator: {
-                ...(documentQuotation.creator || {}),
-                ...(currentUser?.id === documentQuotation.sales_id ? {
-                    name: currentUser.name,
-                    email: currentUser.email,
-                } : {}),
-            },
-        };
-        printQuotation(enrichedQuotation, withImage, bankAccount, pdfLanguage);
+        printQuotation(enrichQuotation(documentQuotation), withImage, bankAccount, pdfLanguage);
+        setShowPrintMenu(false);
+    };
+
+    const handleDownloadPdf = (documentQuotation = quotation) => {
+        downloadQuotationPDF(enrichQuotation(documentQuotation), withImage, bankAccount, pdfLanguage);
         setShowPrintMenu(false);
     };
 
     const printOptions = (printDocuments || []).map((documentQuotation) => ({
         quotation: documentQuotation,
         label: documentQuotation.id === quotation.id
-            ? 'Cetak Dokumen Ini'
+            ? 'Dokumen Utama'
             : documentQuotation.relation_type === 'split'
-                ? `Cetak Sub Quotation ${documentQuotation.id}`
-                : 'Cetak Quotation Utama',
+                ? `Sub Quotation ${documentQuotation.id}`
+                : 'Quotation Utama',
     }));
 
     const handleExecuteDelete = () => {
@@ -366,40 +372,67 @@ export default function QuotationDetail({ quotation, printDocuments = [], bankAc
                                     </button>
                                 </>
                             )}
+                            {/* Tombol Download PDF Langsung */}
+                            <button
+                                type="button"
+                                onClick={() => handleDownloadPdf(quotation)}
+                                className="flex items-center gap-1.5 rounded-lg bg-emerald-600 px-4 py-2 text-xs font-bold text-white shadow-xs transition-all hover:bg-emerald-700 active:scale-95 cursor-pointer"
+                                title="Download file PDF langsung ke komputer Anda"
+                            >
+                                <Download className="w-4 h-4" />
+                                Download PDF
+                            </button>
+
+                            {/* Tombol Cetak Browser */}
                             <div className="relative flex items-stretch">
                                 <button
-                                    onClick={() => handlePrint(quotation)}
-                                    className="flex items-center gap-2 rounded-l-lg bg-brand-500 px-5 py-2 text-xs font-bold text-white shadow-sm transition-all hover:bg-brand-600 cursor-pointer"
-                                >
-                                    <Download className="w-4 h-4" />
-                                    Cetak / PDF
-                                </button>
-                                <button
                                     type="button"
-                                    onClick={() => setShowPrintMenu(prev => !prev)}
-                                    className="rounded-r-lg border-l border-white/30 bg-brand-500 px-2 text-white shadow-sm transition-all hover:bg-brand-600 cursor-pointer"
-                                    aria-label="Pilih dokumen PDF"
+                                    onClick={() => handlePrint(quotation)}
+                                    className={`flex items-center gap-1.5 ${printOptions.length > 1 ? 'rounded-l-lg' : 'rounded-lg'} bg-brand-500 px-4 py-2 text-xs font-bold text-white shadow-xs transition-all hover:bg-brand-600 active:scale-95 cursor-pointer`}
+                                    title="Buka dialog cetak browser (Ctrl + P)"
                                 >
-                                    <ChevronDown className="h-4 w-4" />
+                                    <Printer className="w-4 h-4" />
+                                    Cetak PDF
                                 </button>
-                                {showPrintMenu && (
-                                    <div className="absolute right-0 top-full z-50 mt-2 w-72 overflow-hidden rounded-xl border border-surface-200 bg-white p-1.5 shadow-xl">
-                                        <div className="px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-surface-400">Pilih dokumen untuk dicetak</div>
-                                        {printOptions.length > 0 ? printOptions.map(({ quotation: documentQuotation, label }) => (
-                                            <button
-                                                type="button"
-                                                key={documentQuotation.id}
-                                                onClick={() => handlePrint(documentQuotation)}
-                                                className={`w-full rounded-lg px-3 py-2.5 text-left text-xs transition-colors hover:bg-brand-50 ${documentQuotation.id === quotation.id ? 'bg-brand-50 font-bold text-brand-700' : 'text-surface-700'}`}
-                                            >
-                                                <span className="block font-mono font-bold">{documentQuotation.id}</span>
-                                                <span className="mt-0.5 block text-[11px] text-surface-500">{label}</span>
-                                            </button>
-                                        )) : (
-                                            <button type="button" onClick={() => handlePrint(quotation)} className="w-full rounded-lg px-3 py-2.5 text-left text-xs font-bold text-surface-700 hover:bg-brand-50">
-                                                Cetak dokumen ini
-                                            </button>
-                                        )}
+                                {printOptions.length > 1 && (
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowPrintMenu(prev => !prev)}
+                                        className="rounded-r-lg border-l border-white/30 bg-brand-500 px-2 text-white shadow-xs transition-all hover:bg-brand-600 cursor-pointer"
+                                        aria-label="Pilih dokumen PDF lainnya"
+                                    >
+                                        <ChevronDown className="h-4 w-4" />
+                                    </button>
+                                )}
+                                {showPrintMenu && printOptions.length > 1 && (
+                                    <div className="absolute right-0 top-full z-50 mt-2 w-80 overflow-hidden rounded-xl border border-surface-200 bg-white p-2 shadow-xl">
+                                        <div className="px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-surface-400">Pilih dokumen untuk diunduh / dicetak</div>
+                                        <div className="space-y-1.5 mt-1">
+                                            {printOptions.map(({ quotation: documentQuotation, label }) => (
+                                                <div key={documentQuotation.id} className="p-2 rounded-lg bg-surface-50 border border-surface-100 hover:border-surface-200 transition-colors">
+                                                    <div className="flex items-center justify-between">
+                                                        <span className="font-mono font-bold text-xs text-surface-900">{documentQuotation.id}</span>
+                                                        <span className="text-[10px] text-surface-500">{label}</span>
+                                                    </div>
+                                                    <div className="mt-2 flex items-center gap-2">
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => handleDownloadPdf(documentQuotation)}
+                                                            className="flex-1 flex items-center justify-center gap-1.5 rounded-md bg-emerald-600 px-2 py-1.5 text-[11px] font-bold text-white hover:bg-emerald-700 cursor-pointer transition-colors"
+                                                        >
+                                                            <Download className="w-3.5 h-3.5" /> Download
+                                                        </button>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => handlePrint(documentQuotation)}
+                                                            className="flex-1 flex items-center justify-center gap-1.5 rounded-md bg-brand-500 px-2 py-1.5 text-[11px] font-bold text-white hover:bg-brand-600 cursor-pointer transition-colors"
+                                                        >
+                                                            <Printer className="w-3.5 h-3.5" /> Cetak
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
                                     </div>
                                 )}
                             </div>

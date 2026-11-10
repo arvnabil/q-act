@@ -1,6 +1,7 @@
 // Utility to generate printable PDF view for Quotations
 import { format, parseISO, isValid } from 'date-fns';
 import { id as idLocale, enUS as enLocale } from 'date-fns/locale';
+import { toast } from 'react-hot-toast';
 import { getCompanyInfo } from './companyInfo.js';
 import { resolveLogoConfigForEmail } from './domainLogoMap.js';
 import { formatNumberMoney, roundMoney } from './money.js';
@@ -408,33 +409,72 @@ export function printQuotation(q, withImage = false, bankAccount = null, lang = 
   printWindow.document.close();
 }
 
-export function downloadQuotationPDF(q, withImage = false, bankAccount = null, lang = 'id') {
+export async function downloadQuotationPDF(q, withImage = false, bankAccount = null, lang = 'id') {
   const qId = q.id || 'document';
   const custName = q.customer?.name || '';
-  const rawFilename = custName ? `Quotation ${qId} - ${custName}` : `Quotation ${qId}`;
-  const safeTitle = rawFilename.replace(/[/\\?%*:|"<>]/g, '');
+  const rawFilename = custName ? `Quotation ${qId} - ${custName}.pdf` : `Quotation ${qId}.pdf`;
+  const filename = rawFilename.replace(/[/\\?%*:|"<>]/g, '');
 
-  const printWindow = window.open('', '_blank');
-  if (!printWindow) {
-    toast.error('Mohon izinkan pop-up browser untuk mencetak / mendownload PDF Quotation.');
-    return Promise.resolve();
+  const toastId = toast.loading('Menyiapkan download PDF...');
+
+  try {
+    const html2pdfModule = await import('html2pdf.js');
+    const html2pdf = html2pdfModule.default || html2pdfModule;
+
+    // Gunakan mode PDF yang sudah dioptimalkan untuk ukuran A4 (794px)
+    const html = generateQuotationHTML(q, withImage, bankAccount, lang, false, true, null);
+
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(html, 'text/html');
+
+    const wrapper = document.createElement('div');
+    wrapper.style.position = 'fixed';
+    wrapper.style.left = '-9999px';
+    wrapper.style.top = '0';
+    wrapper.style.width = '794px';
+    wrapper.style.backgroundColor = '#ffffff';
+    wrapper.style.zIndex = '-9999';
+
+    // Salin elemen style
+    doc.querySelectorAll('style').forEach(s => wrapper.appendChild(s.cloneNode(true)));
+
+    // Salin isi body
+    const bodyContent = doc.body;
+    while (bodyContent.firstChild) {
+      wrapper.appendChild(bodyContent.firstChild);
+    }
+
+    document.body.appendChild(wrapper);
+
+    // Tunggu bila ada gambar yang masih loading
+    const images = Array.from(wrapper.querySelectorAll('img'));
+    if (images.length > 0) {
+      await Promise.all(
+        images.map(img => {
+          if (img.complete) return Promise.resolve();
+          return new Promise(resolve => {
+            img.onload = resolve;
+            img.onerror = resolve;
+          });
+        })
+      );
+    }
+
+    const opt = {
+      margin:       [4, 6, 4, 6], // mm
+      filename:     filename,
+      image:        { type: 'jpeg', quality: 0.98 },
+      html2canvas:  { scale: 2, useCORS: true, logging: false },
+      jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
+    };
+
+    await html2pdf().set(opt).from(wrapper).save();
+
+    document.body.removeChild(wrapper);
+    toast.success('PDF berhasil didownload!', { id: toastId });
+  } catch (err) {
+    console.error('Error generating PDF direct download:', err);
+    toast.error('Gagal download langsung. Membuka dialog cetak...', { id: toastId });
+    printQuotation(q, withImage, bankAccount, lang);
   }
-
-  const html = generateQuotationHTML(q, withImage, bankAccount, lang, false, false, null);
-  const htmlWithPrint = html
-    .replace(/<title>.*?<\/title>/, `<title>${safeTitle}</title>`)
-    .replace('</body>', `<script>
-      window.onload = function() {
-        setTimeout(function() {
-          window.print();
-          setTimeout(function() { window.close(); }, 1000);
-        }, 500);
-      };
-    <\/script></body>`);
-
-  printWindow.document.open();
-  printWindow.document.write(htmlWithPrint);
-  printWindow.document.close();
-  return Promise.resolve();
 }
-import { toast } from 'react-hot-toast';
