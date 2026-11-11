@@ -2,277 +2,349 @@
 <html>
 <head>
     <meta charset="utf-8">
-    <title>Quotation {{ $quotation->id }}</title>
+    <title>Quotation {{ $quotation->id }} - {{ $quotation->customer?->name ?? 'Customer' }}</title>
     <style>
+        *, html, body, div, table, tr, th, td {
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+            box-sizing: border-box;
+        }
         @page {
             margin: 15mm 15mm 15mm 15mm;
-            size: a4 portrait;
+            size: A4 portrait;
         }
         body {
             font-family: Arial, Helvetica, sans-serif;
-            font-size: 9pt;
-            color: #1e293b;
-            line-height: 1.35;
+            color: #111;
             margin: 0;
             padding: 0;
+            font-size: 9px;
+            line-height: 1.25;
+            width: 100%;
+            box-sizing: border-box;
+            background: #ffffff;
         }
         .header-table {
             width: 100%;
             border-collapse: collapse;
-            margin-bottom: 12px;
+            margin-bottom: 8px;
+            table-layout: fixed;
         }
-        .header-table td {
+        .header-left {
             vertical-align: top;
-        }
-        .quotation-title {
-            font-size: 18pt;
-            font-weight: 800;
-            letter-spacing: 0.5px;
-            color: #0f172a;
-            margin-bottom: 4px;
-        }
-        .meta-text {
-            font-size: 8pt;
-            color: #475569;
-            line-height: 1.4;
-        }
-        .logo-img {
-            max-width: 160px;
-            max-height: 55px;
-        }
-        .company-info {
-            font-size: 7.5pt;
-            color: #64748b;
-            line-height: 1.3;
-            text-align: right;
-        }
-        .info-table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-bottom: 14px;
-        }
-        .info-table td {
-            vertical-align: top;
+            text-align: left;
             width: 50%;
-            font-size: 8pt;
-            line-height: 1.35;
+            font-size: 9px;
         }
-        .info-label {
-            font-weight: bold;
-            color: #0f172a;
-            margin-bottom: 2px;
+        .header-right {
+            vertical-align: top;
+            text-align: left;
+            width: 50%;
+            font-size: 8.5px;
+            color: #333;
+            line-height: 1.25;
         }
-        .info-box {
-            padding: 6px 8px;
-            background: #f8fafc;
-            border: 1px solid #e2e8f0;
-            border-radius: 4px;
+        .table-container {
+            width: 100%;
+            box-sizing: border-box;
         }
-        table.items-table {
+        .table-items {
             width: 100%;
             border-collapse: collapse;
-            margin-bottom: 10px;
+            margin-bottom: 0px;
+            table-layout: fixed;
         }
-        table.items-table thead {
+        .table-items thead {
             display: table-header-group;
         }
-        table.items-table tr {
+        .table-items tr {
             page-break-inside: avoid;
         }
-        table.items-table th {
-            background-color: #f1f5f9;
-            color: #0f172a;
-            font-size: 7.5pt;
-            font-weight: 700;
+        .table-items th, .table-items td {
+            border: 1px solid #6b7280 !important;
+            padding: 4px 5px;
+            box-sizing: border-box;
+        }
+        .table-items th {
+            background-color: #f1f5f9 !important;
+            color: #000000 !important;
+            padding: 4px 3px;
+            font-size: 8.5px;
+            font-weight: bold;
             text-transform: uppercase;
-            padding: 6px 5px;
-            border: 1px solid #cbd5e1;
             text-align: center;
         }
-        table.items-table td {
-            padding: 5px;
-            border: 1px solid #cbd5e1;
-            font-size: 7.5pt;
-            vertical-align: top;
+        .terms {
+            font-size: 8.5px;
+            margin-top: 10px;
+            line-height: 1.35;
+            color: #222;
+            page-break-inside: avoid;
         }
-        .totals-table {
+        .signature-table {
             width: 100%;
+            border: none !important;
+            margin-top: 15px;
+            page-break-inside: avoid;
             border-collapse: collapse;
-            margin-top: 4px;
-            page-break-inside: avoid;
-        }
-        .totals-table td {
-            padding: 4px 6px;
-            font-size: 8pt;
-        }
-        .totals-label {
-            text-align: right;
-            font-weight: 700;
-            width: 80%;
-            border: 1px solid #cbd5e1;
-            background: #f8fafc;
-        }
-        .totals-val {
-            text-align: right;
-            font-weight: 700;
-            width: 20%;
-            border: 1px solid #cbd5e1;
-        }
-        .grand-total {
-            background: #e2e8f0;
-            font-size: 8.5pt;
-            font-weight: 800;
-        }
-        .terms-section {
-            margin-top: 12px;
-            font-size: 7.5pt;
-            color: #334155;
-            page-break-inside: avoid;
-        }
-        .terms-title {
-            font-weight: 700;
-            margin-bottom: 4px;
-            color: #0f172a;
-        }
-        .signatures-table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-top: 16px;
-            page-break-inside: avoid;
-        }
-        .signatures-table td {
-            vertical-align: top;
-            width: 50%;
         }
     </style>
 </head>
 <body>
-    {{-- Header --}}
-    <table class="header-table">
-        <tr>
-            <td style="width: 55%;">
-                <div class="quotation-title">QUOTATION</div>
-                <div class="meta-text">
-                    <strong>No:</strong> {{ $quotation->id }}<br>
-                    <strong>Tanggal:</strong> {{ $quotation->date ? $quotation->date->format('d/m/Y') : date('d/m/Y') }}<br>
-                    <strong>Masa Berlaku:</strong> {{ $quotation->expired ? $quotation->expired->format('d/m/Y') : '-' }}
-                </div>
-            </td>
-            <td style="width: 45%; text-align: right;">
-                @if(!empty($logoBase64))
-                    <img src="{{ $logoBase64 }}" class="logo-img" alt="Logo"><br>
-                @endif
-                <div class="company-info">
-                    <strong>{{ $companyInfo['name'] ?? 'PT ALFA CIPTA TEKNOLOGI VIRTUAL' }}</strong><br>
-                    {{ $companyInfo['address'] ?? 'Ruko Grand Puri Niaga Blok K6/3C, Jakarta Barat' }}<br>
-                    Telp: {{ $companyInfo['phone'] ?? '+62 21 5835 5508' }} | Email: {{ $companyInfo['email'] ?? 'info@activ.co.id' }}
-                </div>
-            </td>
-        </tr>
-    </table>
+    @php
+        $calcTax = $quotation->calc_tax !== false;
+        $showTax = $quotation->show_tax !== false;
+        $ppnRate = $quotation->ppn_rate ?: 0.11;
+        $bakeTaxIntoItems = $calcTax && !$showTax;
+        $taxMultiplier = $bakeTaxIntoItems ? (1 + $ppnRate) : 1;
 
-    {{-- Customer & Sales Information --}}
-    <table class="info-table">
-        <tr>
-            <td style="padding-right: 6px;">
-                <div class="info-box">
-                    <div class="info-label">KEPADA:</div>
-                    <strong>{{ $quotation->customer?->name ?? '-' }}</strong><br>
-                    @if($quotation->pic)
-                        Attn: {{ $quotation->pic->name }} ({{ $quotation->pic->phone ?? '-' }})<br>
-                    @endif
-                    {{ $quotation->customer?->address ?? '-' }}
-                </div>
-            </td>
-            <td style="padding-left: 6px;">
-                <div class="info-box">
-                    <div class="info-label">PENGIRIM:</div>
-                    <strong>{{ $quotation->sales?->name ?? 'Sales Team' }}</strong><br>
-                    PT ALFA CIPTA TEKNOLOGI VIRTUAL<br>
-                    Email: {{ $quotation->sales?->email ?? 'info@activ.co.id' }}<br>
-                    Telp: {{ $quotation->sales?->mobile ?? '-' }}
-                </div>
-            </td>
-        </tr>
-    </table>
+        $items = $quotation->items ?? [];
+        $baseSubtotal = 0;
+        foreach ($items as $it) {
+            $baseSubtotal += ($it->qty ?? 0) * ($it->price ?? 0);
+        }
+        $subtotal = round($bakeTaxIntoItems ? $baseSubtotal * $taxMultiplier : $baseSubtotal);
+        $ppn = ($calcTax && $showTax) ? round($subtotal * $ppnRate) : 0;
 
-    {{-- Items Table --}}
-    <table class="items-table">
-        <thead>
+        $calcPph = $quotation->calc_pph === true;
+        $showPph = $quotation->show_pph === true;
+        $pphRate = $quotation->pph_rate ?: 0.02;
+        $pphBasis = 0;
+        foreach ($items as $it) {
+            if (!empty($it->is_pph_applied)) {
+                $pphBasis += ($it->qty ?? 0) * ($it->price ?? 0);
+            }
+        }
+        $pphAmount = $calcPph ? round($pphBasis * $pphRate) : 0;
+        $grandTotal = round($subtotal + $ppn + $pphAmount);
+
+        $picObj = $quotation->pic ?? $quotation->customer?->pics?->firstWhere('is_primary', true) ?? $quotation->customer?->pics?->first();
+        $creatorObj = $quotation->sales ?? $quotation->creator ?? null;
+
+        $bankName = $bankAccount?->bank_name ?: ($companyInfo['bank_name'] ?? 'BCA');
+        $bankNum = $bankAccount?->account_number ?: ($companyInfo['bank_account_number'] ?? '6044447899');
+        $bankHolder = $bankAccount?->account_name ?: ($companyInfo['bank_account_name'] ?? 'PT ALFA CIPTA TEKNOLOGI VIRTUAL');
+        $branchText = $bankAccount?->branch ?: ($companyInfo['branch_office'] ?? 'Kantor Cabang Utama Alam Sutera ( Tangerang Selatan )');
+
+        $formatMoney = function($num) {
+            return number_format($num, 0, ',', '.');
+        };
+
+        // Format Expired
+        $expiredText = '-';
+        if ($quotation->expired) {
+            $daysId = ['Sunday' => 'Minggu', 'Monday' => 'Senin', 'Tuesday' => 'Selasa', 'Wednesday' => 'Rabu', 'Thursday' => 'Kamis', 'Friday' => 'Jumat', 'Saturday' => 'Sabtu'];
+            $monthsId = [1 => 'Januari', 2 => 'Februari', 3 => 'Maret', 4 => 'April', 5 => 'Mei', 6 => 'Juni', 7 => 'Juli', 8 => 'Agustus', 9 => 'September', 10 => 'Oktober', 11 => 'November', 12 => 'Desember'];
+            $dateObj = \Carbon\Carbon::parse($quotation->expired);
+            $dayName = $daysId[$dateObj->format('l')] ?? $dateObj->format('l');
+            $monthName = $monthsId[(int)$dateObj->format('n')] ?? $dateObj->format('F');
+            $expiredText = 'Expired ' . $dayName . ', ' . $dateObj->format('d') . ' ' . $monthName . ' ' . $dateObj->format('Y');
+        }
+    @endphp
+
+    <div style="width: 100%; box-sizing: border-box; overflow: hidden;">
+        <table class="header-table">
             <tr>
-                <th style="width: 4%;">No</th>
-                <th style="width: 14%;">SKU</th>
-                <th style="width: 12%;">Brand</th>
-                <th style="width: 42%; text-align: left;">Deskripsi Produk</th>
-                <th style="width: 6%;">Jml</th>
-                <th style="width: 11%; text-align: right;">Harga</th>
-                <th style="width: 11%; text-align: right;">Total</th>
-            </tr>
-        </thead>
-        <tbody>
-            @foreach($quotation->items as $idx => $item)
-                <tr>
-                    <td style="text-align: center;">{{ $idx + 1 }}</td>
-                    <td>{{ $item->sku ?: ($item->product?->sku ?? '-') }}</td>
-                    <td>{{ $item->product?->brand?->name ?? ($item->brand ?? '-') }}</td>
-                    <td>
-                        <strong>{{ $item->item_name ?: ($item->product?->name ?? '-') }}</strong>
-                        @if($item->description)
-                            <br><span style="color: #64748b; font-size: 7pt;">{{ $item->description }}</span>
+                <td class="header-left">
+                    <h1 style="font-size: 20px; font-weight: bold; margin: 0 0 8px 0; color: #000; letter-spacing: 0.5px;">QUOTATION</h1>
+                    <div style="font-size: 8.5px; line-height: 1.35; margin-bottom: 10px;">
+                        <div style="font-weight: bold;">QUOTATION NO {{ $quotation->id }}</div>
+                        <div>{{ $quotation->date ? \Carbon\Carbon::parse($quotation->date)->format('d/m/Y') : date('d/m/Y') }}</div>
+                        <div style="color: #ef4444; font-weight: bold;">{{ $expiredText }}</div>
+                    </div>
+                    <div style="font-size: 8.5px; line-height: 1.35; margin-bottom: 10px;">
+                        <div style="font-weight: bold; margin-bottom: 2px;">Kepada :</div>
+                        @if($picObj?->name)
+                            <div style="font-weight: bold;">{{ $picObj->name }}</div>
                         @endif
+                        <div style="font-weight: bold; text-transform: uppercase;">{{ $quotation->customer?->name ?? '—' }}</div>
+                        @if($quotation->customer?->address)
+                            <div>{{ $quotation->customer->address }}</div>
+                        @endif
+                        @if($picObj?->phone)
+                            <div>Mobile : {{ $picObj->phone }}</div>
+                        @endif
+                        @if($picObj?->email)
+                            <div><a href="mailto:{{ $picObj->email }}" style="color: #2563eb; text-decoration: underline;">{{ $picObj->email }}</a></div>
+                        @endif
+                    </div>
+                    <div style="font-size: 8.5px; line-height: 1.35;">
+                        <div style="font-weight: bold; margin-bottom: 2px;">Pengirim :</div>
+                        <div style="font-weight: bold;">{{ $creatorObj?->name ?? 'Sales' }}</div>
+                        <div style="font-weight: bold; text-transform: uppercase;">{{ $companyInfo['name'] ?? 'PT. ALFA CIPTA TEKNOLOGI VIRTUAL' }} ({{ $companyInfo['brand'] ?? 'ACTIV' }})</div>
+                        <div>Mobile : {{ $creatorObj?->mobile ?: '-' }}</div>
+                        <div>Office : {{ $companyInfo['phone'] ?? '(021) 50110987' }}</div>
+                        <div><a href="mailto:{{ $creatorObj?->email ?: ($companyInfo['email'] ?? 'sales@activ.co.id') }}" style="color: #2563eb; text-decoration: underline;">{{ $creatorObj?->email ?: ($companyInfo['email'] ?? 'sales@activ.co.id') }}</a></div>
+                    </div>
+                </td>
+                <td class="header-right">
+                    <div style="width: 250px; margin-left: auto; text-align: left;">
+                        @if(!empty($logoBase64))
+                            <img src="{{ $logoBase64 }}" alt="{{ $companyInfo['brand'] ?? 'ACTIV' }}" style="max-height: 50px; max-width: 180px; display: block; margin-bottom: 4px; object-fit: contain;" />
+                        @endif
+                        <div style="font-weight: bold; font-size: 8.5px; margin-bottom: 2px;">{{ $companyInfo['name'] ?? 'PT. ALFA CIPTA TEKNOLOGI VIRTUAL' }}</div>
+                        <div style="font-size: 7.5px; line-height: 1.25; color: #333;">{{ $companyInfo['address'] ?? 'Infinity Office, Bellezza BSA 1st Floor Unit 106, Jl. Letjen Soepeno, Kebayoran Lama, Jakarta Selatan 12210' }}</div>
+                        @if(!empty($companyInfo['branch']))
+                            <div style="font-size: 7.5px; line-height: 1.25; color: #333;">{{ $companyInfo['branch'] }}</div>
+                        @endif
+                        @if(!empty($companyInfo['branch2']))
+                            <div style="font-size: 7.5px; line-height: 1.25; color: #333;">{{ $companyInfo['branch2'] }}</div>
+                        @endif
+                        <div style="font-size: 7.5px; margin-top: 3px; color: #333;">T : {{ $companyInfo['phone'] ?? '(021) 50110987' }} | E: {{ $creatorObj?->email ?: ($companyInfo['email'] ?? 'sales@activ.co.id') }} | W: {{ $companyInfo['website'] ?? 'www.activ.co.id' }}</div>
+                    </div>
+                </td>
+            </tr>
+        </table>
+
+        <div style="font-size: 8px; color: #4b5563; margin-bottom: 3px;">Harga dalam IDR</div>
+
+        <div class="table-container">
+            <table class="table-items">
+                <thead>
+                    <tr>
+                        <th style="width: 4%;">NO</th>
+                        <th style="width: 11%;">SKU</th>
+                        <th style="width: 10%;">NAMA BRAND</th>
+                        <th style="width: 47%;">DESKRIPSI PRODUK</th>
+                        <th style="width: 4%;">JML</th>
+                        <th style="width: 12%;">HARGA</th>
+                        <th style="width: 12%;">TOTAL HARGA</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @forelse($items as $idx => $item)
+                        @php
+                            $prod = $item->product;
+                            $productName = $prod?->name ?: ($item->name ?: ($item->product_name ?: '-'));
+                            $sku = $prod?->sku ?: ($item->sku ?: '-');
+                            $brandName = $item->brand ?: ($prod?->brand?->name ?: ($prod?->brands?->name ?: 'ACTIV'));
+                            $desc = $item->description ?: ($prod?->description ?: '');
+                            $price = ($item->price ?: 0) * $taxMultiplier;
+                            $qty = $item->qty ?: 1;
+                            $itemTotal = round($qty * $price);
+                        @endphp
+                        <tr>
+                            <td style="text-align: center; font-size: 9.5px; vertical-align: top;">{{ $idx + 1 }}</td>
+                            <td style="text-align: center; font-size: 8.5px; vertical-align: top; word-break: break-all;">{{ $sku }}</td>
+                            <td style="text-align: center; font-size: 8.5px; font-style: italic; vertical-align: top;">{{ $brandName }}</td>
+                            <td style="font-size: 8.5px; vertical-align: top; text-align: left; line-height: 1.25;">
+                                <strong style="font-size: 9.5px; display: block; margin-bottom: 1.5px;">{{ $productName }}</strong>
+                                @if($desc)
+                                    <div style="color: #333; font-size: 8px; line-height: 1.25; white-space: pre-wrap;">{{ $desc }}</div>
+                                @endif
+                            </td>
+                            <td style="text-align: center; font-size: 9.5px; vertical-align: top;">{{ $qty }}</td>
+                            <td style="font-size: 8.5px; vertical-align: top; padding: 4px 5px;">
+                                <table style="width: 100%; border: none !important; border-collapse: collapse; margin: 0; padding: 0; background: transparent !important;">
+                                    <tr>
+                                        <td style="border: none !important; padding: 0; text-align: left; width: 20px;">Rp</td>
+                                        <td style="border: none !important; padding: 0; text-align: right;">{{ $formatMoney($price) }}</td>
+                                    </tr>
+                                </table>
+                            </td>
+                            <td style="font-size: 8.5px; vertical-align: top; padding: 4px 5px;">
+                                <table style="width: 100%; border: none !important; border-collapse: collapse; margin: 0; padding: 0; background: transparent !important;">
+                                    <tr>
+                                        <td style="border: none !important; padding: 0; text-align: left; width: 20px;">Rp</td>
+                                        <td style="border: none !important; padding: 0; text-align: right;">{{ $formatMoney($itemTotal) }}</td>
+                                    </tr>
+                                </table>
+                            </td>
+                        </tr>
+                    @empty
+                        <tr>
+                            <td colspan="7" style="text-align: center; padding: 10px;">Belum ada item produk.</td>
+                        </tr>
+                    @endforelse
+                    <tr style="font-weight: bold;">
+                        <td colspan="4" style="border: none !important; background: transparent !important;"></td>
+                        <td colspan="2" style="text-align: right; font-size: 8.5px; padding-right: 8px; border-left: 1px solid #6b7280 !important; border-top: 1px solid #6b7280 !important;">TOTAL</td>
+                        <td style="font-size: 8.5px; vertical-align: middle; border-top: 1px solid #6b7280 !important; padding: 4px 5px;">
+                            <table style="width: 100%; border: none !important; border-collapse: collapse; margin: 0; padding: 0; background: transparent !important;">
+                                <tr>
+                                    <td style="border: none !important; padding: 0; text-align: left; width: 20px;">Rp</td>
+                                    <td style="border: none !important; padding: 0; text-align: right;">{{ $formatMoney($subtotal) }}</td>
+                                </tr>
+                            </table>
+                        </td>
+                    </tr>
+                    @if($calcTax && $showTax)
+                        <tr style="font-weight: bold;">
+                            <td colspan="4" style="border: none !important; background: transparent !important;"></td>
+                            <td colspan="2" style="text-align: right; font-size: 8.5px; padding-right: 8px; border-left: 1px solid #6b7280 !important;">PPN (VAT) 11%</td>
+                            <td style="font-size: 8.5px; vertical-align: middle; padding: 4px 5px;">
+                                <table style="width: 100%; border: none !important; border-collapse: collapse; margin: 0; padding: 0; background: transparent !important;">
+                                    <tr>
+                                        <td style="border: none !important; padding: 0; text-align: left; width: 20px;">Rp</td>
+                                        <td style="border: none !important; padding: 0; text-align: right;">{{ $formatMoney($ppn) }}</td>
+                                    </tr>
+                                </table>
+                            </td>
+                        </tr>
+                    @endif
+                    @if($calcPph && $showPph)
+                        <tr style="font-weight: bold;">
+                            <td colspan="4" style="border: none !important; background: transparent !important;"></td>
+                            <td colspan="2" style="text-align: right; font-size: 8.5px; padding-right: 8px; border-left: 1px solid #6b7280 !important;">PPh Pasal 23 {{ number_format($pphRate * 100, 0) }}%</td>
+                            <td style="font-size: 8.5px; vertical-align: middle; padding: 4px 5px;">
+                                <table style="width: 100%; border: none !important; border-collapse: collapse; margin: 0; padding: 0; background: transparent !important;">
+                                    <tr>
+                                        <td style="border: none !important; padding: 0; text-align: left; width: 20px;">Rp</td>
+                                        <td style="border: none !important; padding: 0; text-align: right;">{{ $formatMoney($pphAmount) }}</td>
+                                    </tr>
+                                </table>
+                            </td>
+                        </tr>
+                    @endif
+                    <tr style="font-weight: bold;">
+                        <td colspan="4" style="border: none !important; background: transparent !important;"></td>
+                        <td colspan="2" style="text-align: right; font-size: 8.5px; padding-right: 8px; border-left: 1px solid #6b7280 !important;">GRAND TOTAL</td>
+                        <td style="font-size: 8.5px; vertical-align: middle; padding: 4px 5px;">
+                            <table style="width: 100%; border: none !important; border-collapse: collapse; margin: 0; padding: 0; background: transparent !important;">
+                                <tr>
+                                    <td style="border: none !important; padding: 0; text-align: left; width: 20px;">Rp</td>
+                                    <td style="border: none !important; padding: 0; text-align: right;">{{ $formatMoney($grandTotal) }}</td>
+                                </tr>
+                            </table>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        @php
+            $termsList = is_array($quotation->terms) ? $quotation->terms : [];
+        @endphp
+        <div class="terms" style="margin-top: 10px; page-break-inside: avoid;">
+            <div style="font-weight: bold; margin-bottom: 3px;">Syarat & Ketentuan</div>
+            <table style="width: 100%; border: none !important; font-size: 8.5px; line-height: 1.35; color: #222; border-collapse: collapse;">
+                @foreach($termsList as $tIdx => $term)
+                    <tr>
+                        <td style="width: 18px; vertical-align: top; font-weight: bold; border: none !important; padding: 1.5px 0;">{{ $tIdx + 1 }}.</td>
+                        <td style="vertical-align: top; border: none !important; padding: 1.5px 0;">{{ $term }}</td>
+                    </tr>
+                @endforeach
+                <tr>
+                    <td style="width: 18px; vertical-align: top; font-weight: bold; border: none !important; padding: 1.5px 0;">{{ count($termsList) + 1 }}.</td>
+                    <td style="vertical-align: top; border: none !important; padding: 1.5px 0;">
+                        Nomor Rekening :<br/>
+                        <strong>{{ $bankName }} : {{ $bankNum }} - {{ $bankHolder }}<br/>{{ $branchText }}</strong>
                     </td>
-                    <td style="text-align: center;">{{ $item->qty }}</td>
-                    <td style="text-align: right;">Rp {{ number_format($item->price, 0, ',', '.') }}</td>
-                    <td style="text-align: right;">Rp {{ number_format($item->qty * $item->price, 0, ',', '.') }}</td>
                 </tr>
-            @endforeach
-        </tbody>
-    </table>
+            </table>
+        </div>
 
-    {{-- Totals --}}
-    <table class="totals-table">
-        <tr>
-            <td class="totals-label">SUBTOTAL</td>
-            <td class="totals-val">Rp {{ number_format($quotation->subtotal, 0, ',', '.') }}</td>
-        </tr>
-        @if($quotation->calc_tax)
-        <tr>
-            <td class="totals-label">PPN (11%)</td>
-            <td class="totals-val">Rp {{ number_format($quotation->tax_amount, 0, ',', '.') }}</td>
-        </tr>
-        @endif
-        <tr class="grand-total">
-            <td class="totals-label grand-total">GRAND TOTAL</td>
-            <td class="totals-val grand-total">Rp {{ number_format($quotation->grand_total, 0, ',', '.') }}</td>
-        </tr>
-    </table>
-
-    {{-- Terms & Conditions --}}
-    @if(!empty($quotation->terms) && is_array($quotation->terms))
-    <div class="terms-section">
-        <div class="terms-title">Syarat & Ketentuan:</div>
-        <ol style="margin: 0; padding-left: 18px;">
-            @foreach($quotation->terms as $term)
-                <li>{{ $term }}</li>
-            @endforeach
-        </ol>
+        <table class="signature-table" style="width: 100%; border: none !important; margin-top: 15px; page-break-inside: avoid; border-collapse: collapse;">
+            <tr>
+                <td style="width: 60%; border: none !important; background: transparent !important;"></td>
+                <td style="width: 40%; border: none !important; background: transparent !important; text-align: right; font-size: 8.5px; line-height: 1.25;">
+                    <strong>Disetujui oleh :</strong>
+                    <div style="height: 35px;"></div>
+                    <div style="font-weight: bold;">[ .................... ]</div>
+                    <div style="font-size: 7px; color: #666; font-style: italic; margin-top: 2px;">Tanda Tangan & Cap Pelanggan</div>
+                </td>
+            </tr>
+        </table>
     </div>
-    @endif
-
-    {{-- Signatures --}}
-    <table class="signatures-table">
-        <tr>
-            <td style="text-align: left;">
-                <div style="font-size: 8pt; font-weight: bold; margin-bottom: 45px;">Diterbitkan oleh:</div>
-                <div style="font-size: 8pt; font-weight: bold;">{{ $quotation->sales?->name ?? 'Sales Representative' }}</div>
-                <div style="font-size: 7pt; color: #64748b;">PT ALFA CIPTA TEKNOLOGI VIRTUAL</div>
-            </td>
-            <td style="text-align: right;">
-                <div style="font-size: 8pt; font-weight: bold; margin-bottom: 45px;">Disetujui oleh:</div>
-                <div style="font-size: 8pt; font-weight: bold;">[ ........................................ ]</div>
-                <div style="font-size: 7pt; color: #64748b;">Tanda Tangan & Cap Pelanggan</div>
-            </td>
-        </tr>
-    </table>
 </body>
 </html>

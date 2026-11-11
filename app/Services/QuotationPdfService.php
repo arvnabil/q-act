@@ -28,12 +28,20 @@ class QuotationPdfService
         ]);
 
         $companyInfo = SystemSetting::find('company_info')?->value ?? [
-            'name'    => 'PT ALFA CIPTA TEKNOLOGI VIRTUAL',
-            'address' => 'Ruko Grand Puri Niaga Blok K6/3C, Kembangan, Jakarta Barat 11610',
-            'phone'   => '+62 21 5835 5508',
-            'email'   => 'info@activ.co.id',
+            'name'    => 'PT. Alfa Cipta Teknologi Virtual',
+            'brand'   => 'ACTiV',
+            'address' => 'Infinity Office, Bellezza BSA 1st Floor Unit 106, Jl. Letjen Soepeno, Kebayoran Lama, Jakarta Selatan 12210',
+            'branch'  => 'Ruko Golden Boulevard Blok S No.28 Pahlawan Seribu, BSD Serpong',
+            'branch2' => 'Kota Tangerang Selatan, 15315',
+            'phone'   => '(021) 50110987',
+            'email'   => 'sales@activ.co.id',
             'website' => 'www.activ.co.id',
         ];
+
+        // Resolve Bank Account
+        $bankAccount = $quotation->bankAccount 
+            ?: \App\Models\CompanyBankAccount::where('is_default', true)->first()
+            ?: \App\Models\CompanyBankAccount::first();
 
         // Convert logo to base64 for instant Dompdf loading
         $logoBase64 = null;
@@ -50,11 +58,18 @@ class QuotationPdfService
         $html = view('pdf.quotation', [
             'quotation'   => $quotation,
             'companyInfo' => $companyInfo,
+            'bankAccount' => $bankAccount,
             'logoBase64'  => $logoBase64,
         ])->render();
 
         $pdf = Pdf::loadHTML($html);
         $pdf->setPaper('a4', 'portrait');
+        $pdf->getDomPDF()->getOptions()->set([
+            'isHtml5ParserEnabled' => true,
+            'isRemoteEnabled'      => true,
+            'defaultFont'          => 'sans-serif',
+            'dpi'                  => 96,
+        ]);
 
         return $pdf;
     }
