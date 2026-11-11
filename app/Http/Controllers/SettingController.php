@@ -111,6 +111,10 @@ class SettingController extends Controller
             ->orderBy('name')
             ->get();
 
+        $emailNotificationService = app(\App\Services\EmailNotificationService::class);
+        $emailNotificationSettings = $emailNotificationService->getSettings();
+        $availableRoles = \Spatie\Permission\Models\Role::pluck('name')->values()->all();
+
         return Inertia::render('Settings', [
             'companyInfo'            => $companyInfo,
             'bankAccounts'           => $bankAccounts,
@@ -120,6 +124,8 @@ class SettingController extends Controller
             'googleCalendarSettings' => $googleCalendarSettings,
             'zoomSettings'           => $zoomSettings,
             'sharePointSettings'     => $sharePointSettings,
+            'emailNotificationSettings' => $emailNotificationSettings,
+            'availableRoles'            => $availableRoles,
             'teamUsers'              => $teamUsers,
         ]);
     }
@@ -450,5 +456,17 @@ class SettingController extends Controller
         }
 
         return back()->withErrors(['sharepoint_test' => $result['message']]);
+    }
+
+    public function updateEmailNotifications(Request $request)
+    {
+        $data = $request->validate([
+            'settings' => 'required|array',
+        ]);
+
+        $service = app(\App\Services\EmailNotificationService::class);
+        $service->saveSettings($data['settings']);
+
+        return back()->with('message', 'Pengaturan Notifikasi Email berhasil disimpan!');
     }
 }

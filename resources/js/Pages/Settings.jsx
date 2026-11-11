@@ -9,6 +9,8 @@ import {
   Settings as SettingsIcon
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
+import EmailNotificationSettingsTab from '@/Components/Settings/EmailNotificationSettingsTab';
+import { Mail } from 'lucide-react';
 
 export default function Settings({ 
   companyInfo: initialCompanyInfo = {}, 
@@ -19,6 +21,8 @@ export default function Settings({
   googleCalendarSettings = { is_configured: false },
   zoomSettings = { is_configured: false },
   sharePointSettings = { is_configured: false, enabled: false, site_id: '', drive_id: '', base_folder: 'Documents/Purchase Orders' },
+  emailNotificationSettings = {},
+  availableRoles = ['Administrator', 'Manager', 'Sales Manager', 'Sales', 'Presales', 'Finance'],
   teamUsers = []
 }) {
   const { auth } = usePage().props;
@@ -30,7 +34,7 @@ export default function Settings({
   const [activeTab, setActiveTab] = useState(urlTab || 'company');
 
   useEffect(() => {
-    if (!isAdmin && ['terms', 'domains', 'maintenance', 'integrations', 'sharepoint'].includes(activeTab)) {
+    if (!isAdmin && ['terms', 'domains', 'maintenance', 'integrations', 'sharepoint', 'email_notifications'].includes(activeTab)) {
       setActiveTab('company');
     }
   }, [isAdmin, activeTab]);
@@ -80,6 +84,25 @@ export default function Settings({
       notification_director_email: sharePointSettings?.notification_director_email || '',
     });
   }, [sharePointSettings]);
+
+  // Email Notification Settings State
+  const [emailForm, setEmailForm] = useState(emailNotificationSettings || {});
+  const [isSavingEmail, setIsSavingEmail] = useState(false);
+
+  useEffect(() => {
+    setEmailForm(emailNotificationSettings || {});
+  }, [emailNotificationSettings]);
+
+  const handleSaveEmailNotifications = (e) => {
+    e.preventDefault();
+    setIsSavingEmail(true);
+    router.post(route('settings.email-notifications'), {
+      settings: emailForm
+    }, {
+      preserveScroll: true,
+      onFinish: () => setIsSavingEmail(false)
+    });
+  };
 
   const handleSaveSharePoint = (e) => {
     e.preventDefault();
@@ -385,6 +408,7 @@ export default function Settings({
       { id: 'maintenance', label: 'Mode Maintenance', icon: Wrench, badge: maintenanceMode?.enabled ? 'Aktif' : 'Nonaktif', badgeColor: maintenanceMode?.enabled ? 'bg-amber-100 text-amber-800' : 'bg-surface-100 text-surface-500' },
       { id: 'integrations', label: 'Integrasi Eksternal', icon: Globe, badge: `${(googleCalendarSettings?.is_configured ? 1 : 0) + (zoomSettings?.is_configured ? 1 : 0)} Aktif` },
       { id: 'sharepoint', label: 'SharePoint Storage', icon: FolderOpen, badge: sharePointSettings?.is_configured ? 'Terhubung' : (sharePointSettings?.enabled ? 'Config' : 'Nonaktif'), badgeColor: sharePointSettings?.is_configured ? 'bg-emerald-100 text-emerald-800' : (sharePointSettings?.enabled ? 'bg-amber-100 text-amber-800' : 'bg-surface-100 text-surface-500') },
+      { id: 'email_notifications', label: 'Notifikasi Email', icon: Mail, badge: 'Konfigurasi' },
     ] : [])
   ];
 
@@ -1119,6 +1143,17 @@ export default function Settings({
           )}
 
           {/* Microsoft 365 SharePoint Storage Integration */}
+          {/* Email Notifications Center Tab */}
+          {activeTab === 'email_notifications' && isAdmin && (
+            <EmailNotificationSettingsTab
+              emailForm={emailForm}
+              setEmailForm={setEmailForm}
+              availableRoles={availableRoles}
+              onSubmit={handleSaveEmailNotifications}
+              isSaving={isSavingEmail}
+            />
+          )}
+
           {activeTab === 'sharepoint' && isAdmin && (
           <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
             <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between bg-gray-50/50">
@@ -1228,30 +1263,18 @@ export default function Settings({
                     </p>
                   </div>
 
-                  <div>
-                    <label className="text-xs font-semibold text-gray-700 block mb-1">
-                      Email Notifikasi Tim Finance
-                    </label>
-                    <input
-                      type="email"
-                      value={spForm.notification_finance_email}
-                      onChange={(e) => setSpForm({ ...spForm, notification_finance_email: e.target.value })}
-                      placeholder="finance@activ.co.id"
-                      className="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-xs outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-100"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="text-xs font-semibold text-gray-700 block mb-1">
-                      Email Notifikasi Direktur / Manajemen
-                    </label>
-                    <input
-                      type="email"
-                      value={spForm.notification_director_email}
-                      onChange={(e) => setSpForm({ ...spForm, notification_director_email: e.target.value })}
-                      placeholder="director@activ.co.id"
-                      className="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-xs outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-100"
-                    />
+                  <div className="md:col-span-2 p-3 bg-brand-50/70 border border-brand-100 rounded-xl flex items-center justify-between text-xs text-brand-900">
+                    <div className="flex items-center gap-2">
+                      <span className="font-semibold">✉️ Pengaturan Penerima Email Notifikasi PO:</span>
+                      <span className="text-brand-700">Penerima email (To, CC, BCC) kini dikelola terpusat di menu <strong>Notifikasi Email</strong>.</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab('email_notifications')}
+                      className="px-2.5 py-1 text-[11px] font-bold bg-brand-600 text-white rounded-lg hover:bg-brand-700 transition"
+                    >
+                      Buka Pengaturan Email &rarr;
+                    </button>
                   </div>
                 </div>
 

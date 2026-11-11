@@ -56,16 +56,28 @@ class SendPoNotificationEmail implements ShouldQueue
 
         $sharePointUrl = ($spDoc && $spDoc->status === 'synced') ? $spDoc->sharepoint_web_url : null;
 
-        // 3. Resolve recipients
-        $spSetting = SystemSetting::find('sharepoint_integration');
-        $spVal = $spSetting ? (array) $spSetting->value : [];
+        // 3. Resolve recipients using EmailNotificationService (with fallback to old SharePoint settings)
+        $notificationService = app(\App\Services\EmailNotificationService::class);
+        $resolved = $notificationService->resolveRecipients('po_uploaded', [
+            'sales_email' => $quotation->sales?->email,
+        ]);
 
-        $financeEmail = $spVal['notification_finance_email'] ?? env('NOTIFICATION_FINANCE_EMAIL', 'finance@activ.co.id');
-        $directorEmail = $spVal['notification_director_email'] ?? env('NOTIFICATION_DIRECTOR_EMAIL', 'director@activ.co.id');
-        $salesEmail = $quotation->sales?->email;
+        if ($resolved['enabled']) {
+            $recipients    = $resolved['to'];
+            $ccRecipients  = $resolved['cc'];
+            $bccRecipients = $resolved['bcc'];
+        } else {
+            // Fallback to legacy SharePoint integration settings if not enabled or empty
+            $spSetting = SystemSetting::find('sharepoint_integration');
+            $spVal = $spSetting ? (array) $spSetting->value : [];
+            $financeEmail = $spVal['notification_finance_email'] ?? env('NOTIFICATION_FINANCE_EMAIL', 'finance@activ.co.id');
+            $directorEmail = $spVal['notification_director_email'] ?? env('NOTIFICATION_DIRECTOR_EMAIL', 'director@activ.co.id');
+            $salesEmail = $quotation->sales?->email;
 
-        $recipients = array_values(array_filter(array_unique([$financeEmail, $directorEmail])));
-        $ccRecipients = array_values(array_filter(array_unique([$salesEmail])));
+            $recipients    = array_values(array_filter(array_unique([$financeEmail])));
+            $ccRecipients  = array_values(array_filter(array_unique([$salesEmail])));
+            $bccRecipients = array_values(array_filter(array_unique([$directorEmail])));
+        }
 
         if (empty($recipients)) {
             Log::info("SendPoNotificationEmail: No recipients configured for PO notification.");
@@ -75,7 +87,7 @@ class SendPoNotificationEmail implements ShouldQueue
         // 4. Pre-grant SharePoint permission if item ID is present
         if ($spDoc && $spDoc->sharepoint_item_id && $sharePoint->isConfigured()) {
             try {
-                $allEmails = array_merge($recipients, $ccRecipients);
+                $allEmails = array_values(array_unique(array_merge($recipients, $ccRecipients, $bccRecipients)));
                 $sharePoint->grantPermission($spDoc->sharepoint_item_id, $allEmails, ['read']);
             } catch (\Throwable $e) {
                 Log::debug('SharePoint grantPermission warning in email job: ' . $e->getMessage());
@@ -104,12 +116,15 @@ class SendPoNotificationEmail implements ShouldQueue
             if (!empty($ccRecipients)) {
                 $mail->cc($ccRecipients);
             }
+            if (!empty($bccRecipients)) {
+                $mail->bcc($bccRecipients);
+            }
             $mail->send(new PoConfirmationNotification($data));
 
             PoNotificationLog::create([
                 'purchase_order_id' => $this->purchaseOrderId,
                 'quotation_id'      => $this->quotationId,
-                'recipients'        => ['to' => $recipients, 'cc' => $ccRecipients],
+                'recipients'        => ['to' => $recipients, 'cc' => $ccRecipients, 'bcc' => $bccRecipients],
                 'subject'           => $subject,
                 'status'            => 'sent',
                 'sent_at'           => now(),
@@ -122,7 +137,7 @@ class SendPoNotificationEmail implements ShouldQueue
             PoNotificationLog::create([
                 'purchase_order_id' => $this->purchaseOrderId,
                 'quotation_id'      => $this->quotationId,
-                'recipients'        => ['to' => $recipients, 'cc' => $ccRecipients],
+                'recipients'        => ['to' => $recipients, 'cc' => $ccRecipients, 'bcc' => $bccRecipients],
                 'subject'           => $subject,
                 'status'            => 'failed',
                 'error_message'     => $e->getMessage(),

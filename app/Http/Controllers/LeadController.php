@@ -453,16 +453,33 @@ class LeadController extends Controller
         // Send email notification to Finance team when lead is confirmed as paid
         if ($newStage === 'selesai_terbayar') {
             $lead->load(['customer', 'sales']);
-            $financeUsers = \App\Models\User::where('is_active', true)
-                ->where('role', 'Finance')
-                ->get();
-            foreach ($financeUsers as $financeUser) {
-                try {
-                    \Illuminate\Support\Facades\Mail::to($financeUser->email)
-                        ->send(new \App\Mail\LeadPaidNotification($lead, $request->user()));
-                } catch (\Exception $e) {
-                    \Illuminate\Support\Facades\Log::error('LeadPaid email failed for ' . $financeUser->email . ': ' . $e->getMessage());
+            try {
+                $notificationService = app(\App\Services\EmailNotificationService::class);
+                $resolved = $notificationService->resolveRecipients('lead_paid', [
+                    'sales_email' => $lead->sales?->email,
+                ]);
+
+                if ($resolved['enabled'] && !empty($resolved['to'])) {
+                    $mail = \Illuminate\Support\Facades\Mail::to($resolved['to']);
+                    if (!empty($resolved['cc'])) {
+                        $mail->cc($resolved['cc']);
+                    }
+                    if (!empty($resolved['bcc'])) {
+                        $mail->bcc($resolved['bcc']);
+                    }
+                    $mail->send(new \App\Mail\LeadPaidNotification($lead, $request->user()));
+                } elseif (!$resolved['enabled']) {
+                    // Notification disabled
+                } else {
+                    // Fallback to finance users
+                    $financeUsers = \App\Models\User::where('is_active', true)->where('role', 'Finance')->get();
+                    foreach ($financeUsers as $financeUser) {
+                        \Illuminate\Support\Facades\Mail::to($financeUser->email)
+                            ->send(new \App\Mail\LeadPaidNotification($lead, $request->user()));
+                    }
                 }
+            } catch (\Exception $e) {
+                \Illuminate\Support\Facades\Log::error('LeadPaid email failed: ' . $e->getMessage());
             }
         }
 

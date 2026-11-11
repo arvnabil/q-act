@@ -111,13 +111,19 @@ class MicrosoftGraphTransport extends AbstractTransport
                 'from' => [
                     'emailAddress' => $fromData,
                 ],
-                'toRecipients'  => $toRecipients,
-                'ccRecipients'  => $ccRecipients,
-                'bccRecipients' => $bccRecipients,
+                'toRecipients'  => array_values($toRecipients),
                 'attachments'   => $attachments,
             ],
             'saveToSentItems' => false,
         ];
+
+        if (!empty($ccRecipients)) {
+            $payload['message']['ccRecipients'] = array_values($ccRecipients);
+        }
+
+        if (!empty($bccRecipients)) {
+            $payload['message']['bccRecipients'] = array_values($bccRecipients);
+        }
 
         $url = "https://graph.microsoft.com/v1.0/users/{$this->mailbox}/sendMail";
 

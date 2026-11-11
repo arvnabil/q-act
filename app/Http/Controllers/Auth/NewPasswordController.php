@@ -52,6 +52,32 @@ class NewPasswordController extends Controller
                 ])->save();
 
                 event(new PasswordReset($user));
+
+                // Send security notification about password reset
+                try {
+                    $notificationService = app(\App\Services\EmailNotificationService::class);
+                    $recipients = $notificationService->resolveRecipients('password_changed', [
+                        'user_email' => $user->email,
+                    ]);
+
+                    if ($recipients['enabled'] && !empty($recipients['to'])) {
+                        $mail = \Illuminate\Support\Facades\Mail::to($recipients['to']);
+                        if (!empty($recipients['cc'])) {
+                            $mail->cc($recipients['cc']);
+                        }
+                        if (!empty($recipients['bcc'])) {
+                            $mail->bcc($recipients['bcc']);
+                        }
+
+                        $mail->send(new \App\Mail\PasswordChangedNotification($user, [
+                            'changed_at' => now()->translatedFormat('l, d F Y H:i:s'),
+                            'ip_address' => $request->ip(),
+                            'user_agent' => $request->userAgent(),
+                        ]));
+                    }
+                } catch (\Throwable $e) {
+                    \Illuminate\Support\Facades\Log::warning('PasswordReset notification failed: ' . $e->getMessage());
+                }
             }
         );
 
