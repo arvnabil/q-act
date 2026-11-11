@@ -118,8 +118,21 @@ class SalesOrderController extends Controller
                 'po_status' => $salesOrder->po_status,
                 'po_number' => $salesOrder->po_number,
                 'po_date' => $salesOrder->po_date?->toDateString(),
-                'po_document_path' => $salesOrder->po_document_path,
-                'sharepoint_document' => \App\Models\SharePointDocument::where('quotation_id', $salesOrder->quotation_id)->where('status', 'synced')->latest()->first()?->only(['id', 'sharepoint_web_url', 'original_filename', 'status', 'synced_at']),
+                'po_document_path' => $salesOrder->po_document_path
+                    ?: $salesOrder->quotation?->po_document_path
+                    ?: $salesOrder->quotation?->purchaseOrders()->latest()->first()?->document_path,
+                'sharepoint_document' => (\App\Models\SharePointDocument::where('quotation_id', $salesOrder->quotation_id)
+                    ->where('status', 'synced')
+                    ->where(function ($q) {
+                        $q->where('document_type', 'customer_po')
+                          ->orWhere('source_type', 'quotation_purchase_order');
+                    })
+                    ->latest()
+                    ->first()
+                    ?: \App\Models\SharePointDocument::where('quotation_id', $salesOrder->quotation_id)
+                        ->where('status', 'synced')
+                        ->latest()
+                        ->first())?->only(['id', 'sharepoint_web_url', 'original_filename', 'status', 'synced_at']),
                 'date' => $salesOrder->date?->toDateString(),
                 'notes' => $salesOrder->notes,
                 'total_item_value' => $totalItemValue,

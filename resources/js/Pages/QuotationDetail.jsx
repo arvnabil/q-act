@@ -610,12 +610,7 @@ export default function QuotationDetail({ quotation, printDocuments = [], bankAc
                                     </div>
                                     <span className="text-[10px] font-bold uppercase tracking-wide text-emerald-700 bg-emerald-50 border border-emerald-100 rounded-full px-2 py-1">{po.status}</span>
                                     <div className="flex items-center gap-2">
-                                        {po.document_path && (
-                                            <a href={`/storage/${po.document_path}`} target="_blank" rel="noreferrer" className="text-xs font-semibold text-brand-600 hover:text-brand-700">
-                                                Dokumen
-                                            </a>
-                                        )}
-                                        {po.sharepoint_document?.web_url && (
+                                        {po.sharepoint_document?.web_url ? (
                                             <a
                                                 href={po.sharepoint_document.web_url}
                                                 target="_blank"
@@ -625,6 +620,10 @@ export default function QuotationDetail({ quotation, printDocuments = [], bankAc
                                             >
                                                 <span>SharePoint</span>
                                                 <ExternalLink className="w-2.5 h-2.5" />
+                                            </a>
+                                        ) : po.document_path && (
+                                            <a href={`/storage/${po.document_path}`} target="_blank" rel="noreferrer" className="text-xs font-semibold text-brand-600 hover:text-brand-700">
+                                                Dokumen
                                             </a>
                                         )}
                                     </div>

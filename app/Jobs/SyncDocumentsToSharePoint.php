@@ -135,6 +135,20 @@ class SyncDocumentsToSharePoint implements ShouldQueue
             'error_message'          => null,
         ]);
 
+        // 4a. Delete local file after successful SharePoint upload
+        try {
+            $localDisk = Storage::disk('public')->exists($docPath) ? Storage::disk('public') : null;
+            if ($localDisk && $localDisk->exists($docPath)) {
+                $localDisk->delete($docPath);
+                // Clear document_path on the PO record so the local link disappears
+                $po->updateQuietly(['document_path' => null]);
+                Log::info("SyncDocumentsToSharePoint: File lokal dihapus setelah upload berhasil: {$docPath}");
+            }
+        } catch (\Throwable $e) {
+            // Non-fatal: deletion failure should not fail the job
+            Log::warning("SyncDocumentsToSharePoint: Gagal hapus file lokal {$docPath}: " . $e->getMessage());
+        }
+
         // 4b. Generate and upload Quotation PDF to the same folder
         try {
             $pdfService = app(\App\Services\QuotationPdfService::class);
