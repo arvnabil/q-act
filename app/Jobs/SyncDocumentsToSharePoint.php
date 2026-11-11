@@ -125,7 +125,7 @@ class SyncDocumentsToSharePoint implements ShouldQueue
             }
         }
 
-        // 4. Update SharePointDocument status
+        // 4. Update SharePointDocument status for Customer PO
         $spDoc->update([
             'sharepoint_item_id'     => $itemId,
             'sharepoint_web_url'     => $webUrl,
@@ -134,6 +134,58 @@ class SyncDocumentsToSharePoint implements ShouldQueue
             'synced_at'              => now(),
             'error_message'          => null,
         ]);
+
+        // 4b. Generate and upload Quotation PDF to the same folder
+        try {
+            $pdfService = app(\App\Services\QuotationPdfService::class);
+            $cleanQuotId = $sharePoint->sanitizeFilename($quotation->id);
+            $quotUploadName = "Quotation_{$cleanQuotId}.pdf";
+            $quotDiskPath = 'quotations/Quotation_' . $cleanQuotId . '.pdf';
+            $localQuotFile = Storage::disk('public')->path($quotDiskPath);
+
+            $pdfService->saveToFile($quotation, $localQuotFile);
+
+            if (file_exists($localQuotFile)) {
+                $quotDriveItem = $sharePoint->uploadFile($folderPath, $quotUploadName, $localQuotFile);
+                $quotItemId = $quotDriveItem['id'] ?? null;
+                $quotWebUrl = $quotDriveItem['webUrl'] ?? null;
+
+                if ($quotItemId && !empty($quotDriveItem)) {
+                    try {
+                        $sharingLink = $sharePoint->createSharingLink($quotItemId, 'view', 'organization');
+                        if (!empty($sharingLink['link']['webUrl'])) {
+                            $quotWebUrl = $sharingLink['link']['webUrl'];
+                        }
+                    } catch (\Throwable $e) {
+                        Log::debug('SharePoint createSharingLink for quotation fallback to webUrl: ' . $e->getMessage());
+                    }
+                }
+
+                SharePointDocument::updateOrCreate(
+                    [
+                        'source_type'   => 'quotation',
+                        'source_id'     => $quotation->id,
+                        'document_type' => 'quotation_pdf',
+                    ],
+                    [
+                        'purchase_order_id'      => $po->id,
+                        'quotation_id'           => $quotation->id,
+                        'original_filename'      => basename($localQuotFile),
+                        'file_size'              => filesize($localQuotFile),
+                        'mime_type'              => 'application/pdf',
+                        'sharepoint_item_id'     => $quotItemId,
+                        'sharepoint_web_url'     => $quotWebUrl,
+                        'sharepoint_folder_path' => $folderPath,
+                        'status'                 => 'synced',
+                        'synced_at'              => now(),
+                        'uploaded_by'            => $this->uploadedBy,
+                        'error_message'          => null,
+                    ]
+                );
+            }
+        } catch (\Throwable $e) {
+            Log::warning("SyncDocumentsToSharePoint: Gagal upload Quotation PDF: " . $e->getMessage());
+        }
 
         // 5. Activity Log
         ActivityLog::create([

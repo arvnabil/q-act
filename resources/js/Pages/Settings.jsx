@@ -1224,7 +1224,7 @@ export default function Settings({
                       className="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-xs outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-100"
                     />
                     <p className="text-[10px] text-gray-400 mt-1">
-                      Struktur folder otomatis: <span className="font-mono">{spForm.base_folder || 'Documents/Purchase Orders'}/&#123;TAHUN&#125;/&#123;QUOTATION_PO_SUFFIX&#125;</span>
+                      Struktur folder otomatis: <span className="font-mono">{spForm.base_folder || 'Documents/Purchase Orders'}/&#123;TAHUN&#125;/&#123;NAMA_SALES&#125;/&#123;QUOTATION_PO_SUFFIX&#125;</span>
                     </p>
                   </div>
 

@@ -68,7 +68,7 @@ class SharePointService
     }
 
     /**
-     * Build folder path: {base_folder}/{YEAR}/{QUOTATION_ID}_{PO_NUMBER}_{PO_ID_SUFFIX}
+     * Build folder path: {base_folder}/{YEAR}/{SALES_NAME}/{QUOTATION_ID}_{PO_NUMBER}_{PO_ID_SUFFIX}
      */
     public function buildFolderPath(Quotation $quotation, QuotationPurchaseOrder $po): string
     {
@@ -77,9 +77,17 @@ class SharePointService
         $sanitizedPoNum = $this->sanitizeFilename($po->po_number ?: 'PO');
         $quotId = $this->sanitizeFilename($quotation->id);
         $shortId = substr(str_replace('-', '', $po->id), 0, 8);
+
+        // Ambil nama sales dari relasi quotation
+        $salesName = $quotation->sales?->name;
+        if (empty($salesName) && $quotation->sales_id) {
+            $salesName = \App\Models\User::find($quotation->sales_id)?->name;
+        }
+        $sanitizedSales = $this->sanitizeFilename($salesName ?: 'Sales');
+
         $folderName = "{$quotId}_{$sanitizedPoNum}_{$shortId}";
 
-        return "{$base}/{$year}/{$folderName}";
+        return "{$base}/{$year}/{$sanitizedSales}/{$folderName}";
     }
 
     protected function client()
