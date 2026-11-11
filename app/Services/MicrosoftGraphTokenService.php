@@ -102,6 +102,7 @@ class MicrosoftGraphTokenService
                 'success' => true,
                 'message' => 'Koneksi Microsoft Graph & autentikasi token berhasil.',
                 'token_preview' => substr($token, 0, 15) . '...',
+                'expires_in' => 3600,
             ];
         } catch (\Throwable $e) {
             return [

@@ -39,7 +39,8 @@ class TestSharePointUploadCommand extends Command
             $tokenRes = $tokenService->testConnection();
             if ($tokenRes['success']) {
                 $hasGraphCredentials = true;
-                $this->info("   ✓ Token Microsoft Graph berhasil diperoleh (Expires in: {$tokenRes['expires_in']}s)");
+                $expiresIn = $tokenRes['expires_in'] ?? 3600;
+                $this->info("   ✓ Token Microsoft Graph berhasil diperoleh (Expires in: {$expiresIn}s)");
             } else {
                 $this->warn("   ⚠ Microsoft Entra ID belum terhubung: " . $tokenRes['message']);
             }
