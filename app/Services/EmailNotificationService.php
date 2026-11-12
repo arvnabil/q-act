@@ -51,6 +51,65 @@ class EmailNotificationService
                 'bcc_roles'    => [],
                 'custom_bcc'   => [],
             ],
+
+            // 4. Pengajuan Revisi Quotation (Sales -> Manager)
+            'change_request_submitted' => [
+                'enabled'      => true,
+                'to_roles'     => ['Manager', 'Sales Manager'],
+                'custom_to'    => [],
+                'cc_sales'     => true,  // CC ke Sales pemohon
+                'cc_roles'     => [],
+                'custom_cc'    => [],
+                'bcc_roles'    => [],
+                'custom_bcc'   => [],
+            ],
+
+            // 5. Hasil Approval Revisi (Manager -> Sales)
+            'change_request_decided' => [
+                'enabled'      => true,
+                'notify_sales' => true,  // Kirim ke Sales pemilik quotation
+                'to_roles'     => [],
+                'custom_to'    => [],
+                'cc_roles'     => ['Manager', 'Sales Manager'],
+                'custom_cc'    => [],
+                'bcc_roles'    => [],
+                'custom_bcc'   => [],
+            ],
+
+            // 6. Disposisi / Assignment Lead Baru
+            'lead_assigned' => [
+                'enabled'        => true,
+                'notify_assignee' => true,  // Kirim ke Sales yang ditugaskan
+                'to_roles'       => [],
+                'custom_to'      => [],
+                'cc_roles'       => ['Manager', 'Sales Manager'],
+                'custom_cc'      => [],
+                'bcc_roles'      => [],
+                'custom_bcc'     => [],
+            ],
+
+            // 7. Reminder Agenda Kunjungan Harian 07:00
+            'daily_visit_reminder' => [
+                'enabled'    => true,
+                'send_time'  => '07:00',
+                'to_roles'   => ['Sales', 'Presales'],  // Masing-masing yang punya jadwal
+                'custom_to'  => [],
+                'cc_roles'   => [],
+                'custom_cc'  => [],
+                'bcc_roles'  => [],
+                'custom_bcc' => [],
+            ],
+
+            // 8. Pengingat Ulang Tahun PIC Customer H-7
+            'customer_birthday_reminder' => [
+                'enabled'       => true,
+                'days_before'   => 7,
+                'to_sales_pic'  => true,  // Kirim ke Sales PIC customer
+                'cc_roles'      => [],    // Opsional Manager
+                'custom_cc'     => [],
+                'bcc_roles'     => [],
+                'custom_bcc'    => [],
+            ],
         ];
     }
 
@@ -84,15 +143,18 @@ class EmailNotificationService
         foreach ($defaults as $eventKey => $defaultConfig) {
             $input = $settings[$eventKey] ?? [];
             $clean[$eventKey] = [
-                'enabled'      => (bool) ($input['enabled'] ?? false),
-                'notify_user'  => (bool) ($input['notify_user'] ?? true),
-                'to_roles'     => array_values(array_filter((array) ($input['to_roles'] ?? []))),
-                'custom_to'    => $this->cleanEmails($input['custom_to'] ?? []),
-                'cc_sales'     => (bool) ($input['cc_sales'] ?? false),
-                'cc_roles'     => array_values(array_filter((array) ($input['cc_roles'] ?? []))),
-                'custom_cc'    => $this->cleanEmails($input['custom_cc'] ?? []),
-                'bcc_roles'    => array_values(array_filter((array) ($input['bcc_roles'] ?? []))),
-                'custom_bcc'   => $this->cleanEmails($input['custom_bcc'] ?? []),
+                'enabled'         => (bool) ($input['enabled'] ?? false),
+                'notify_user'     => (bool) ($input['notify_user'] ?? ($defaultConfig['notify_user'] ?? true)),
+                'notify_sales'    => (bool) ($input['notify_sales'] ?? ($defaultConfig['notify_sales'] ?? true)),
+                'notify_assignee' => (bool) ($input['notify_assignee'] ?? ($defaultConfig['notify_assignee'] ?? true)),
+                'to_sales_pic'    => (bool) ($input['to_sales_pic'] ?? ($defaultConfig['to_sales_pic'] ?? true)),
+                'to_roles'        => array_values(array_filter((array) ($input['to_roles'] ?? []))),
+                'custom_to'       => $this->cleanEmails($input['custom_to'] ?? []),
+                'cc_sales'        => (bool) ($input['cc_sales'] ?? false),
+                'cc_roles'        => array_values(array_filter((array) ($input['cc_roles'] ?? []))),
+                'custom_cc'       => $this->cleanEmails($input['custom_cc'] ?? []),
+                'bcc_roles'       => array_values(array_filter((array) ($input['bcc_roles'] ?? []))),
+                'custom_bcc'      => $this->cleanEmails($input['custom_bcc'] ?? []),
             ];
         }
 
@@ -127,6 +189,15 @@ class EmailNotificationService
         $to = [];
         if (!empty($config['notify_user']) && !empty($context['user_email'])) {
             $to[] = $context['user_email'];
+        }
+        if (!empty($config['notify_sales']) && !empty($context['sales_email'])) {
+            $to[] = $context['sales_email'];
+        }
+        if (!empty($config['notify_assignee']) && !empty($context['assignee_email'])) {
+            $to[] = $context['assignee_email'];
+        }
+        if (!empty($config['to_sales_pic']) && !empty($context['sales_email'])) {
+            $to[] = $context['sales_email'];
         }
         if (!empty($config['to_roles'])) {
             $roleEmails = $this->getEmailsForRoles($config['to_roles']);

@@ -62,7 +62,17 @@ class UserController extends Controller
         // Assign Spatie Role
         $user->assignRole($validated['role']);
 
-        return back()->with('message', 'User berhasil ditambahkan!');
+        // Send invitation & setup password email
+        try {
+            $token = \Illuminate\Support\Facades\Password::broker()->createToken($user);
+            $setupUrl = url(route('password.reset', ['token' => $token, 'email' => $user->email], false));
+            \Illuminate\Support\Facades\Mail::to($user->email)
+                ->send(new \App\Mail\NewUserInvitationNotification($user, $setupUrl, $request->user()));
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::error('New user invitation email failed: ' . $e->getMessage());
+        }
+
+        return back()->with('message', 'User berhasil ditambahkan dan email undangan telah dikirim!');
     }
 
     /**

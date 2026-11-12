@@ -295,12 +295,17 @@ class LeadController extends Controller
         $data['stage']      = $data['stage'] ?? 'lead_masuk';
         $data['lead_code']  = $this->generateLeadCode();
 
-        DB::transaction(function () use ($request, $data) {
+        $createdLead = null;
+        DB::transaction(function () use ($request, $data, &$createdLead) {
             $pic = \App\Services\LeadCustomerInput::prepare($request->user(), $data);
-            $lead = Lead::create($data);
-            \App\Services\LeadCustomerInput::attach($lead, $pic, $request->user());
-            $this->logActivity($lead, 'note', 'Lead dibuat', 'Lead baru ditambahkan: ' . $lead->title);
+            $createdLead = Lead::create($data);
+            \App\Services\LeadCustomerInput::attach($createdLead, $pic, $request->user());
+            $this->logActivity($createdLead, 'note', 'Lead dibuat', 'Lead baru ditambahkan: ' . $createdLead->title);
         });
+
+        if ($createdLead && $createdLead->sales_id) {
+            $this->sendLeadAssignedEmail($createdLead, $request->user());
+        }
 
         return back()->with('message', 'Lead berhasil dibuat.');
     }
@@ -406,13 +411,55 @@ class LeadController extends Controller
             'tags'            => 'nullable|array',
         ]);
 
+        $oldSalesId = $lead->sales_id;
         $data['updated_by'] = Auth::id();
 
         $lead->update($data);
 
+        if (isset($data['sales_id']) && $data['sales_id'] && $data['sales_id'] !== $oldSalesId) {
+            $this->sendLeadAssignedEmail($lead, $request->user());
+        }
+
         $this->logActivity($lead, 'note', 'Lead diperbarui');
 
         return back()->with('message', 'Lead berhasil diperbarui.');
+    }
+
+    /**
+     * Send lead assignment email notification via EmailNotificationService.
+     */
+    protected function sendLeadAssignedEmail(Lead $lead, ?User $assignedBy = null): void
+    {
+        if (!$lead->sales_id) {
+            return;
+        }
+
+        $lead->loadMissing('sales', 'customer');
+        $salesUser = $lead->sales;
+        if (!$salesUser || !$salesUser->email) {
+            return;
+        }
+
+        try {
+            $notificationService = app(\App\Services\EmailNotificationService::class);
+            $resolved = $notificationService->resolveRecipients('lead_assigned', [
+                'assignee_email' => $salesUser->email,
+                'sales_email'    => $salesUser->email,
+            ]);
+
+            if ($resolved['enabled'] && !empty($resolved['to'])) {
+                $mail = \Illuminate\Support\Facades\Mail::to($resolved['to']);
+                if (!empty($resolved['cc'])) {
+                    $mail->cc($resolved['cc']);
+                }
+                if (!empty($resolved['bcc'])) {
+                    $mail->bcc($resolved['bcc']);
+                }
+                $mail->send(new \App\Mail\LeadAssignedNotification($lead, $salesUser, $assignedBy));
+            }
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::error('LeadAssigned email failed: ' . $e->getMessage());
+        }
     }
 
     // ─── Update Stage ────────────────────────────────────────────────────────────

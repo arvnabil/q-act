@@ -68,6 +68,27 @@ class ChangeRequestController extends Controller
             ]);
         }
 
+        // Email Notification to Managers
+        try {
+            $notificationService = app(\App\Services\EmailNotificationService::class);
+            $resolved = $notificationService->resolveRecipients('change_request_submitted', [
+                'sales_email' => $user->email,
+            ]);
+
+            if ($resolved['enabled'] && !empty($resolved['to'])) {
+                $mail = \Illuminate\Support\Facades\Mail::to($resolved['to']);
+                if (!empty($resolved['cc'])) {
+                    $mail->cc($resolved['cc']);
+                }
+                if (!empty($resolved['bcc'])) {
+                    $mail->bcc($resolved['bcc']);
+                }
+                $mail->send(new \App\Mail\ChangeRequestSubmittedNotification($changeRequest, $quotation, $user));
+            }
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::error('ChangeRequestSubmitted email failed: ' . $e->getMessage());
+        }
+
         return back()->with('message', 'Pengajuan berhasil dikirim ke manager.');
     }
 
@@ -111,6 +132,33 @@ class ChangeRequestController extends Controller
             return $newQuotation;
         });
 
+        // Email Notification to Sales (Approved)
+        $changeRequest->load(['requester', 'quotation']);
+        try {
+            $notificationService = app(\App\Services\EmailNotificationService::class);
+            $resolved = $notificationService->resolveRecipients('change_request_decided', [
+                'sales_email' => $changeRequest->requester?->email,
+            ]);
+
+            if ($resolved['enabled'] && !empty($resolved['to'])) {
+                $mail = \Illuminate\Support\Facades\Mail::to($resolved['to']);
+                if (!empty($resolved['cc'])) {
+                    $mail->cc($resolved['cc']);
+                }
+                if (!empty($resolved['bcc'])) {
+                    $mail->bcc($resolved['bcc']);
+                }
+                $mail->send(new \App\Mail\ChangeRequestDecidedNotification(
+                    $changeRequest,
+                    $changeRequest->quotation,
+                    $request->user(),
+                    $newQuotation
+                ));
+            }
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::error('ChangeRequestApproved email failed: ' . $e->getMessage());
+        }
+
         $message = $newQuotation
             ? "Revisi disetujui. Quotation baru {$newQuotation->id} siap diedit."
             : 'Pembatalan quotation dan Sales Order berhasil disetujui.';
@@ -138,6 +186,33 @@ class ChangeRequestController extends Controller
             'entity_id' => $changeRequest->quotation_id,
             'description' => "Pengajuan ditolak: {$data['manager_comment']}",
         ]);
+
+        // Email Notification to Sales (Rejected)
+        $changeRequest->load(['requester', 'quotation']);
+        try {
+            $notificationService = app(\App\Services\EmailNotificationService::class);
+            $resolved = $notificationService->resolveRecipients('change_request_decided', [
+                'sales_email' => $changeRequest->requester?->email,
+            ]);
+
+            if ($resolved['enabled'] && !empty($resolved['to'])) {
+                $mail = \Illuminate\Support\Facades\Mail::to($resolved['to']);
+                if (!empty($resolved['cc'])) {
+                    $mail->cc($resolved['cc']);
+                }
+                if (!empty($resolved['bcc'])) {
+                    $mail->bcc($resolved['bcc']);
+                }
+                $mail->send(new \App\Mail\ChangeRequestDecidedNotification(
+                    $changeRequest,
+                    $changeRequest->quotation,
+                    $request->user(),
+                    null
+                ));
+            }
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::error('ChangeRequestRejected email failed: ' . $e->getMessage());
+        }
 
         return back()->with('message', 'Pengajuan ditolak dan alasannya tersimpan di riwayat.');
     }
