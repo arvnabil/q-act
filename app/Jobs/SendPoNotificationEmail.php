@@ -56,27 +56,45 @@ class SendPoNotificationEmail implements ShouldQueue
 
         $sharePointUrl = ($spDoc && $spDoc->status === 'synced') ? $spDoc->sharepoint_web_url : null;
 
-        // 3. Resolve recipients using EmailNotificationService (with fallback to old SharePoint settings)
+        // 3. Resolve recipients using EmailNotificationService
         $notificationService = app(\App\Services\EmailNotificationService::class);
-        $resolved = $notificationService->resolveRecipients('po_uploaded', [
-            'sales_email' => $quotation->sales?->email,
-        ]);
+        $hasCustomConfig = SystemSetting::where('key', \App\Services\EmailNotificationService::KEY)->exists();
 
-        if ($resolved['enabled']) {
+        if ($hasCustomConfig) {
+            $resolved = $notificationService->resolveRecipients('po_uploaded', [
+                'sales_email' => $quotation->sales?->email,
+            ]);
+
+            // If explicitly disabled by admin toggle, do NOT send email
+            if (!$resolved['enabled']) {
+                Log::info("SendPoNotificationEmail: Notifikasi email PO dinonaktifkan di pengaturan untuk PO {$this->purchaseOrderId}.");
+                return;
+            }
+
             $recipients    = $resolved['to'];
             $ccRecipients  = $resolved['cc'];
             $bccRecipients = $resolved['bcc'];
         } else {
-            // Fallback to legacy SharePoint integration settings if not enabled or empty
-            $spSetting = SystemSetting::find('sharepoint_integration');
-            $spVal = $spSetting ? (array) $spSetting->value : [];
-            $financeEmail = $spVal['notification_finance_email'] ?? env('NOTIFICATION_FINANCE_EMAIL', 'finance@activ.co.id');
-            $directorEmail = $spVal['notification_director_email'] ?? env('NOTIFICATION_DIRECTOR_EMAIL', 'director@activ.co.id');
-            $salesEmail = $quotation->sales?->email;
+            // Fallback for initial state before admin configures Email Notifications tab
+            $resolved = $notificationService->resolveRecipients('po_uploaded', [
+                'sales_email' => $quotation->sales?->email,
+            ]);
 
-            $recipients    = array_values(array_filter(array_unique([$financeEmail])));
-            $ccRecipients  = array_values(array_filter(array_unique([$salesEmail])));
-            $bccRecipients = array_values(array_filter(array_unique([$directorEmail])));
+            if ($resolved['enabled'] && !empty($resolved['to'])) {
+                $recipients    = $resolved['to'];
+                $ccRecipients  = $resolved['cc'];
+                $bccRecipients = $resolved['bcc'];
+            } else {
+                $spSetting = SystemSetting::find('sharepoint_integration');
+                $spVal = $spSetting ? (array) $spSetting->value : [];
+                $financeEmail = $spVal['notification_finance_email'] ?? env('NOTIFICATION_FINANCE_EMAIL', 'finance@activ.co.id');
+                $directorEmail = $spVal['notification_director_email'] ?? env('NOTIFICATION_DIRECTOR_EMAIL', 'director@activ.co.id');
+                $salesEmail = $quotation->sales?->email;
+
+                $recipients    = array_values(array_filter(array_unique([$financeEmail])));
+                $ccRecipients  = array_values(array_filter(array_unique([$salesEmail])));
+                $bccRecipients = array_values(array_filter(array_unique([$directorEmail])));
+            }
         }
 
         if (empty($recipients)) {
