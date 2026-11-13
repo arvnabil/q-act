@@ -11,8 +11,12 @@ return new class extends Migration
      */
     public function up(): void
     {
+        if (Schema::hasTable('job_batches')) {
+            return;
+        }
+
         Schema::create('job_batches', function (Blueprint $table) {
-            $table->string('id')->primary();
+            $table->string('id', 64)->primary();
             $table->string('name');
             $table->integer('total_jobs');
             $table->integer('pending_jobs');
