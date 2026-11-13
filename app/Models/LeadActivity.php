@@ -20,6 +20,8 @@ class LeadActivity extends Model
         'follow_up',
         'stage_change',
         'quotation_linked',
+        'primary_quotation_changed',
+        'quotation_needs_review',
         'deal_won',
         'deal_lost',
     ];

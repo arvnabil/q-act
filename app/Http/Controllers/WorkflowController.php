@@ -94,6 +94,7 @@ class WorkflowController extends Controller
         }
         $payload = $this->payload($request, $lead, LeadVisit::whereIn('quotation_id', $visibleIds), $quotation);
         $payload['grandTotal'] = (float) $quotation->grand_total;
+        $payload['status'] = $quotation->status;
         $payload['customerId'] = $quotation->customer_id;
         $payload['candidates'] = $this->matchingLeads($request->user(), $quotation)
             ->with('customer:id,name')
@@ -173,8 +174,9 @@ class WorkflowController extends Controller
                     'bu_id' => $root->bu_id,
                     'created_by' => $request->user()->id,
                     'stage' => $hasPo ? $dealStage : $normalStage,
-                    'estimated_value' => $root->grand_total,
-                    'quotation_id' => $root->id,
+                    'estimated_value' => $root->status === 'sent' ? $root->grand_total : 0,
+                    'quotation_id' => null,
+                    'estimation_source' => $root->status === 'sent' ? 'primary_quotation' : 'manual',
                 ]);
                 $lead->created_at = $qDate;
                 $lead->updated_at = $qDate;
@@ -233,6 +235,15 @@ class WorkflowController extends Controller
                     LeadActivity::create(['lead_id' => $lead->id, 'user_id' => $request->user()->id, 'type' => 'quotation_linked',
                         'title' => 'Quotation '.$q->id.' dihubungkan', 'metadata' => ['quotation_id' => $q->id]]);
                 }
+            }
+            // Explicitly linking a Sent quotation makes that quotation the
+            // primary estimate for an existing lead; the value is replaced,
+            // never added to the prior estimate or other quotations.
+            if ($quotation->status === 'sent') {
+                app(\App\Services\PrimaryQuotationSync::class)->sync(
+                    $quotation->fresh(), $request->user()
+                );
+                $lead->refresh();
             }
             LeadVisit::whereIn('quotation_id', $ids)->whereNull('lead_id')->update(['lead_id' => $lead->id]);
 

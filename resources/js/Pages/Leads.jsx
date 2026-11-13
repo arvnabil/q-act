@@ -161,6 +161,7 @@ function LeadCard({ lead, activeStagesList, stageMetaMap, onStageChange, onViewD
                     <span>{formatCompactRupiah(lead.estimated_value)}</span>
                 </div>
             )}
+            {lead.quotation_needs_review && <span className="mt-1 inline-flex rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-800">Needs Review</span>}
 
             {/* Quotation link */}
             {lead.quotation && (

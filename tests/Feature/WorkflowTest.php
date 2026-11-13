@@ -9,6 +9,7 @@ use App\Models\Lead;
 use App\Models\LeadActivity;
 use App\Models\LeadVisit;
 use App\Models\Quotation;
+use App\Models\QuotationItem;
 use App\Models\User;
 use App\Services\GoogleCalendarService;
 use App\Services\PersonalDashboard;
@@ -112,7 +113,7 @@ class WorkflowTest extends TestCase
         $this->assertSame('Ibu Sari', $lead->pic_name);
         $this->assertSame('Jakarta', $lead->customer_address);
         $this->assertSame($u->id, $lead->sales_id);
-        $this->assertEquals(1000, $lead->estimated_value);
+        $this->assertEquals(0, $lead->estimated_value);
         $this->assertDatabaseCount('lead_pics', 1);
         $revision = $this->quote($u, 'Q1-R1', 'C1', ['parent_quotation_id' => 'Q1', 'relation_type' => 'revision']);
         $this->assertEquals($first, $revision->lead_id);
@@ -131,6 +132,58 @@ class WorkflowTest extends TestCase
         $this->assertSame('Bandung', $lead->fresh()->customer_address);
         $this->assertEquals(1500, $lead->fresh()->estimated_value);
         $this->assertDatabaseCount('leads', 1);
+    }
+
+    public function test_sent_quotation_becomes_the_primary_estimate_and_rejected_marks_review(): void
+    {
+        $u = $this->actor();
+        $q = $this->quote($u, 'Q-SENT', 'C1', ['grand_total' => 2450]);
+        QuotationItem::create(['quotation_id' => $q->id, 'name' => 'Item', 'qty' => 1, 'price' => 2450, 'hpp' => 0]);
+
+        $this->actingAs($u)->putJson('/quotations/Q-SENT', ['status' => 'sent'])->assertRedirect();
+        $q->refresh();
+        $lead = Lead::whereKey($q->lead_id)->firstOrFail();
+        $this->assertSame($q->id, $lead->quotation_id);
+        $this->assertEquals($q->grand_total, $lead->estimated_value);
+        $this->assertSame('primary_quotation', $lead->estimation_source);
+        $this->assertDatabaseHas('lead_activities', ['lead_id' => $lead->id, 'type' => 'primary_quotation_changed']);
+
+        $this->putJson('/quotations/Q-SENT', ['status' => 'rejected'])->assertRedirect();
+        $this->assertTrue($lead->fresh()->quotation_needs_review);
+        $this->assertEquals($q->grand_total, $lead->fresh()->estimated_value);
+        $this->assertDatabaseHas('lead_activities', ['lead_id' => $lead->id, 'type' => 'quotation_needs_review']);
+    }
+
+    public function test_sent_quotation_link_replaces_existing_manual_estimate_and_drafts_do_not(): void
+    {
+        $u = $this->actor();
+        $draft = $this->quote($u, 'Q-DRAFT', 'C1', ['grand_total' => 1200]);
+        $lead = Lead::create(['title' => 'Manual Kanban lead', 'customer_id' => 'C1', 'sales_id' => $u->id, 'estimated_value' => 900]);
+        $this->actingAs($u)->postJson('/workflow/quotations/Q-DRAFT/lead', ['lead_id' => $lead->id])->assertOk();
+        $this->assertEquals(900, $lead->fresh()->estimated_value);
+        $this->assertSame('manual', $lead->fresh()->estimation_source);
+
+        $sent = $this->quote($u, 'Q-SENT-LINK', 'C1', ['status' => 'sent', 'grand_total' => 3700]);
+        $this->postJson('/workflow/quotations/Q-SENT-LINK/lead', ['lead_id' => $lead->id])->assertOk();
+        $this->assertEquals(3700, $lead->fresh()->estimated_value);
+        $this->assertSame($sent->id, $lead->fresh()->quotation_id);
+        $this->assertSame('primary_quotation', $lead->fresh()->estimation_source);
+        $this->assertSame($lead->id, $draft->fresh()->lead_id);
+    }
+
+    public function test_kanban_manual_estimate_switches_to_linked_quotation_when_it_is_sent(): void
+    {
+        $u = $this->actor();
+        $draft = $this->quote($u, 'Q-KANBAN', 'C1');
+        $lead = Lead::create(['title' => 'Kanban lead', 'customer_id' => 'C1', 'sales_id' => $u->id, 'estimated_value' => 900]);
+        $draft->update(['lead_id' => $lead->id]);
+        QuotationItem::create(['quotation_id' => $draft->id, 'name' => 'Item', 'qty' => 1, 'price' => 2000, 'hpp' => 0]);
+
+        $this->actingAs($u)->putJson('/quotations/Q-KANBAN', ['status' => 'sent'])->assertRedirect();
+
+        $this->assertEquals($draft->fresh()->grand_total, $lead->fresh()->estimated_value);
+        $this->assertSame('primary_quotation', $lead->fresh()->estimation_source);
+        $this->assertSame($draft->id, $lead->fresh()->quotation_id);
     }
 
     public function test_linking_rejects_other_customer_existing_project_and_outside_scope(): void

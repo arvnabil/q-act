@@ -438,6 +438,11 @@ export default function WorkflowPanel({
                                             );
                                         } else {
                                             if (!connectSelectedId) return;
+                                            const selectedLead = combinedLeads.find((lead) => lead.id === connectSelectedId);
+                                            const confirmed = window.confirm(
+                                                `Hubungkan quotation${data?.status === "sent" ? ` Sent senilai Rp ${Number(data?.grandTotal || 0).toLocaleString("id-ID")} dan jadikan Primary Quotation` : ""} ke lead "${selectedLead?.title || "ini"}"? ${data?.status === "sent" ? "Estimasi lead akan diganti dengan total quotation ini." : ""}`,
+                                            );
+                                            if (!confirmed) return;
                                             perform(
                                                 () => axios.post(endpoint + "/lead", { lead_id: connectSelectedId }),
                                                 "Quotation berhasil dihubungkan ke lead.",

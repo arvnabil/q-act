@@ -568,9 +568,6 @@ class QuotationController extends Controller
             $lead = Lead::find($quotation->lead_id);
             if ($lead) {
                 \App\Services\WorkflowAccess::fillFromQuotation($lead, $quotation, $user);
-                if (! $lead->quotation_id) {
-                    $lead->update(['quotation_id' => $quotation->id]);
-                }
                 LeadActivity::create([
                     'lead_id' => $lead->id,
                     'user_id' => $user->id,
@@ -946,6 +943,12 @@ class QuotationController extends Controller
         $quotation->tax_amount = $totals['ppn_amount'];
         $quotation->grand_total = $totals['grand_total'];
         $quotation->save();
+
+        // Sent quotations are the sole source of automated estimates. Drafts
+        // and unsent revisions leave manual values untouched.
+        app(\App\Services\PrimaryQuotationSync::class)->sync(
+            $quotation->fresh(['customer']), $request->user(), createLeadWhenSent: true
+        );
 
         ActivityLog::create([
             'user_id' => $request->user()->id,

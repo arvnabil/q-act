@@ -1527,6 +1527,9 @@ export default function LeadDetail({
                                     Estimasi Nilai: {formatRupiah(lead.estimated_value)} <span className="text-xs text-brand-500 font-normal">({formatCompactRupiah(lead.estimated_value)})</span>
                                 </p>
                             )}
+                            {lead.quotation_needs_review && (
+                                <span className="ml-2 inline-flex rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-800">Needs Review: quotation utama {lead.quotation?.id || lead.quotation_id}</span>
+                            )}
                             {(lead.lost_reason || currentStage === 'lost') && (
                                 <div className="mt-2 inline-flex items-center gap-2 px-3 py-1.5 bg-red-50 text-red-700 border border-red-200 rounded-lg text-xs font-medium">
                                     <AlertCircle className="w-3.5 h-3.5 text-red-500 shrink-0" />

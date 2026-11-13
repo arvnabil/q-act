@@ -45,6 +45,8 @@ class Lead extends Model
         'stage',
         'source',
         'estimated_value',
+        'estimation_source',
+        'quotation_needs_review',
         'quotation_id',
         'notes',
         'lost_reason',
@@ -58,6 +60,7 @@ class Lead extends Model
 
     protected $casts = [
         'estimated_value' => 'float',
+        'quotation_needs_review' => 'boolean',
         'tags'            => 'array',
         'is_archived'     => 'boolean',
         'converted_at'    => 'datetime',
