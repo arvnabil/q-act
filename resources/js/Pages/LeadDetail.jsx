@@ -1383,6 +1383,11 @@ export default function LeadDetail({
     const [currentStage, setCurrentStage] = useState(lead.stage);
     const [activities, setActivities] = useState(lead.activities || []);
     const [paymentProofs, setPaymentProofs] = useState(initialPaymentProofs || []);
+    const paymentProofRequired = currentStage === 'selesai_terbayar' && paymentProofs.length === 0;
+    const [showLegacyProofModal, setShowLegacyProofModal] = useState(false);
+    const [legacyProofFiles, setLegacyProofFiles] = useState([]);
+    const [legacyProofTransaction, setLegacyProofTransaction] = useState('');
+    const [submittingLegacyProof, setSubmittingLegacyProof] = useState(false);
     const [paymentTransactions, setPaymentTransactions] = useState(initialPaymentTransactions || []);
     const [paymentTransaction, setPaymentTransaction] = useState('');
 
@@ -1489,6 +1494,28 @@ export default function LeadDetail({
     const handleArchive = () => {
         if (!confirm('Arsipkan lead ini?')) return;
         router.delete(route('leads.destroy', lead.id));
+    };
+
+    const submitLegacyPaymentProof = async () => {
+        if (!legacyProofFiles.length || legacyProofFiles.length > 5 || !legacyProofTransaction) return;
+        const [type, id] = legacyProofTransaction.split('|');
+        const form = new FormData();
+        form.append('payment_source_type', type);
+        form.append('payment_source_id', id);
+        legacyProofFiles.forEach((file, index) => form.append(`payment_proofs[${index}]`, file));
+        setSubmittingLegacyProof(true);
+        try {
+            const response = await axios.post(route('leads.payment-proofs.store', lead.id), form);
+            setPaymentProofs(prev => [...(response.data.payment_proofs || []), ...prev]);
+            toast.success(response.data.message || 'Bukti pembayaran berhasil ditambahkan.');
+            setShowLegacyProofModal(false);
+            setLegacyProofFiles([]);
+            setLegacyProofTransaction('');
+        } catch (error) {
+            toast.error(Object.values(error.response?.data?.errors || {}).flat()[0] || error.response?.data?.message || 'Gagal mengunggah bukti pembayaran.');
+        } finally {
+            setSubmittingLegacyProof(false);
+        }
     };
 
     const handleActivityAdded = (newAct) => setActivities(prev => [newAct, ...prev]);
@@ -1716,6 +1743,15 @@ export default function LeadDetail({
 
                     {/* Right: Lead 360° Cockpit Tabs */}
                     <div className="lg:col-span-2 space-y-4">
+                        {paymentProofRequired && (
+                            <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-300 bg-amber-50 p-4">
+                                <div className="flex items-start gap-2 text-amber-900">
+                                    <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                                    <div><div className="text-xs font-bold">Bukti pembayaran belum diunggah</div><p className="mt-1 text-[11px]">Lead ini berstatus Terbayar, tetapi belum memiliki lampiran bukti.</p></div>
+                                </div>
+                                <button type="button" onClick={() => setShowLegacyProofModal(true)} className="rounded-lg bg-amber-700 px-3 py-2 text-xs font-bold text-white hover:bg-amber-800">Konfirmasi &amp; Unggah</button>
+                            </div>
+                        )}
                         {/* Tab Switcher Bar */}
                         <div className="bg-white rounded-2xl border border-surface-200 p-1.5 shadow-sm">
                             <div className="flex items-center gap-1 overflow-x-auto scrollbar-none">
@@ -1828,6 +1864,29 @@ export default function LeadDetail({
                 </div>
             </div>
 
+            {showLegacyProofModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+                    <div className="w-full max-w-lg rounded-xl bg-white p-6 shadow-2xl">
+                        <h3 className="text-lg font-bold text-surface-900">Lengkapi Bukti Pembayaran</h3>
+                        <p className="mb-4 mt-1 text-xs text-surface-500">Status Lead tetap Terbayar dan email konfirmasi Finance tidak dikirim ulang.</p>
+                        <label className="mb-4 block text-xs font-semibold text-surface-700">Transaksi terkait <span className="text-red-600">(wajib)</span>
+                            <select value={legacyProofTransaction} onChange={event => setLegacyProofTransaction(event.target.value)} className="mt-1.5 block w-full rounded-lg border border-surface-300 bg-white px-3 py-2 text-xs font-normal">
+                                <option value="">Pilih Quotation berstatus PO</option>
+                                {paymentTransactions.map(transaction => <option key={`${transaction.type}|${transaction.id}`} value={`${transaction.type}|${transaction.id}`}>{transaction.label}</option>)}
+                            </select>
+                        </label>
+                        <label className="mb-5 block text-xs font-semibold text-surface-700">Lampiran bukti <span className="text-red-600">(PDF/JPG/PNG, maks. 5 file, 10 MB per file)</span>
+                            <input type="file" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png" multiple onChange={event => setLegacyProofFiles(Array.from(event.target.files || []))} className="mt-1.5 block w-full text-xs text-surface-600 file:mr-2 file:rounded-md file:border-0 file:bg-brand-50 file:px-3 file:py-2 file:text-xs file:font-semibold file:text-brand-700" />
+                            {legacyProofFiles.length > 0 && <span className="mt-1 block text-[11px] text-surface-500">{legacyProofFiles.length} file dipilih</span>}
+                        </label>
+                        <div className="flex justify-end gap-2">
+                            <button type="button" disabled={submittingLegacyProof} onClick={() => { setShowLegacyProofModal(false); setLegacyProofFiles([]); setLegacyProofTransaction(''); }} className="rounded-lg px-4 py-2 text-xs font-semibold text-surface-600 hover:bg-surface-100">Batal</button>
+                            <button type="button" disabled={submittingLegacyProof || !legacyProofTransaction || !legacyProofFiles.length || legacyProofFiles.length > 5} onClick={submitLegacyPaymentProof} className="rounded-lg bg-brand-600 px-4 py-2 text-xs font-bold text-white hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-50">{submittingLegacyProof ? 'Mengunggah…' : 'Simpan Bukti'}</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* Modal Jadwalkan Kunjungan */}
             <ScheduleVisitModal
                 open={showScheduleModal}
@@ -1900,13 +1959,13 @@ export default function LeadDetail({
                             ⚠️ Email notifikasi akan dikirim ke Tim Finance setelah konfirmasi ini. Jika salah, hubungi Manager untuk membatalkan.
                         </div>
                         <label className="mb-4 block text-xs font-semibold text-surface-700">
-                            Transaksi yang dibayar <span className="text-red-600">(wajib)</span>
+                            Quotation yang dibayar <span className="text-red-600">(wajib, status PO)</span>
                             <select value={paymentTransaction} onChange={event => setPaymentTransaction(event.target.value)} required
                                 className="mt-1.5 block w-full rounded-lg border border-surface-300 bg-white px-3 py-2 text-xs font-normal text-surface-700">
-                                <option value="">Pilih quotation, PO, atau SO</option>
+                                <option value="">Pilih Quotation berstatus PO</option>
                                 {paymentTransactions.map(transaction => <option key={`${transaction.type}|${transaction.id}`} value={`${transaction.type}|${transaction.id}`}>{transaction.label}</option>)}
                             </select>
-                            {paymentTransactions.length === 0 && <span className="mt-1 block text-[11px] text-amber-700">Lead ini belum memiliki quotation, PO, atau SO yang dapat dipilih.</span>}
+                            {paymentTransactions.length === 0 && <span className="mt-1 block text-[11px] text-amber-700">Lead ini belum memiliki Quotation berstatus PO.</span>}
                         </label>
                         <label className="mb-4 block text-xs font-semibold text-surface-700">
                             Bukti pembayaran <span className="text-red-600">(wajib, maks. 5 file; PDF/JPG/PNG, 10 MB per file)</span>

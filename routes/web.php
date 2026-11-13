@@ -176,6 +176,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::patch('/{lead}/stage',                [LeadController::class, 'updateStage'])->name('stage.update');
         Route::post('/{lead}/stage',                 [LeadController::class, 'updateStage'])->name('stage.update.upload');
         Route::get('/{lead}/payment-transactions',   [LeadController::class, 'paymentTransactions'])->name('payment-transactions');
+        Route::post('/{lead}/payment-proofs',         [LeadController::class, 'uploadMissingPaymentProofs'])->name('payment-proofs.store');
         Route::get('/{lead}/payment-proofs/{proof}',  [LeadController::class, 'downloadPaymentProof'])->name('payment-proofs.download');
         Route::delete('/{lead}',                     [LeadController::class, 'destroy'])->name('destroy');
         Route::post('/{lead}/activities',            [LeadController::class, 'addActivity'])->name('activities.store');

@@ -1510,13 +1510,13 @@ export default function Leads({ grouped, stats, stageCounts = {}, salesUsers, fi
                             ⚠️ Notifikasi email akan dikirim otomatis ke Tim Finance setelah konfirmasi ini.
                         </div>
                         <label className="mb-4 block text-xs font-semibold text-surface-700">
-                            Transaksi yang dibayar <span className="text-red-600">(wajib)</span>
+                            Quotation yang dibayar <span className="text-red-600">(wajib, status PO)</span>
                             <select value={paymentTransaction} onChange={event => setPaymentTransaction(event.target.value)} required disabled={loadingPaymentTransactions || paymentTransactions.length === 0}
                                 className="mt-1.5 block w-full rounded-lg border border-surface-300 bg-white px-3 py-2 text-xs font-normal text-surface-700">
-                                <option value="">{loadingPaymentTransactions ? 'Memuat transaksi…' : 'Pilih quotation, PO, atau SO'}</option>
+                                <option value="">{loadingPaymentTransactions ? 'Memuat Quotation…' : 'Pilih Quotation berstatus PO'}</option>
                                 {paymentTransactions.map(transaction => <option key={`${transaction.type}|${transaction.id}`} value={`${transaction.type}|${transaction.id}`}>{transaction.label}</option>)}
                             </select>
-                            {!loadingPaymentTransactions && paymentTransactions.length === 0 && <span className="mt-1 block text-[11px] text-amber-700">Lead ini belum memiliki quotation, PO, atau SO yang dapat dipilih.</span>}
+                            {!loadingPaymentTransactions && paymentTransactions.length === 0 && <span className="mt-1 block text-[11px] text-amber-700">Lead ini belum memiliki Quotation berstatus PO.</span>}
                         </label>
                         <label className="mb-4 block text-xs font-semibold text-surface-700">
                             Bukti pembayaran <span className="text-red-600">(wajib, maks. 5 file; PDF/JPG/PNG, 10 MB per file)</span>
