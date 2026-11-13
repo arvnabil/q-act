@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Jobs\SyncDocumentsToSharePoint;
+use App\Jobs\SyncLeadPaymentProofToSharePoint;
 use App\Models\SharePointDocument;
 use App\Services\DocumentVisibility;
 use Illuminate\Http\Request;
@@ -121,6 +122,16 @@ class DocumentCenterController extends Controller
     {
         $user = $request->user();
         abort_unless(DocumentVisibility::allows($user, 'sharepoint_upload'), 403);
+
+        if ($document->source_type === 'lead_payment_proof' && $document->document_type === 'payment_proof') {
+            $document->update([
+                'status' => 'pending',
+                'error_message' => null,
+            ]);
+            SyncLeadPaymentProofToSharePoint::dispatch($document->source_id);
+
+            return back()->with('message', "Sinkronisasi ulang dimulai untuk bukti pembayaran {$document->original_filename}.");
+        }
 
         if (!$document->purchase_order_id) {
             return back()->withErrors(['message' => 'Dokumen tidak memiliki ID Purchase Order yang valid.']);

@@ -8,6 +8,7 @@ use Illuminate\Bus\Queueable;
 use Illuminate\Mail\Mailable;
 use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
+use Illuminate\Mail\Mailables\Attachment;
 use Illuminate\Queue\SerializesModels;
 
 class LeadPaidNotification extends Mailable
@@ -17,7 +18,15 @@ class LeadPaidNotification extends Mailable
     public function __construct(
         public Lead $lead,
         public User $confirmedBy,
+        public array $paymentProofs = [],
     ) {}
+
+    public function attachments(): array
+    {
+        return collect($this->paymentProofs)->map(fn ($proof) => Attachment::fromStorageDisk('local', $proof->path)
+            ->as($proof->original_name)
+            ->withMime($proof->mime_type))->all();
+    }
 
     public function envelope(): Envelope
     {

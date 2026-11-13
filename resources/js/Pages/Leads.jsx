@@ -859,6 +859,10 @@ export default function Leads({ grouped, stats, stageCounts = {}, salesUsers, fi
     const [lostReasonModal, setLostReasonModal] = useState(false);
     const [lostReasonText, setLostReasonText] = useState('');
     const [confirmTerbayarModal, setConfirmTerbayarModal] = useState(false);
+    const [paymentProofFiles, setPaymentProofFiles] = useState([]);
+    const [paymentTransactions, setPaymentTransactions] = useState([]);
+    const [paymentTransaction, setPaymentTransaction] = useState('');
+    const [loadingPaymentTransactions, setLoadingPaymentTransactions] = useState(false);
     const [showHelpModal, setShowHelpModal] = useState(false);
     const [pendingAction, setPendingAction] = useState(null);
 
@@ -1019,13 +1023,24 @@ export default function Leads({ grouped, stats, stageCounts = {}, salesUsers, fi
         });
 
         // Persist to database silently via background AJAX (no Inertia loading bar)
-        axios.patch(route('leads.stage.update', leadId), { stage: targetStage, ...extraData })
+        const proofFiles = extraData.paymentProofFiles || [];
+        const request = proofFiles.length
+            ? (() => {
+                const form = new FormData();
+                form.append('stage', targetStage);
+                form.append('payment_source_type', extraData.paymentSource.type);
+                form.append('payment_source_id', extraData.paymentSource.id);
+                proofFiles.forEach((file, index) => form.append(`payment_proofs[${index}]`, file));
+                return axios.post(route('leads.stage.update.upload', leadId), form);
+            })()
+            : axios.patch(route('leads.stage.update', leadId), { stage: targetStage, ...extraData });
+        request
             .then(() => {
                 toast.success(`Stage dipindahkan ke "${stageMetaMap[targetStage]?.label || STAGE_META[targetStage]?.label || targetStage}"`);
             })
             .catch(err => {
                 console.error('Failed to update stage in background:', err);
-                toast.error('Gagal memindahkan stage');
+                toast.error(Object.values(err.response?.data?.errors || {}).flat()[0] || 'Gagal memindahkan stage');
                 setLocalGrouped(grouped);
                 setLocalStats(stats);
             });
@@ -1049,7 +1064,19 @@ export default function Leads({ grouped, stats, stageCounts = {}, salesUsers, fi
 
         if (targetStage === 'selesai_terbayar') {
             setPendingAction({ leadId, targetStage, fromStage });
+            setPaymentProofFiles([]);
+            setPaymentTransaction('');
+            setPaymentTransactions([]);
+            setLoadingPaymentTransactions(true);
             setConfirmTerbayarModal(true);
+            axios.get(route('leads.payment-transactions', leadId))
+                .then(response => {
+                    const transactions = response.data.transactions || [];
+                    setPaymentTransactions(transactions);
+                    if (transactions.length === 1) setPaymentTransaction(`${transactions[0].type}|${transactions[0].id}`);
+                })
+                .catch(() => toast.error('Transaksi Lead gagal dimuat.'))
+                .finally(() => setLoadingPaymentTransactions(false));
             return;
         }
 
@@ -1482,20 +1509,41 @@ export default function Leads({ grouped, stats, stageCounts = {}, salesUsers, fi
                         <div className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2.5 text-xs text-amber-700 mb-4">
                             ⚠️ Notifikasi email akan dikirim otomatis ke Tim Finance setelah konfirmasi ini.
                         </div>
+                        <label className="mb-4 block text-xs font-semibold text-surface-700">
+                            Transaksi yang dibayar <span className="text-red-600">(wajib)</span>
+                            <select value={paymentTransaction} onChange={event => setPaymentTransaction(event.target.value)} required disabled={loadingPaymentTransactions || paymentTransactions.length === 0}
+                                className="mt-1.5 block w-full rounded-lg border border-surface-300 bg-white px-3 py-2 text-xs font-normal text-surface-700">
+                                <option value="">{loadingPaymentTransactions ? 'Memuat transaksi…' : 'Pilih quotation, PO, atau SO'}</option>
+                                {paymentTransactions.map(transaction => <option key={`${transaction.type}|${transaction.id}`} value={`${transaction.type}|${transaction.id}`}>{transaction.label}</option>)}
+                            </select>
+                            {!loadingPaymentTransactions && paymentTransactions.length === 0 && <span className="mt-1 block text-[11px] text-amber-700">Lead ini belum memiliki quotation, PO, atau SO yang dapat dipilih.</span>}
+                        </label>
+                        <label className="mb-4 block text-xs font-semibold text-surface-700">
+                            Bukti pembayaran <span className="text-red-600">(wajib, maks. 5 file; PDF/JPG/PNG, 10 MB per file)</span>
+                            <input type="file" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png" multiple required
+                                onChange={event => setPaymentProofFiles(Array.from(event.target.files || []))}
+                                className="mt-1.5 block w-full text-xs text-surface-600 file:mr-2 file:rounded-md file:border-0 file:bg-brand-50 file:px-3 file:py-2 file:text-xs file:font-semibold file:text-brand-700" />
+                            {paymentProofFiles.length > 0 && <span className="mt-1 block text-[11px] text-surface-500">{paymentProofFiles.length} file dipilih</span>}
+                        </label>
                         <div className="flex justify-end gap-3">
                             <button
-                                onClick={() => { setConfirmTerbayarModal(false); setPendingAction(null); }}
+                                onClick={() => { setConfirmTerbayarModal(false); setPendingAction(null); setPaymentProofFiles([]); setPaymentTransactions([]); setPaymentTransaction(''); }}
                                 className="px-4 py-2 text-sm font-medium text-surface-600 hover:text-surface-900 transition-colors cursor-pointer"
                             >Batal</button>
                             <button
                                 onClick={() => {
-                                    if (pendingAction) {
-                                        executeDropCard(pendingAction.leadId, pendingAction.targetStage, pendingAction.fromStage);
+                                    if (pendingAction && paymentProofFiles.length > 0 && paymentTransaction) {
+                                        const [type, id] = paymentTransaction.split('|');
+                                        executeDropCard(pendingAction.leadId, pendingAction.targetStage, pendingAction.fromStage, { paymentProofFiles, paymentSource: { type, id } });
                                     }
                                     setConfirmTerbayarModal(false);
                                     setPendingAction(null);
+                                    setPaymentProofFiles([]);
+                                    setPaymentTransactions([]);
+                                    setPaymentTransaction('');
                                 }}
-                                className="px-5 py-2 text-sm font-semibold bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors cursor-pointer"
+                                disabled={paymentProofFiles.length === 0 || paymentProofFiles.length > 5 || !paymentTransaction || loadingPaymentTransactions}
+                                className="px-5 py-2 text-sm font-semibold bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
                             >Ya, Sudah Terbayar</button>
                         </div>
                     </div>

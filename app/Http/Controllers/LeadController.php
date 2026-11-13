@@ -9,6 +9,7 @@ use App\Models\CustomerPic;
 use App\Models\Lead;
 use App\Models\LeadActivity;
 use App\Models\LeadPic;
+use App\Models\LeadPaymentProof;
 use App\Models\LeadVisit;
 use App\Models\SystemSetting;
 use App\Models\User;
@@ -17,11 +18,16 @@ use App\Services\ZoomService;
 use App\Services\WorkflowAccess;
 use App\Services\DocumentVisibility;
 use App\Models\Quotation;
+use App\Models\QuotationPurchaseOrder;
+use App\Models\SalesOrder;
+use App\Models\SharePointDocument;
 use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 
 class LeadController extends Controller
@@ -143,6 +149,79 @@ class LeadController extends Controller
             'description' => $description,
             'metadata'    => $metadata ?: null,
         ]);
+    }
+
+    private function paymentProofPayload(LeadPaymentProof $proof): array
+    {
+        $proof->loadMissing(['quotation', 'purchaseOrder.quotation', 'salesOrder']);
+        $proof->loadMissing('sharePointDocument');
+        $sourceLabel = null;
+        $sourceUrl = null;
+        if ($proof->purchaseOrder) {
+            $sourceLabel = 'PO ' . $proof->purchaseOrder->po_number;
+            $sourceUrl = route('quotations.show', $proof->purchaseOrder->quotation_id);
+        } elseif ($proof->salesOrder) {
+            $sourceLabel = 'SO ' . $proof->salesOrder->id;
+            $sourceUrl = route('sales-orders.show', $proof->salesOrder->id);
+        } elseif ($proof->quotation) {
+            $sourceLabel = 'Quotation ' . $proof->quotation->id;
+            $sourceUrl = route('quotations.show', $proof->quotation->id);
+        }
+        $sourceLabel = $sourceLabel ?: $proof->source_label;
+
+        return [
+            'id' => $proof->id,
+            'original_name' => $proof->original_name,
+            'mime_type' => $proof->mime_type,
+            'size' => $proof->size,
+            'created_at' => $proof->created_at,
+            'uploader' => $proof->uploader?->name,
+            'source_label' => $sourceLabel,
+            'source_url' => $sourceUrl,
+            'sharepoint_status' => $proof->sharePointDocument?->status,
+            'sharepoint_url' => $proof->sharePointDocument?->sharepoint_web_url,
+            'sharepoint_folder_path' => $proof->sharePointDocument?->sharepoint_folder_path,
+            'sharepoint_error' => $proof->sharePointDocument?->error_message,
+            'download_url' => route('leads.payment-proofs.download', [$proof->lead_id, $proof->id]),
+        ];
+    }
+
+    private function paymentTransactionOptions(Request $request, Lead $lead): array
+    {
+        $quotations = DocumentVisibility::apply(Quotation::query(), $request->user(), 'quotations')
+            ->where('is_deleted', false)
+            ->where(function ($query) use ($lead) {
+                $query->where('lead_id', $lead->id)->orWhere('id', $lead->quotation_id);
+            })
+            ->with(['purchaseOrders:id,quotation_id,po_number', 'salesOrders:id,quotation_id,status'])
+            ->orderByDesc('date')->get(['id', 'lead_id', 'status', 'date', 'po_number']);
+
+        $options = [];
+        foreach ($quotations as $quotation) {
+            $options[] = [
+                'type' => 'quotation', 'id' => $quotation->id,
+                'label' => 'Quotation ' . $quotation->id . ($quotation->po_number ? ' · PO ' . $quotation->po_number : ''),
+                'url' => route('quotations.show', $quotation->id),
+            ];
+            foreach ($quotation->purchaseOrders as $purchaseOrder) {
+                $options[] = [
+                    'type' => 'purchase_order', 'id' => $purchaseOrder->id,
+                    'label' => 'PO ' . $purchaseOrder->po_number . ' · ' . $quotation->id,
+                    'url' => route('quotations.show', $quotation->id),
+                ];
+            }
+            $visibleSalesOrders = DocumentVisibility::apply(SalesOrder::query(), $request->user(), 'sales_orders')
+                ->where('quotation_id', $quotation->id)->get(['id']);
+            foreach ($visibleSalesOrders as $salesOrder) {
+                $options[] = [
+                    'type' => 'sales_order', 'id' => $salesOrder->id,
+                    'label' => 'SO ' . $salesOrder->id . ' · ' . $quotation->id,
+                    'url' => route('sales-orders.show', $salesOrder->id),
+                ];
+            }
+        }
+
+        return $options;
     }
 
     // ─── Leads Index ────────────────────────────────────────────────────────────
@@ -327,6 +406,7 @@ class LeadController extends Controller
             'pics.customerPic',
             'visits.user:id,name',
         ]);
+        $lead->setRelation('paymentProofs', $lead->paymentProofs()->with('uploader:id,name')->get());
 
         // Load activities sorted newest first
         $lead->setRelation('activities',
@@ -339,6 +419,8 @@ class LeadController extends Controller
 
         return Inertia::render('LeadDetail', [
             'lead'                     => $lead,
+            'paymentProofs'            => $lead->paymentProofs->map(fn (LeadPaymentProof $proof) => $this->paymentProofPayload($proof))->values(),
+            'paymentTransactions'      => $this->paymentTransactionOptions(request(), $lead),
             'customerPics'             => $customerPics,
             'stages'                   => Lead::STAGES,
             'sources'                  => Lead::SOURCES,
@@ -473,10 +555,45 @@ class LeadController extends Controller
             'stage'       => 'required|string|in:' . implode(',', $this->getAllowedStageKeys()),
             'lost_reason' => 'nullable|string|max:500',
             'sort_order'  => 'nullable|integer',
+            'payment_proofs' => 'required_if:stage,selesai_terbayar|array|min:1|max:5',
+            'payment_proofs.*' => 'required|file|mimes:pdf,jpg,jpeg,png|max:10240',
+            'payment_source_type' => 'required_if:stage,selesai_terbayar|in:quotation,purchase_order,sales_order',
+            'payment_source_id' => 'required_if:stage,selesai_terbayar|string|max:64',
         ]);
 
         $oldStage = $lead->stage;
         $newStage = $data['stage'];
+        $paymentSource = [];
+        if ($newStage === 'selesai_terbayar') {
+            $linkedQuotationIds = DocumentVisibility::apply(Quotation::query(), $request->user(), 'quotations')
+                ->where('is_deleted', false)
+                ->where(function ($query) use ($lead) {
+                    $query->where('lead_id', $lead->id)->orWhere('id', $lead->quotation_id);
+                })->select('id');
+            $sourceId = $data['payment_source_id'];
+            $validSource = match ($data['payment_source_type']) {
+                'quotation' => (clone $linkedQuotationIds)->where('id', $sourceId)->exists(),
+                'purchase_order' => QuotationPurchaseOrder::whereKey($sourceId)->whereIn('quotation_id', clone $linkedQuotationIds)->exists(),
+                'sales_order' => DocumentVisibility::apply(SalesOrder::query(), $request->user(), 'sales_orders')
+                    ->whereKey($sourceId)->whereIn('quotation_id', clone $linkedQuotationIds)->exists(),
+            };
+            if (! $validSource) {
+                throw ValidationException::withMessages(['payment_source_id' => 'Pilih quotation, PO, atau SO yang terhubung dan dapat diakses melalui Lead ini.']);
+            }
+            $paymentSource = match ($data['payment_source_type']) {
+                'quotation' => ['quotation_id' => $sourceId, 'source_label' => 'Quotation ' . $sourceId],
+                'purchase_order' => [
+                    'purchase_order_id' => $sourceId,
+                    'quotation_id' => QuotationPurchaseOrder::whereKey($sourceId)->value('quotation_id'),
+                    'source_label' => 'PO ' . QuotationPurchaseOrder::whereKey($sourceId)->value('po_number'),
+                ],
+                'sales_order' => [
+                    'sales_order_id' => $sourceId,
+                    'quotation_id' => SalesOrder::whereKey($sourceId)->value('quotation_id'),
+                    'source_label' => 'SO ' . $sourceId,
+                ],
+            };
+        }
 
         $updateData = [
             'stage'      => $newStage,
@@ -495,7 +612,58 @@ class LeadController extends Controller
             $updateData['lost_reason'] = $data['lost_reason'];
         }
 
-        $lead->update($updateData);
+        $storedPaths = [];
+        $paymentProofs = collect();
+        try {
+            DB::transaction(function () use ($request, $lead, $updateData, $newStage, $paymentSource, &$storedPaths, &$paymentProofs) {
+                $lead->update($updateData);
+                if ($newStage === 'selesai_terbayar') {
+                    foreach ($request->file('payment_proofs', []) as $file) {
+                        $path = $file->store('lead-payment-proofs/' . $lead->id, 'local');
+                        if (! $path) {
+                            throw new \RuntimeException('Bukti pembayaran gagal disimpan.');
+                        }
+                        $storedPaths[] = $path;
+                        $paymentProofs->push($lead->paymentProofs()->create([
+                            'uploaded_by' => $request->user()->id,
+                            ...$paymentSource,
+                            'path' => $path,
+                            'original_name' => mb_substr($file->getClientOriginalName(), 0, 255),
+                            'mime_type' => $file->getMimeType() ?: 'application/octet-stream',
+                            'size' => $file->getSize(),
+                        ]));
+                    }
+                }
+            });
+        } catch (\Throwable $exception) {
+            foreach ($storedPaths as $path) {
+                Storage::disk('local')->delete($path);
+            }
+            throw $exception;
+        }
+
+        foreach ($paymentProofs as $proof) {
+            try {
+                SharePointDocument::updateOrCreate(
+                    ['source_type' => 'lead_payment_proof', 'source_id' => $proof->id, 'document_type' => 'payment_proof'],
+                    [
+                        'quotation_id' => $paymentSource['quotation_id'] ?? null,
+                        'purchase_order_id' => $paymentSource['purchase_order_id'] ?? null,
+                        'original_filename' => $proof->original_name,
+                        'file_size' => $proof->size,
+                        'mime_type' => $proof->mime_type,
+                        'status' => 'pending',
+                        'uploaded_by' => $proof->uploaded_by,
+                        'error_message' => null,
+                    ]
+                );
+                \App\Jobs\SyncLeadPaymentProofToSharePoint::dispatch($proof->id)->afterCommit();
+            } catch (\Throwable $exception) {
+                \Illuminate\Support\Facades\Log::warning('Payment proof queued without SharePoint sync record: ' . $exception->getMessage(), [
+                    'payment_proof_id' => $proof->id,
+                ]);
+            }
+        }
 
         // Send email notification to Finance team when lead is confirmed as paid
         if ($newStage === 'selesai_terbayar') {
@@ -514,7 +682,7 @@ class LeadController extends Controller
                     if (!empty($resolved['bcc'])) {
                         $mail->bcc($resolved['bcc']);
                     }
-                    $mail->send(new \App\Mail\LeadPaidNotification($lead, $request->user()));
+                    $mail->send(new \App\Mail\LeadPaidNotification($lead, $request->user(), $paymentProofs->all()));
                 } elseif (!$resolved['enabled']) {
                     // Notification disabled
                 } else {
@@ -522,7 +690,7 @@ class LeadController extends Controller
                     $financeUsers = \App\Models\User::where('is_active', true)->where('role', 'Finance')->get();
                     foreach ($financeUsers as $financeUser) {
                         \Illuminate\Support\Facades\Mail::to($financeUser->email)
-                            ->send(new \App\Mail\LeadPaidNotification($lead, $request->user()));
+                            ->send(new \App\Mail\LeadPaidNotification($lead, $request->user(), $paymentProofs->all()));
                     }
                 }
             } catch (\Exception $e) {
@@ -552,7 +720,7 @@ class LeadController extends Controller
             'stage_change',
             'Stage diubah: ' . $oldStage . ' → ' . $newStage,
             $data['lost_reason'] ?? null,
-            ['from' => $oldStage, 'to' => $newStage]
+            ['from' => $oldStage, 'to' => $newStage, 'payment_proof_ids' => $paymentProofs->pluck('id')->all()]
         );
 
         // Auto-convert to customer on deal
@@ -566,10 +734,31 @@ class LeadController extends Controller
                 'success' => true,
                 'message' => 'Stage lead berhasil diubah.',
                 'lead'    => $lead,
+                'payment_proofs' => $paymentProofs->map(fn (LeadPaymentProof $proof) => $this->paymentProofPayload($proof))->values(),
             ]);
         }
 
         return back()->with('message', 'Stage lead berhasil diubah.');
+    }
+
+    public function downloadPaymentProof(Request $request, Lead $lead, LeadPaymentProof $proof)
+    {
+        WorkflowAccess::lead($request->user(), $lead);
+        abort_unless($proof->lead_id === $lead->id, 404);
+        abort_unless(Storage::disk('local')->exists($proof->path), 404);
+
+        return Storage::disk('local')->download($proof->path, $proof->original_name, [
+            'Content-Type' => $proof->mime_type,
+            'X-Content-Type-Options' => 'nosniff',
+        ]);
+    }
+
+    public function paymentTransactions(Request $request, Lead $lead)
+    {
+        WorkflowAccess::lead($request->user(), $lead);
+
+        return response()->json(['transactions' => $this->paymentTransactionOptions($request, $lead)])
+            ->header('Cache-Control', 'no-store');
     }
 
     // ─── Destroy (Archive) ───────────────────────────────────────────────────────

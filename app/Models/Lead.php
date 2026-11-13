@@ -114,6 +114,11 @@ class Lead extends Model
         return $this->hasMany(LeadActivity::class)->latest();
     }
 
+    public function paymentProofs(): HasMany
+    {
+        return $this->hasMany(LeadPaymentProof::class)->latest();
+    }
+
     public function visits(): HasMany
     {
         return $this->hasMany(LeadVisit::class)->orderBy('scheduled_at');

@@ -13,7 +13,7 @@ import {
     Phone, Mail, MessageSquare, Calendar, CheckCircle2, Tag,
     MessageCircle, Video, Send, ChevronDown, Pencil, Check,
     Navigation, AlertCircle, ShoppingCart, Users, Briefcase,
-    ExternalLink, ShieldCheck
+    ExternalLink, ShieldCheck, Paperclip
 } from 'lucide-react';
 
 // ─── Constants ───────────────────────────────────────────────────────────────────
@@ -1361,6 +1361,8 @@ function AddLeadPicModal({ open, onClose, lead, customerPics = [] }) {
 
 export default function LeadDetail({ 
     lead, 
+    paymentProofs: initialPaymentProofs = [],
+    paymentTransactions: initialPaymentTransactions = [],
     customerPics = [], 
     stages = [], 
     sources = [],
@@ -1380,6 +1382,9 @@ export default function LeadDetail({
     const [changingStage, setChangingStage] = useState(false);
     const [currentStage, setCurrentStage] = useState(lead.stage);
     const [activities, setActivities] = useState(lead.activities || []);
+    const [paymentProofs, setPaymentProofs] = useState(initialPaymentProofs || []);
+    const [paymentTransactions, setPaymentTransactions] = useState(initialPaymentTransactions || []);
+    const [paymentTransaction, setPaymentTransaction] = useState('');
 
     // Lost reason modal
     const [lostReasonModal, setLostReasonModal] = useState(false);
@@ -1389,6 +1394,7 @@ export default function LeadDetail({
     // Confirm terbayar modal
     const [confirmTerbayarModal, setConfirmTerbayarModal] = useState(false);
     const [pendingTerbayarStage, setPendingTerbayarStage] = useState(null);
+    const [paymentProofFiles, setPaymentProofFiles] = useState([]);
 
     // Build stage meta with updated custom labels and colors
     const stageMetaMap = { ...STAGE_META };
@@ -1410,8 +1416,10 @@ export default function LeadDetail({
 
     useEffect(() => { setCurrentStage(lead.stage); }, [lead.stage]);
     useEffect(() => { setActivities(lead.activities || []); }, [lead.activities]);
+    useEffect(() => { setPaymentProofs(initialPaymentProofs || []); }, [initialPaymentProofs]);
+    useEffect(() => { setPaymentTransactions(initialPaymentTransactions || []); }, [initialPaymentTransactions]);
 
-    const submitStageChange = async (newStage, extraData = {}) => {
+    const submitStageChange = async (newStage, extraData = {}, proofFiles = []) => {
         const oldStage = currentStage;
         setCurrentStage(newStage);
         setChangingStage(false);
@@ -1425,10 +1433,22 @@ export default function LeadDetail({
         };
         setActivities(prev => [optimistic, ...prev]);
         try {
-            await axios.patch(route('leads.stage.update', lead.id), { stage: newStage, ...extraData });
+            let response;
+            if (proofFiles.length) {
+                const form = new FormData();
+                form.append('stage', newStage);
+                const [sourceType, sourceId] = paymentTransaction.split('|');
+                form.append('payment_source_type', sourceType || '');
+                form.append('payment_source_id', sourceId || '');
+                proofFiles.forEach((file, index) => form.append(`payment_proofs[${index}]`, file));
+                response = await axios.post(route('leads.stage.update.upload', lead.id), form);
+                setPaymentProofs(prev => [...(response.data.payment_proofs || []), ...prev]);
+            } else {
+                response = await axios.patch(route('leads.stage.update', lead.id), { stage: newStage, ...extraData });
+            }
             toast.success(`Stage diubah ke "${stageMetaMap[newStage]?.label || newStage}"`);
-        } catch {
-            toast.error('Gagal mengubah stage lead.');
+        } catch (error) {
+            toast.error(Object.values(error.response?.data?.errors || {}).flat()[0] || 'Gagal mengubah stage lead.');
             setCurrentStage(oldStage);
             setActivities(lead.activities || []);
         }
@@ -1454,6 +1474,10 @@ export default function LeadDetail({
 
         if (newStage === 'selesai_terbayar') {
             setPendingTerbayarStage(newStage);
+            setPaymentProofFiles([]);
+            setPaymentTransaction(paymentTransactions.length === 1
+                ? `${paymentTransactions[0].type}|${paymentTransactions[0].id}`
+                : '');
             setConfirmTerbayarModal(true);
             setChangingStage(false);
             return;
@@ -1497,6 +1521,7 @@ export default function LeadDetail({
         { key: 'poso',       label: 'PO & Sales Order',     icon: ShoppingCart,  count: allPurchaseOrders.length + allSalesOrders.length },
         { key: 'visits',     label: 'Agenda',            icon: MapPin,        count: (lead.visits || []).length },
         { key: 'pics',       label: 'Kontak PIC',           icon: Users,         count: allLeadPics.length },
+        { key: 'paymentProofs', label: 'Bukti Bayar',       icon: Paperclip,     count: paymentProofs.length },
     ];
 
     return (
@@ -1767,6 +1792,37 @@ export default function LeadDetail({
                                     onOpenAdd={() => setShowAddPicModal(true)}
                                 />
                             )}
+
+                            {activeTab === 'paymentProofs' && (
+                                <div className="space-y-4">
+                                    <div>
+                                        <h3 className="text-sm font-bold text-surface-800">Bukti Pembayaran Lead</h3>
+                                        <p className="text-xs text-surface-500 mt-1">File disimpan privat dan hanya dapat diunduh oleh pengguna yang berhak melihat Lead ini.</p>
+                                    </div>
+                                    {paymentProofs.length === 0 ? (
+                                        <div className="rounded-xl border border-dashed border-surface-200 bg-surface-50 py-10 text-center text-xs text-surface-500">Belum ada bukti pembayaran.</div>
+                                    ) : (
+                                        <div className="divide-y divide-surface-100 rounded-xl border border-surface-200">
+                                            {paymentProofs.map(proof => (
+                                                <div key={proof.id} className="flex items-center justify-between gap-3 p-3">
+                                                    <div className="flex min-w-0 items-center gap-2.5">
+                                                        <FileText className="h-4 w-4 shrink-0 text-brand-600" />
+                                                        <div className="min-w-0">
+                                                            <div className="truncate text-xs font-semibold text-surface-800">{proof.original_name}</div>
+                                                            <div className="text-[10px] text-surface-500">{proof.uploader || 'Pengguna'} · {proof.created_at ? new Date(proof.created_at).toLocaleString('id-ID') : ''} · {proof.source_url ? <a href={proof.source_url} className="font-semibold text-brand-700 hover:underline">{proof.source_label}</a> : proof.source_label}</div>
+                                                            <div className="text-[10px]">
+                                                                {proof.sharepoint_url ? <a href={proof.sharepoint_url} target="_blank" rel="noreferrer" className="font-semibold text-emerald-700 hover:underline">Buka di SharePoint</a> : proof.sharepoint_status === 'failed' ? <span className="text-amber-700">SharePoint gagal: {proof.sharepoint_error || 'perlu dicoba ulang'}</span> : <span className="text-surface-400">{proof.sharepoint_status === 'uploading' ? 'Sedang diunggah ke SharePoint…' : proof.sharepoint_status === 'pending' ? 'Menunggu upload ke SharePoint…' : 'Status SharePoint belum tersedia'}</span>}
+                                                                {proof.sharepoint_folder_path && <span className="ml-1 text-surface-400" title={proof.sharepoint_folder_path}>· Folder {proof.sharepoint_folder_path}</span>}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    <a href={proof.download_url} className="shrink-0 rounded-lg border border-brand-200 px-3 py-1.5 text-xs font-semibold text-brand-700 hover:bg-brand-50">Unduh</a>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
                         </div>
                     </div>
                 </div>
@@ -1843,9 +1899,25 @@ export default function LeadDetail({
                         <div className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2.5 text-xs text-amber-700 mb-4">
                             ⚠️ Email notifikasi akan dikirim ke Tim Finance setelah konfirmasi ini. Jika salah, hubungi Manager untuk membatalkan.
                         </div>
+                        <label className="mb-4 block text-xs font-semibold text-surface-700">
+                            Transaksi yang dibayar <span className="text-red-600">(wajib)</span>
+                            <select value={paymentTransaction} onChange={event => setPaymentTransaction(event.target.value)} required
+                                className="mt-1.5 block w-full rounded-lg border border-surface-300 bg-white px-3 py-2 text-xs font-normal text-surface-700">
+                                <option value="">Pilih quotation, PO, atau SO</option>
+                                {paymentTransactions.map(transaction => <option key={`${transaction.type}|${transaction.id}`} value={`${transaction.type}|${transaction.id}`}>{transaction.label}</option>)}
+                            </select>
+                            {paymentTransactions.length === 0 && <span className="mt-1 block text-[11px] text-amber-700">Lead ini belum memiliki quotation, PO, atau SO yang dapat dipilih.</span>}
+                        </label>
+                        <label className="mb-4 block text-xs font-semibold text-surface-700">
+                            Bukti pembayaran <span className="text-red-600">(wajib, maks. 5 file; PDF/JPG/PNG, 10 MB per file)</span>
+                            <input type="file" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png" multiple required
+                                onChange={event => setPaymentProofFiles(Array.from(event.target.files || []))}
+                                className="mt-1.5 block w-full text-xs text-surface-600 file:mr-2 file:rounded-md file:border-0 file:bg-brand-50 file:px-3 file:py-2 file:text-xs file:font-semibold file:text-brand-700" />
+                            {paymentProofFiles.length > 0 && <span className="mt-1 block text-[11px] text-surface-500">{paymentProofFiles.length} file dipilih</span>}
+                        </label>
                         <div className="flex justify-end gap-3">
                             <button
-                                onClick={() => { setConfirmTerbayarModal(false); setPendingTerbayarStage(null); }}
+                                onClick={() => { setConfirmTerbayarModal(false); setPendingTerbayarStage(null); setPaymentProofFiles([]); setPaymentTransaction(''); }}
                                 className="px-4 py-2 text-sm font-medium text-surface-600 hover:text-surface-900 transition-colors"
                             >Batal</button>
                             <button
@@ -1853,9 +1925,14 @@ export default function LeadDetail({
                                     const stage = pendingTerbayarStage;
                                     setConfirmTerbayarModal(false);
                                     setPendingTerbayarStage(null);
-                                    submitStageChange(stage);
+                                    if (paymentProofFiles.length > 0 && paymentProofFiles.length <= 5 && paymentTransaction) {
+                                        submitStageChange(stage, {}, paymentProofFiles);
+                                    }
+                                    setPaymentProofFiles([]);
+                                    setPaymentTransaction('');
                                 }}
-                                className="px-5 py-2 text-sm font-semibold bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors"
+                                disabled={paymentProofFiles.length === 0 || paymentProofFiles.length > 5 || !paymentTransaction}
+                                className="px-5 py-2 text-sm font-semibold bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors disabled:cursor-not-allowed disabled:opacity-50"
                             >Ya, Sudah Terbayar</button>
                         </div>
                     </div>
