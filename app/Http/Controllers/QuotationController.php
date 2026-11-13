@@ -2051,7 +2051,8 @@ class QuotationController extends Controller
         $pdf->getDomPDF()->getOptions()->set([
             'isHtml5ParserEnabled' => true,
             'isRemoteEnabled'      => true,
-            'defaultFont'          => 'sans-serif',
+            // Use Dompdf's bundled Unicode font for quotation descriptions.
+            'defaultFont'          => 'DejaVu Sans',
             'dpi'                  => 96,
         ]);
 

@@ -228,8 +228,9 @@ export function generateQuotationHTML(q, withImage = false, bankAccount = null, 
 
   const html = `
     <!DOCTYPE html>
-    <html>
+    <html lang="${lang === 'en' ? 'en' : 'id'}">
       <head>
+        <meta charset="utf-8" />
         <base href="${window.location.origin}/" />
         <title>Quotation ${q.id} - ${q.customer?.name || 'Customer'}</title>
         <style>
@@ -238,9 +239,13 @@ export function generateQuotationHTML(q, withImage = false, bankAccount = null, 
             print-color-adjust: exact !important;
             box-sizing: border-box;
           }
-          @page { margin: 15mm 15mm 15mm 15mm; size: A4 portrait; }
+          @page { margin: 15mm; size: A4 portrait; }
+          @media print {
+            html, body { width: 100%; margin: 0; padding: 0; }
+            body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+          }
           body {
-            font-family: Arial, Helvetica, sans-serif; color: #111; margin: 0; padding: 0;
+            font-family: "DejaVu Sans", Arial, sans-serif; color: #111; margin: 0; padding: 0;
             font-size: ${baseFontSize}; line-height: 1.25;
             width: 100%; box-sizing: border-box; background: #ffffff;
           }

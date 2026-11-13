@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html>
+<html lang="id">
 <head>
     <meta charset="utf-8">
     <title>Quotation {{ $quotation->id }} - {{ $quotation->customer?->name ?? 'Customer' }}</title>
@@ -14,7 +14,7 @@
             size: A4 portrait;
         }
         body {
-            font-family: Arial, Helvetica, sans-serif;
+            font-family: "DejaVu Sans", sans-serif;
             color: #111;
             margin: 0;
             padding: 0;

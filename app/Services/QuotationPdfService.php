@@ -67,7 +67,8 @@ class QuotationPdfService
         $pdf->getDomPDF()->getOptions()->set([
             'isHtml5ParserEnabled' => true,
             'isRemoteEnabled'      => true,
-            'defaultFont'          => 'sans-serif',
+            // Dompdf's core PDF fonts lack the symbols used in product descriptions.
+            'defaultFont'          => 'DejaVu Sans',
             'dpi'                  => 96,
         ]);
 

@@ -373,6 +373,15 @@ export default function QuotationDetail({ quotation, printDocuments = [], bankAc
                                 </>
                             )}
                             {/* Tombol Download PDF Langsung (dengan opsi sub-quotation jika ada) */}
+                            <button
+                                type="button"
+                                onClick={() => handlePrint(quotation)}
+                                className="flex items-center gap-1.5 rounded-lg border border-surface-200 bg-white px-4 py-2 text-xs font-bold text-surface-700 shadow-xs transition-all hover:bg-surface-50 active:scale-95 cursor-pointer"
+                                title={`Cetak quotation ${quotation.id}`}
+                            >
+                                <Printer className="w-4 h-4" />
+                                Print
+                            </button>
                             <div className="relative flex items-stretch">
                                 <button
                                     type="button"
