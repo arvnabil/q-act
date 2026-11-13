@@ -133,9 +133,15 @@ const getDateGroup = (dateStr) => {
 
 function StageBadge({ stage, meta: customMeta }) {
     const meta = customMeta || STAGE_META[stage] || { label: stage, color: 'bg-surface-100 text-surface-600', dot: 'bg-surface-400' };
-    const colorHex = meta.colorHex;
+    const colorHex = /^#[0-9a-f]{6}$/i.test(meta.colorHex || '') ? meta.colorHex : null;
+    const rgb = colorHex?.slice(1).match(/.{2}/g).map(value => parseInt(value, 16));
+    const badgeStyle = rgb ? {
+        backgroundColor: `rgb(${rgb.map(value => Math.round(value * 0.12 + 255 * 0.88)).join(', ')})`,
+        borderColor: `rgb(${rgb.map(value => Math.round(value * 0.3 + 255 * 0.7)).join(', ')})`,
+        color: `rgb(${rgb.map(value => Math.round(value * 0.42)).join(', ')})`,
+    } : undefined;
     return (
-        <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold ${meta.color || 'bg-surface-100 text-surface-600'}`}>
+        <span style={badgeStyle} className={`inline-flex items-center gap-1.5 whitespace-nowrap border border-transparent px-2.5 py-1 rounded-full text-xs font-semibold ${!colorHex ? (meta.color || 'bg-surface-100 text-surface-600') : ''}`}>
             <span
                 className={`w-2 h-2 rounded-full shrink-0 ${!colorHex ? (meta.dot || 'bg-surface-400') : ''}`}
                 style={colorHex ? { backgroundColor: colorHex } : undefined}
