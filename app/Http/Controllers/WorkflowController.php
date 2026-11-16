@@ -10,6 +10,7 @@ use App\Models\SystemSetting;
 use Carbon\Carbon;
 use App\Services\DocumentVisibility;
 use App\Services\GoogleCalendarService;
+use App\Services\LeadVisitCalendarSyncService;
 use App\Services\LeadCode;
 use App\Services\WorkflowAccess;
 use App\Services\ZoomService;
@@ -256,31 +257,34 @@ class WorkflowController extends Controller
     public function cancel(Request $request, LeadVisit $visit)
     {
         WorkflowAccess::visit($request->user(), $visit);
-        if ($visit->cancelled_at) {
-            return response()->json(['message' => 'Agenda sudah dibatalkan.']);
-        }
-        abort_if($visit->checked_in_at, 422, 'Agenda sudah selesai.');
-        $visit->update(['cancelled_at' => now()]);
-        $warnings = [];
+        $wasCancelled = (bool) $visit->cancelled_at;
+        abort_if(! $wasCancelled && $visit->checked_in_at, 422, 'Agenda sudah selesai.');
+
+        $warnings = app(LeadVisitCalendarSyncService::class)->deleteProviderEvents($visit);
         try {
-            if ($visit->gc_event_id && ! app(GoogleCalendarService::class)->deleteEvent($visit->gc_event_id)) {
-                $warnings[] = 'Google Calendar belum berhasil diperbarui.';
-            }
-        } catch (\Throwable $e) {
-            $warnings[] = 'Google Calendar belum berhasil diperbarui.';
-        }
-        try {
-            if ($visit->zoom_meeting_id && ! app(ZoomService::class)->deleteMeeting($visit->zoom_meeting_id)) {
-                $warnings[] = 'Zoom belum berhasil dibatalkan.';
+            if ($visit->zoom_meeting_id) {
+                if (! app(ZoomService::class)->deleteMeeting($visit->zoom_meeting_id)) {
+                    $warnings[] = 'Zoom belum berhasil dibatalkan.';
+                } else {
+                    $visit->forceFill(['zoom_meeting_id' => null])->save();
+                }
             }
         } catch (\Throwable $e) {
             $warnings[] = 'Zoom belum berhasil dibatalkan.';
         }
-        if ($visit->lead_id) {
+
+        if (! $warnings && ! $wasCancelled) {
+            $visit->forceFill(['cancelled_at' => now()])->save();
+        }
+        if (! $wasCancelled && ! $warnings && $visit->lead_id) {
             LeadActivity::create(['lead_id' => $visit->lead_id, 'user_id' => $request->user()->id,
                 'type' => 'visit', 'title' => mb_substr('Agenda dibatalkan: '.$visit->subject, 0, 255), 'metadata' => ['visit_id' => $visit->id]]);
         }
 
-        return response()->json(['message' => 'Agenda dibatalkan.', 'warnings' => $warnings]);
+        return response()->json([
+            'message' => $warnings ? 'Sebagian kalender belum berhasil membatalkan agenda.' : 'Agenda dibatalkan.',
+            'cancelled' => ! $warnings,
+            'warnings' => $warnings,
+        ]);
     }
 }

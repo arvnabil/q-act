@@ -12,6 +12,7 @@ use App\Models\Quotation;
 use App\Models\QuotationItem;
 use App\Models\User;
 use App\Services\GoogleCalendarService;
+use App\Services\LeadVisitCalendarSyncService;
 use App\Services\OutlookCalendarService;
 use App\Services\PersonalDashboard;
 use App\Services\ZoomService;
@@ -288,6 +289,9 @@ class WorkflowTest extends TestCase
         $u = $this->actor();
         $this->quote($u);
         $id = $this->actingAs($u)->postJson('/leads/visits', $this->agenda(['quotation_id' => 'Q1']))->assertOk()->json('visit.id');
+        $this->mock(LeadVisitCalendarSyncService::class, function ($mock) use ($id) {
+            $mock->shouldReceive('deleteProviderEvents')->twice()->withArgs(fn (LeadVisit $visit) => $visit->id === $id)->andReturn([]);
+        });
         $this->postJson('/workflow/visits/'.$id.'/cancel')->assertOk();
         $this->postJson('/workflow/visits/'.$id.'/cancel')->assertOk();
         $this->postJson('/leads/visits/'.$id.'/check-in')->assertUnprocessable();
@@ -295,6 +299,35 @@ class WorkflowTest extends TestCase
         $this->assertDatabaseCount('lead_visits', 1);
         $this->getJson('/workflow/quotations/Q1')->assertJsonCount(1, 'visits');
         $this->get('/team-calendar')->assertInertia(fn (Assert $p) => $p->has('visits', 0));
+    }
+
+    public function test_failed_calendar_cancellation_keeps_agenda_retryable(): void
+    {
+        $u = $this->actor();
+        $visit = LeadVisit::create(array_merge($this->agenda(), ['user_id' => $u->id]));
+        $this->mock(LeadVisitCalendarSyncService::class, function ($mock) use ($visit) {
+            $mock->shouldReceive('deleteProviderEvents')->once()->withArgs(fn (LeadVisit $item) => $item->id === $visit->id)
+                ->andReturn(['Event Outlook Calendar belum berhasil dibatalkan.']);
+        });
+
+        $this->actingAs($u)->postJson('/workflow/visits/'.$visit->id.'/cancel')
+            ->assertOk()
+            ->assertJsonPath('cancelled', false)
+            ->assertJsonCount(1, 'warnings');
+        $this->assertNull($visit->fresh()->cancelled_at);
+    }
+
+    public function test_failed_calendar_event_deletion_keeps_visit_record_for_retry(): void
+    {
+        $u = $this->actor();
+        $visit = LeadVisit::create(array_merge($this->agenda(), ['user_id' => $u->id]));
+        $this->mock(LeadVisitCalendarSyncService::class, function ($mock) use ($visit) {
+            $mock->shouldReceive('deleteProviderEvents')->once()->withArgs(fn (LeadVisit $item) => $item->id === $visit->id)
+                ->andReturn(['Event Outlook Calendar belum berhasil dibatalkan.']);
+        });
+
+        $this->actingAs($u)->delete('/leads/visits/'.$visit->id)->assertRedirect();
+        $this->assertDatabaseHas('lead_visits', ['id' => $visit->id]);
     }
 
     public function test_permission_and_bu_scope_control_linking_and_agenda_access(): void

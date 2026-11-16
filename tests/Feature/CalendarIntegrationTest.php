@@ -4,7 +4,9 @@ namespace Tests\Feature;
 
 use App\Models\LeadVisit;
 use App\Models\SystemSetting;
+use App\Models\User;
 use App\Services\GoogleCalendarService;
+use App\Services\LeadVisitCalendarSyncService;
 use App\Services\MicrosoftGraphTokenService;
 use App\Services\OutlookCalendarService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -45,6 +47,60 @@ class CalendarIntegrationTest extends TestCase
         $this->assertSame('aktif.official0101@gmail.com', $service->connectWithAuthorizationCode('auth-code'));
         $this->assertSame('refresh-token', Crypt::decryptString(SystemSetting::find('google_calendar_oauth')->value['refresh_token']));
         $this->assertTrue($service->isConfigured());
+    }
+
+    public function test_google_event_not_found_is_not_reported_as_a_successful_deletion(): void
+    {
+        config([
+            'services.google_calendar.client_id' => 'google-delete-client',
+            'services.google_calendar.client_secret' => 'google-secret',
+            'services.google_calendar.redirect_uri' => 'https://qsales.test/settings/integrations/google-calendar/callback',
+            'services.google_calendar.calendar_id' => 'primary',
+        ]);
+        SystemSetting::create([
+            'key' => 'google_calendar_oauth',
+            'value' => [
+                'account_email' => 'aktif.official0101@gmail.com',
+                'refresh_token' => Crypt::encryptString('refresh-token'),
+            ],
+        ]);
+        Http::fake([
+            'https://oauth2.googleapis.com/token' => Http::response(['access_token' => 'access-token'], 200),
+            'https://www.googleapis.com/calendar/v3/calendars/*/events/google-event-404*' => Http::response([], 404),
+        ]);
+
+        $deleted = app(GoogleCalendarService::class)->deleteEvent('google-event-404');
+
+        $this->assertFalse($deleted);
+        Http::assertSent(fn ($request) => $request->method() === 'DELETE'
+            && str_contains($request->url(), '/events/google-event-404?sendUpdates=all'));
+    }
+
+    public function test_google_event_update_places_id_before_send_updates_query(): void
+    {
+        config([
+            'services.google_calendar.client_id' => 'google-update-client',
+            'services.google_calendar.client_secret' => 'google-secret',
+            'services.google_calendar.redirect_uri' => 'https://qsales.test/settings/integrations/google-calendar/callback',
+            'services.google_calendar.calendar_id' => 'primary',
+        ]);
+        SystemSetting::create([
+            'key' => 'google_calendar_oauth',
+            'value' => [
+                'account_email' => 'aktif.official0101@gmail.com',
+                'refresh_token' => Crypt::encryptString('refresh-token'),
+            ],
+        ]);
+        Http::fake([
+            'https://oauth2.googleapis.com/token' => Http::response(['access_token' => 'access-token'], 200),
+            'https://www.googleapis.com/calendar/v3/calendars/*/events/google-event-update?sendUpdates=all' => Http::response(['id' => 'google-event-update'], 200),
+        ]);
+
+        $updated = app(GoogleCalendarService::class)->updateEvent('google-event-update', ['summary' => 'Updated']);
+
+        $this->assertTrue($updated);
+        Http::assertSent(fn ($request) => $request->method() === 'PATCH'
+            && str_contains($request->url(), '/events/google-event-update?sendUpdates=all'));
     }
 
     public function test_outlook_event_is_created_by_shared_mailbox_with_the_selected_attendees(): void
@@ -103,5 +159,69 @@ class CalendarIntegrationTest extends TestCase
             && $request['end']['dateTime'] === '2026-12-01T00:00:00'
             && $request['start']['timeZone'] === $request['end']['timeZone']
             && $request['isAllDay'] === true);
+    }
+
+    public function test_deleting_a_visit_cancels_both_calendar_events_and_keeps_failed_event_id_for_retry(): void
+    {
+        $user = User::factory()->create();
+        $visit = LeadVisit::create([
+            'user_id' => $user->id,
+            'subject' => 'Calendar cancellation test',
+            'visit_type' => 'follow_up',
+            'scheduled_at' => '2026-11-30 09:00:00',
+            'end_at' => '2026-11-30 10:00:00',
+            'sync_google_calendar' => true,
+            'gc_event_id' => 'google-event-1',
+            'sync_outlook_calendar' => true,
+            'outlook_event_id' => 'outlook-event-1',
+        ]);
+        $this->mock(GoogleCalendarService::class, function ($mock) {
+            $mock->shouldReceive('deleteEvent')->once()->with('google-event-1')->andReturn(true);
+        });
+        $this->mock(OutlookCalendarService::class, function ($mock) {
+            $mock->shouldReceive('deleteEvent')->once()->with('outlook-event-1')->andReturn(false);
+        });
+
+        $warnings = app(LeadVisitCalendarSyncService::class)->deleteProviderEvents($visit);
+
+        $this->assertSame(['Event Outlook Calendar belum berhasil dibatalkan.'], $warnings);
+        $this->assertDatabaseHas('lead_visits', [
+            'id' => $visit->id,
+            'gc_event_id' => null,
+            'sync_google_calendar' => false,
+            'google_sync_status' => 'cancelled',
+            'outlook_event_id' => 'outlook-event-1',
+            'sync_outlook_calendar' => true,
+            'outlook_sync_status' => 'failed',
+        ]);
+    }
+
+    public function test_google_event_not_found_keeps_visit_and_provider_id_retryable(): void
+    {
+        $user = User::factory()->create();
+        $visit = LeadVisit::create([
+            'user_id' => $user->id,
+            'subject' => 'Google event not found cancellation test',
+            'visit_type' => 'follow_up',
+            'scheduled_at' => '2026-11-30 09:00:00',
+            'end_at' => '2026-11-30 10:00:00',
+            'sync_google_calendar' => true,
+            'gc_event_id' => 'google-event-404',
+            'sync_outlook_calendar' => false,
+        ]);
+        $this->mock(GoogleCalendarService::class, function ($mock) {
+            $mock->shouldReceive('deleteEvent')->once()->with('google-event-404')->andReturn(false);
+        });
+        $this->mock(OutlookCalendarService::class, function ($mock) {});
+
+        $warnings = app(LeadVisitCalendarSyncService::class)->deleteProviderEvents($visit);
+
+        $this->assertSame(['Event Google Calendar belum berhasil dibatalkan.'], $warnings);
+        $this->assertDatabaseHas('lead_visits', [
+            'id' => $visit->id,
+            'gc_event_id' => 'google-event-404',
+            'sync_google_calendar' => true,
+            'google_sync_status' => 'failed',
+        ]);
     }
 }

@@ -21,6 +21,7 @@ return [
                 'Perbaikan agenda all-day agar satu tanggal tidak bergeser menjadi dua hari di kalender QSales dan Outlook.',
                 'PDF quotation mempertahankan glyph Unicode dan tersedia dalam layout cetak A4 khusus quotation.',
                 'Badge stage pada detail Lead mengikuti warna stage di Lead Pipeline.',
+                'Pembatalan dan penghapusan agenda sekarang menyinkronkan Google Calendar dan Outlook; jika provider gagal, agenda dan ID sinkronisasi tetap bisa dicoba ulang.',
             ],
             'categories' => [
                 'Lead, Quotation & Estimasi' => [
@@ -43,6 +44,7 @@ return [
                     'Status sinkronisasi dan error dicatat terpisah untuk Google dan Outlook; sinkronisasi legacy tersedia melalui perintah Artisan dengan opsi dry-run.',
                     'Google Calendar Team dan Outlook menjadi pilihan default; Zoom tetap opt-in dan memerlukan lisensi.',
                     'Rentang tanggal all-day dipertahankan sebagai tanggal kalender, dengan batas akhir eksklusif untuk provider kalender.',
+                    'URL Google Calendar untuk update/delete agenda diperbaiki agar pembatalan provider menargetkan event yang benar.',
                 ],
                 'Quotation PDF & Print' => [
                     'DejaVu Sans digunakan pada jalur PDF quotation agar simbol Unicode seperti tanda kutip cerdas, tanda derajat, dan simbol merek tercetak dengan benar.',

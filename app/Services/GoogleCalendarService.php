@@ -136,7 +136,7 @@ class GoogleCalendarService
             $existing = Http::withToken($token)->timeout(15)->get($this->eventsUrl() . '/' . rawurlencode($eventId));
             if ($existing->successful()) {
                 $updated = Http::withToken($token)->timeout(20)
-                    ->patch($this->eventsUrl(['sendUpdates' => 'all']) . '/' . rawurlencode($eventId), $payload);
+                    ->patch($this->eventUrl($eventId, ['sendUpdates' => 'all']), $payload);
                 if ($updated->successful()) {
                     return $eventId;
                 }
@@ -154,7 +154,7 @@ class GoogleCalendarService
     public function updateEvent(string $eventId, array $payload): bool
     {
         $response = Http::withToken($this->getAccessToken())->timeout(20)
-            ->patch($this->eventsUrl(['sendUpdates' => 'all']) . '/' . rawurlencode($eventId), $payload);
+            ->patch($this->eventUrl($eventId, ['sendUpdates' => 'all']), $payload);
 
         if ($response->failed()) {
             Log::warning('[GoogleCalendar] Event update failed.', ['status' => $response->status(), 'error' => $response->json('error.message')]);
@@ -167,10 +167,18 @@ class GoogleCalendarService
     public function deleteEvent(string $eventId): bool
     {
         $response = Http::withToken($this->getAccessToken())->timeout(20)
-            ->delete($this->eventsUrl(['sendUpdates' => 'all']) . '/' . rawurlencode($eventId));
+            ->delete($this->eventUrl($eventId, ['sendUpdates' => 'all']));
 
-        if ($response->failed() && ! in_array($response->status(), [404, 410], true)) {
-            Log::warning('[GoogleCalendar] Event deletion failed.', ['status' => $response->status()]);
+        if ($response->failed()) {
+            // A not-found response can mean the configured calendar does not
+            // contain this event. Do not treat it as an idempotent success:
+            // callers must retain the provider ID so the mismatch can be
+            // investigated instead of deleting the QSales record.
+            Log::warning('[GoogleCalendar] Event deletion failed.', [
+                'status' => $response->status(),
+                'event_id_hash' => substr(hash('sha256', $eventId), 0, 12),
+            ]);
+
             return false;
         }
 
@@ -224,6 +232,13 @@ class GoogleCalendarService
     {
         $calendarId = (string) config('services.google_calendar.calendar_id', 'primary');
         $url = 'https://www.googleapis.com/calendar/v3/calendars/' . rawurlencode($calendarId) . '/events';
+
+        return $query ? $url . '?' . http_build_query($query) : $url;
+    }
+
+    private function eventUrl(string $eventId, array $query = []): string
+    {
+        $url = $this->eventsUrl() . '/' . rawurlencode($eventId);
 
         return $query ? $url . '?' . http_build_query($query) : $url;
     }

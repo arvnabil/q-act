@@ -34,23 +34,53 @@ class LeadVisitCalendarSyncService
         }
     }
 
-    public function deleteProviderEvents(LeadVisit $visit): void
+    public function deleteProviderEvents(LeadVisit $visit): array
     {
+        $warnings = [];
+
         if ($visit->gc_event_id) {
             try {
-                $this->googleCalendar->deleteEvent($visit->gc_event_id);
+                if (! $this->googleCalendar->deleteEvent($visit->gc_event_id)) {
+                    throw new \RuntimeException('Google Calendar menolak pembatalan event.');
+                }
+                $visit->forceFill([
+                    'gc_event_id' => null,
+                    'sync_google_calendar' => false,
+                    'google_sync_status' => 'cancelled',
+                    'google_sync_error' => null,
+                ])->save();
             } catch (\Throwable $exception) {
                 Log::warning('[LeadVisit] Google event cancellation failed.', ['visit_id' => $visit->id, 'message' => $exception->getMessage()]);
+                $visit->forceFill([
+                    'google_sync_status' => 'failed',
+                    'google_sync_error' => mb_substr($exception->getMessage(), 0, 1000),
+                ])->save();
+                $warnings[] = 'Event Google Calendar belum berhasil dibatalkan.';
             }
         }
 
         if ($visit->outlook_event_id) {
             try {
-                $this->outlookCalendar->deleteEvent($visit->outlook_event_id);
+                if (! $this->outlookCalendar->deleteEvent($visit->outlook_event_id)) {
+                    throw new \RuntimeException('Outlook Calendar menolak pembatalan event.');
+                }
+                $visit->forceFill([
+                    'outlook_event_id' => null,
+                    'sync_outlook_calendar' => false,
+                    'outlook_sync_status' => 'cancelled',
+                    'outlook_sync_error' => null,
+                ])->save();
             } catch (\Throwable $exception) {
                 Log::warning('[LeadVisit] Outlook event cancellation failed.', ['visit_id' => $visit->id, 'message' => $exception->getMessage()]);
+                $visit->forceFill([
+                    'outlook_sync_status' => 'failed',
+                    'outlook_sync_error' => mb_substr($exception->getMessage(), 0, 1000),
+                ])->save();
+                $warnings[] = 'Event Outlook Calendar belum berhasil dibatalkan.';
             }
         }
+
+        return $warnings;
     }
 
     private function syncGoogle(LeadVisit $visit, array $attendees, string $description): array

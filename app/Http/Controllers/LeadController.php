@@ -1292,7 +1292,10 @@ class LeadController extends Controller
     public function destroyVisit(LeadVisit $visit)
     {
         WorkflowAccess::visit(request()->user(), $visit);
-        app(LeadVisitCalendarSyncService::class)->deleteProviderEvents($visit);
+        $calendarWarnings = app(LeadVisitCalendarSyncService::class)->deleteProviderEvents($visit);
+        if ($calendarWarnings) {
+            return back()->with('error', 'Agenda belum dihapus agar penghapusan kalender dapat dicoba lagi. '.implode(' ', $calendarWarnings));
+        }
 
         // 2. Remove Zoom meeting if linked
         if ($visit->zoom_meeting_id) {
