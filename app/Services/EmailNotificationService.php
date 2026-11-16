@@ -92,7 +92,7 @@ class EmailNotificationService
             'daily_visit_reminder' => [
                 'enabled'    => true,
                 'send_time'  => '07:00',
-                'to_roles'   => ['Sales', 'Presales'],  // Masing-masing yang punya jadwal
+                'to_roles'   => ['Sales', 'Presales'],  // Filter role pemilik agenda; bukan penerima bersama
                 'custom_to'  => [],
                 'cc_roles'   => [],
                 'custom_cc'  => [],

@@ -88,12 +88,12 @@ export default function EmailNotificationSettingsTab({
     {
       key: 'daily_visit_reminder',
       title: 'Reminder Agenda Kunjungan Harian (Pukul 07.00)',
-      description: 'Email rekap jadwal visit pagi hari ke masing-masing Sales/Presales. Otomatis dilewati jika tidak ada agenda hari itu.',
+      description: 'Email rekap agenda pagi dikirim terpisah hanya ke pemilik agenda. Role membatasi pemilik yang menerima, bukan penerima bersama. Otomatis dilewati jika tidak ada agenda hari itu.',
       icon: Calendar,
       color: 'teal',
       hasSalesCc: false,
-      toLabel: 'Kirim Kepada (TO) — Pilih Role yang Menerima Agenda Pribadi:',
-      defaultToHint: 'Default: Sales, Presales yang memiliki kunjungan aktif hari ini',
+      toLabel: 'Role pemilik agenda yang menerima reminder:',
+      defaultToHint: 'Setiap email hanya berisi agenda dan dikirim ke pemiliknya sendiri.',
       extraNote: 'Sistem juga otomatis menandai kunjungan sebagai "Selesai" jika sudah lewat 2 hari belum diselesaikan.',
     },
     {

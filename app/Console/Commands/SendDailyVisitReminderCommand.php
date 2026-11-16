@@ -43,12 +43,28 @@ class SendDailyVisitReminderCommand extends Command
 
         // Kelompokkan per user
         $groupedByUser = $visits->groupBy('user_id');
+        $reminderRoles = array_values(array_filter((array) ($config['to_roles'] ?? [])));
+        $salesEmails = User::query()
+            ->where('is_active', true)
+            ->where(function ($query) {
+                $query->whereIn('role', ['Sales', 'Presales'])
+                    ->orWhereHas('roles', fn ($roles) => $roles->whereIn('name', ['Sales', 'Presales']));
+            })
+            ->pluck('email')
+            ->map(fn ($email) => strtolower($email))
+            ->all();
         $sentCount = 0;
         $dateFormatted = $today->translatedFormat('l, d F Y');
 
         foreach ($groupedByUser as $userId => $userVisits) {
             $user = User::find($userId);
             if (!$user || !$user->is_active || !$user->email) {
+                continue;
+            }
+
+            // Role selection is an eligibility filter, not a shared recipient list.
+            if ($reminderRoles !== [] && !in_array($user->role, $reminderRoles, true)
+                && !$user->roles()->whereIn('name', $reminderRoles)->exists()) {
                 continue;
             }
 
@@ -60,6 +76,17 @@ class SendDailyVisitReminderCommand extends Command
 
                 if (!$resolved['enabled'] || empty($resolved['to'])) {
                     continue;
+                }
+
+                // This email contains a personal agenda digest: send it only to its owner.
+                $resolved['to'] = [$user->email];
+                $ownerEmail = strtolower($user->email);
+                foreach (['cc', 'bcc'] as $copyType) {
+                    $resolved[$copyType] = array_values(array_filter(
+                        $resolved[$copyType],
+                        fn ($email) => strtolower($email) !== $ownerEmail
+                            && !in_array(strtolower($email), $salesEmails, true)
+                    ));
                 }
 
                 $mail = Mail::to($resolved['to']);
