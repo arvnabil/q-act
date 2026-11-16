@@ -3,175 +3,236 @@
 namespace App\Services;
 
 use App\Models\SystemSetting;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use RuntimeException;
 
-/**
- * Google Calendar Service (Service Account / HTTP-based, no composer SDK needed)
- *
- * Credentials stored in SystemSetting key: 'google_calendar_credentials'
- * Value shape: { "type":"service_account", "project_id":..., "private_key_id":...,
- *                "private_key":..., "client_email":..., "calendar_id":... }
- *
- * The service account must have "Editor" access to the shared team calendar.
- */
+/** Google Calendar integration using one administrator-connected OAuth account. */
 class GoogleCalendarService
 {
-    private ?array $creds = null;
-    private ?string $calendarId = null;
+    private const SETTING_KEY = 'google_calendar_oauth';
 
-    public function __construct()
+    private const EVENT_SCOPE = 'https://www.googleapis.com/auth/calendar.events.owned';
+
+    public function credentialsConfigured(): bool
     {
-        $setting = SystemSetting::find('google_calendar_credentials');
-        if ($setting && is_array($setting->value)) {
-            $this->creds = $setting->value;
-            $this->calendarId = $setting->value['calendar_id'] ?? null;
-        }
+        $config = config('services.google_calendar', []);
+
+        return filled($config['client_id'] ?? null)
+            && filled($config['client_secret'] ?? null)
+            && filled($config['redirect_uri'] ?? null);
     }
 
     public function isConfigured(): bool
     {
-        return !empty($this->creds)
-            && !empty($this->creds['private_key'])
-            && !empty($this->creds['client_email'])
-            && !empty($this->calendarId);
+        return $this->credentialsConfigured() && filled($this->setting()['refresh_token'] ?? null);
     }
 
-    // ─── JWT + Access Token ──────────────────────────────────────────────────────
-
-    private function getAccessToken(): ?string
+    public function connectedAccount(): ?string
     {
-        if (!$this->isConfigured()) return null;
+        return $this->setting()['account_email'] ?? null;
+    }
 
-        $now  = time();
-        $exp  = $now + 3600;
-        $iss  = $this->creds['client_email'];
-        $scope = 'https://www.googleapis.com/auth/calendar';
-
-        // Build JWT header + claim
-        $header = base64_encode(json_encode(['alg' => 'RS256', 'typ' => 'JWT']));
-        $claim  = base64_encode(json_encode([
-            'iss'   => $iss,
-            'scope' => $scope,
-            'aud'   => 'https://oauth2.googleapis.com/token',
-            'exp'   => $exp,
-            'iat'   => $now,
-        ]));
-        $headerClaim = $header . '.' . $claim;
-
-        // Sign with private key
-        $privateKey = $this->creds['private_key'];
-        $signature  = '';
-        $ok = openssl_sign($headerClaim, $signature, $privateKey, OPENSSL_ALGO_SHA256);
-        if (!$ok) {
-            Log::error('[GoogleCalendar] openssl_sign failed');
-            return null;
+    public function authorizationUrl(string $state): string
+    {
+        if (! $this->credentialsConfigured()) {
+            throw new RuntimeException('Google Calendar OAuth client belum dikonfigurasi di environment.');
         }
 
-        $jwt = $headerClaim . '.' . base64_encode($signature);
+        $config = config('services.google_calendar');
 
-        // Exchange JWT for access token
-        $response = Http::asForm()->post('https://oauth2.googleapis.com/token', [
-            'grant_type' => 'urn:ietf:params:oauth:grant-type:jwt-bearer',
-            'assertion'  => $jwt,
+        return 'https://accounts.google.com/o/oauth2/v2/auth?' . http_build_query([
+            'client_id' => $config['client_id'],
+            'redirect_uri' => $config['redirect_uri'],
+            'response_type' => 'code',
+            'scope' => 'openid email ' . self::EVENT_SCOPE,
+            'access_type' => 'offline',
+            'prompt' => 'consent select_account',
+            'include_granted_scopes' => 'true',
+            'login_hint' => $config['account_email'] ?? '',
+            'state' => $state,
+        ]);
+    }
+
+    public function connectWithAuthorizationCode(string $code): string
+    {
+        if (! $this->credentialsConfigured()) {
+            throw new RuntimeException('Google Calendar OAuth client belum dikonfigurasi di environment.');
+        }
+
+        $config = config('services.google_calendar');
+        $response = Http::asForm()->timeout(20)->post('https://oauth2.googleapis.com/token', [
+            'code' => $code,
+            'client_id' => $config['client_id'],
+            'client_secret' => $config['client_secret'],
+            'redirect_uri' => $config['redirect_uri'],
+            'grant_type' => 'authorization_code',
         ]);
 
         if ($response->failed()) {
-            Log::error('[GoogleCalendar] Token exchange failed', $response->json());
-            return null;
+            Log::warning('[GoogleCalendar] OAuth code exchange failed.', ['status' => $response->status()]);
+            throw new RuntimeException('Google menolak koneksi OAuth. Periksa redirect URI dan konfigurasi OAuth client.');
         }
 
-        return $response->json('access_token');
+        $tokens = $response->json();
+        $accessToken = $tokens['access_token'] ?? null;
+        if (! $accessToken) {
+            throw new RuntimeException('Google OAuth tidak mengembalikan access token.');
+        }
+
+        $profileResponse = Http::withToken($accessToken)->timeout(15)->get('https://www.googleapis.com/oauth2/v2/userinfo');
+        if ($profileResponse->failed() || ! $profileResponse->json('email')) {
+            throw new RuntimeException('Email akun Google yang terhubung tidak dapat diverifikasi.');
+        }
+
+        $accountEmail = strtolower($profileResponse->json('email'));
+        $expectedEmail = strtolower((string) (config('services.google_calendar.account_email') ?? ''));
+        if ($expectedEmail !== '' && $accountEmail !== $expectedEmail) {
+            throw new RuntimeException("Hubungkan akun Google {$expectedEmail}; akun yang dipilih adalah {$accountEmail}.");
+        }
+
+        $existing = $this->setting();
+        $refreshToken = $tokens['refresh_token'] ?? null;
+        if (! $refreshToken && ! empty($existing['refresh_token'])) {
+            $refreshToken = Crypt::decryptString($existing['refresh_token']);
+        }
+        if (! $refreshToken) {
+            throw new RuntimeException('Google tidak mengembalikan refresh token. Putuskan akses aplikasi di akun Google lalu hubungkan kembali.');
+        }
+
+        SystemSetting::updateOrCreate(
+            ['key' => self::SETTING_KEY],
+            ['value' => [
+                'account_email' => $accountEmail,
+                'refresh_token' => Crypt::encryptString($refreshToken),
+                'calendar_id' => config('services.google_calendar.calendar_id', 'primary'),
+                'connected_at' => now()->toIso8601String(),
+            ]]
+        );
+        Cache::forget($this->tokenCacheKey());
+
+        return $accountEmail;
     }
 
-    // ─── Event CRUD ─────────────────────────────────────────────────────────────
+    public function disconnect(): void
+    {
+        SystemSetting::where('key', self::SETTING_KEY)->delete();
+        Cache::forget($this->tokenCacheKey());
+    }
 
-    /**
-     * Create a calendar event and return the event ID.
-     */
-    public function createEvent(array $payload): ?string
+    public function createEvent(array $payload, ?string $eventId = null): string
     {
         $token = $this->getAccessToken();
-        if (!$token) return null;
+        if ($eventId) {
+            $payload['id'] = $eventId;
+        }
 
-        $response = Http::withToken($token)
-            ->post("https://www.googleapis.com/calendar/v3/calendars/{$this->calendarId}/events", $payload);
+        $response = Http::withToken($token)->timeout(20)
+            ->post($this->eventsUrl(['sendUpdates' => 'all']), $payload);
 
-        // If failed due to Service Account restriction on attendees, retry without attendees
-        if ($response->failed() && !empty($payload['attendees'])) {
-            $err = $response->json();
-            $reason = $err['error']['errors'][0]['reason'] ?? '';
-            if ($reason === 'forbiddenForServiceAccounts' || $response->status() === 403) {
-                Log::info('[GoogleCalendar] Retrying createEvent without attendees due to Service Account restriction');
-                unset($payload['attendees']);
-                $response = Http::withToken($token)
-                    ->post("https://www.googleapis.com/calendar/v3/calendars/{$this->calendarId}/events", $payload);
+        if ($response->status() === 409 && $eventId) {
+            $existing = Http::withToken($token)->timeout(15)->get($this->eventsUrl() . '/' . rawurlencode($eventId));
+            if ($existing->successful()) {
+                $updated = Http::withToken($token)->timeout(20)
+                    ->patch($this->eventsUrl(['sendUpdates' => 'all']) . '/' . rawurlencode($eventId), $payload);
+                if ($updated->successful()) {
+                    return $eventId;
+                }
             }
         }
 
         if ($response->failed()) {
-            Log::error('[GoogleCalendar] createEvent failed', $response->json());
-            return null;
+            Log::warning('[GoogleCalendar] Event creation failed.', ['status' => $response->status(), 'error' => $response->json('error.message')]);
+            throw new RuntimeException('Google Calendar gagal membuat undangan. Periksa izin kalender dan alamat peserta.');
         }
 
-        return $response->json('id');
+        return (string) $response->json('id');
     }
 
-    /**
-     * Update an existing calendar event.
-     */
     public function updateEvent(string $eventId, array $payload): bool
     {
-        $token = $this->getAccessToken();
-        if (!$token) return false;
-
-        $response = Http::withToken($token)
-            ->patch("https://www.googleapis.com/calendar/v3/calendars/{$this->calendarId}/events/{$eventId}", $payload);
-
-        // If failed due to Service Account restriction on attendees, retry without attendees
-        if ($response->failed() && !empty($payload['attendees'])) {
-            $err = $response->json();
-            $reason = $err['error']['errors'][0]['reason'] ?? '';
-            if ($reason === 'forbiddenForServiceAccounts' || $response->status() === 403) {
-                Log::info('[GoogleCalendar] Retrying updateEvent without attendees due to Service Account restriction');
-                unset($payload['attendees']);
-                $response = Http::withToken($token)
-                    ->patch("https://www.googleapis.com/calendar/v3/calendars/{$this->calendarId}/events/{$eventId}", $payload);
-            }
-        }
+        $response = Http::withToken($this->getAccessToken())->timeout(20)
+            ->patch($this->eventsUrl(['sendUpdates' => 'all']) . '/' . rawurlencode($eventId), $payload);
 
         if ($response->failed()) {
-            Log::error('[GoogleCalendar] updateEvent failed', $response->json());
+            Log::warning('[GoogleCalendar] Event update failed.', ['status' => $response->status(), 'error' => $response->json('error.message')]);
             return false;
         }
 
         return true;
     }
 
-    /**
-     * Delete a calendar event.
-     */
     public function deleteEvent(string $eventId): bool
     {
-        $token = $this->getAccessToken();
-        if (!$token) return false;
+        $response = Http::withToken($this->getAccessToken())->timeout(20)
+            ->delete($this->eventsUrl(['sendUpdates' => 'all']) . '/' . rawurlencode($eventId));
 
-        $response = Http::withToken($token)
-            ->delete("https://www.googleapis.com/calendar/v3/calendars/{$this->calendarId}/events/{$eventId}");
-
-        if ($response->failed() && $response->status() !== 410) { // 410 = already deleted
-            Log::error('[GoogleCalendar] deleteEvent failed', ['status' => $response->status()]);
+        if ($response->failed() && ! in_array($response->status(), [404, 410], true)) {
+            Log::warning('[GoogleCalendar] Event deletion failed.', ['status' => $response->status()]);
             return false;
         }
 
         return true;
     }
 
-    // ─── Helpers ────────────────────────────────────────────────────────────────
+    private function getAccessToken(): string
+    {
+        if (! $this->isConfigured()) {
+            throw new RuntimeException('Google Calendar belum terhubung melalui OAuth.');
+        }
 
-    /**
-     * Build a Google Calendar event body from a LeadVisit-like object.
-     */
+        if (Cache::has($this->tokenCacheKey())) {
+            return (string) Cache::get($this->tokenCacheKey());
+        }
+
+        $stored = $this->setting();
+        $refreshToken = Crypt::decryptString($stored['refresh_token']);
+        $config = config('services.google_calendar');
+        $response = Http::asForm()->timeout(20)->post('https://oauth2.googleapis.com/token', [
+            'client_id' => $config['client_id'],
+            'client_secret' => $config['client_secret'],
+            'refresh_token' => $refreshToken,
+            'grant_type' => 'refresh_token',
+        ]);
+
+        if ($response->failed() || ! $response->json('access_token')) {
+            Log::warning('[GoogleCalendar] OAuth token refresh failed.', ['status' => $response->status()]);
+            throw new RuntimeException('Token Google Calendar kedaluwarsa atau dicabut. Admin perlu menghubungkan ulang akun Google.');
+        }
+
+        $accessToken = (string) $response->json('access_token');
+        Cache::put($this->tokenCacheKey(), $accessToken, max(60, (int) $response->json('expires_in', 3600) - 120));
+
+        if ($response->json('refresh_token')) {
+            $stored['refresh_token'] = Crypt::encryptString($response->json('refresh_token'));
+            SystemSetting::updateOrCreate(['key' => self::SETTING_KEY], ['value' => $stored]);
+        }
+
+        return $accessToken;
+    }
+
+    private function setting(): array
+    {
+        $value = SystemSetting::find(self::SETTING_KEY)?->value;
+
+        return is_array($value) ? $value : [];
+    }
+
+    private function eventsUrl(array $query = []): string
+    {
+        $calendarId = (string) config('services.google_calendar.calendar_id', 'primary');
+        $url = 'https://www.googleapis.com/calendar/v3/calendars/' . rawurlencode($calendarId) . '/events';
+
+        return $query ? $url . '?' . http_build_query($query) : $url;
+    }
+
+    private function tokenCacheKey(): string
+    {
+        return 'google_calendar_access_token_' . sha1((string) config('services.google_calendar.client_id'));
+    }
+
     public static function buildEventBody(
         string $summary,
         string $description,
@@ -186,31 +247,26 @@ class GoogleCalendarService
             $description .= "\n\n🎥 Zoom Meeting: {$zoomJoinUrl}";
         }
 
+        $body = [
+            'summary' => $summary,
+            'description' => $description,
+        ];
+
         if ($isAllDay) {
-            $body = [
-                'summary'     => $summary,
-                'description' => $description,
-                'start'       => ['date' => substr($startDatetime, 0, 10)],
-                'end'         => ['date' => substr($endDatetime, 0, 10)],
-            ];
+            $body['start'] = ['date' => substr($startDatetime, 0, 10)];
+            $body['end'] = ['date' => substr($endDatetime, 0, 10)];
         } else {
-            $body = [
-                'summary'     => $summary,
-                'description' => $description,
-                'start'       => ['dateTime' => $startDatetime, 'timeZone' => 'Asia/Jakarta'],
-                'end'         => ['dateTime' => $endDatetime,   'timeZone' => 'Asia/Jakarta'],
-            ];
+            $body['start'] = ['dateTime' => $startDatetime, 'timeZone' => 'Asia/Jakarta'];
+            $body['end'] = ['dateTime' => $endDatetime, 'timeZone' => 'Asia/Jakarta'];
         }
 
         if ($location) {
             $body['location'] = $location;
         }
-
-        if (!empty($attendees)) {
-            $body['attendees'] = array_map(fn($email) => ['email' => $email], array_filter($attendees));
+        if ($attendees) {
+            $body['attendees'] = array_values(array_map(fn ($email) => ['email' => $email], $attendees));
         }
 
         return $body;
     }
 }
-

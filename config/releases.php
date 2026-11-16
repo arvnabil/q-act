@@ -1,14 +1,60 @@
 <?php
 
 return [
-    'current_version' => 'v2.4.0',
-    'last_updated' => '2026-11-08',
+    'current_version' => 'v2.5.0',
+    'last_updated' => '2026-11-16',
     'releases' => [
+        [
+            'version' => 'v2.5.0',
+            'week' => '2026 - Minggu ke-47 (16 Nov - 22 Nov 2026)',
+            'date' => '2026-11-16',
+            'is_current' => true,
+            'tag' => 'Lead, Finance & Calendar Integrations',
+            'summary' => 'Primary Quotation & Auto Lead Estimation, bukti pembayaran terhubung ke SharePoint, PDF Unicode dan cetak A4, serta integrasi Google OAuth dan undangan Outlook.',
+            'highlights' => [
+                'Primary Quotation menjadi sumber estimasi Lead; Quotation berstatus Sent memperbarui Primary dan estimasi tanpa menjumlahkan seluruh quotation.',
+                'Bukti pembayaran wajib dapat diunggah saat konfirmasi Terbayar, ditautkan ke quotation berstatus PO, dan disimpan pada folder SharePoint Purchase Order yang sesuai termasuk folder revisi.',
+                'Lead Terbayar lama yang belum memiliki bukti pembayaran ditandai agar Sales dapat melengkapi lampirannya.',
+                'Google Calendar kini menggunakan OAuth untuk akun kalender tim; integrasi service account lama tidak lagi menjadi jalur sinkronisasi baru.',
+                'Undangan Outlook dibuat dari mailbox bersama noreply melalui Microsoft Graph; pembuat agenda otomatis diundang dan peserta tambahan dapat dipilih.',
+                'Pilihan Google Calendar Team dan Outlook aktif secara default, sedangkan Zoom hanya dibuat jika dipilih dan lisensi tersedia.',
+                'Perbaikan agenda all-day agar satu tanggal tidak bergeser menjadi dua hari di kalender QSales dan Outlook.',
+                'PDF quotation mempertahankan glyph Unicode dan tersedia dalam layout cetak A4 khusus quotation.',
+                'Badge stage pada detail Lead mengikuti warna stage di Lead Pipeline.',
+            ],
+            'categories' => [
+                'Lead, Quotation & Estimasi' => [
+                    'Primary Quotation ditetapkan dari Quotation Sent terbaru yang sengaja ditautkan ke Lead; estimasi Lead mengikuti total Primary Quotation, bukan total semua quotation.',
+                    'Estimasi manual Lead yang dibuat dari Kanban dipertahankan sampai quotation pertama berstatus Sent.',
+                    'Draft/Created tidak memengaruhi estimasi; revisi baru memengaruhi estimasi saat berstatus Sent. Rejected, Cancelled, dan Expired menandai Needs Review tanpa otomatis mengubah Lead menjadi Lost atau menghapus estimasi historis.',
+                    'Nilai PO/SO dan Deal Won tetap menjadi nilai aktual yang terpisah dari estimasi Lead.',
+                    'Warna badge stage pada detail Lead disamakan dengan warna stage di Pipeline.',
+                ],
+                'Bukti Pembayaran & SharePoint' => [
+                    'Popup konfirmasi Terbayar meminta lampiran bukti pembayaran dan mengaitkannya dengan quotation PO yang dipilih.',
+                    'Bukti pembayaran disimpan bersama dokumen quotation dan PO/SO pada folder Purchase Order per tahun, Sales, dan nomor quotation; revisi menggunakan folder revisi yang sesuai.',
+                    'Proses upload PO dan bukti pembayaran memeriksa folder SharePoint terlebih dahulu lalu membuat folder jika belum tersedia.',
+                    'Lead Terbayar tanpa lampiran lama mendapat penanda dan aksi untuk mengunggah bukti pembayaran.',
+                    'Pilihan transaksi pada konfirmasi pembayaran dibatasi ke quotation dengan status PO.',
+                ],
+                'Google Calendar, Outlook & Zoom' => [
+                    'OAuth Google Calendar menggunakan satu akun kalender tim dan menyimpan refresh token terenkripsi.',
+                    'Undangan Outlook memakai Microsoft Graph dengan mailbox noreply sebagai organizer, mengundang pembuat agenda dan peserta yang dipilih.',
+                    'Status sinkronisasi dan error dicatat terpisah untuk Google dan Outlook; sinkronisasi legacy tersedia melalui perintah Artisan dengan opsi dry-run.',
+                    'Google Calendar Team dan Outlook menjadi pilihan default; Zoom tetap opt-in dan memerlukan lisensi.',
+                    'Rentang tanggal all-day dipertahankan sebagai tanggal kalender, dengan batas akhir eksklusif untuk provider kalender.',
+                ],
+                'Quotation PDF & Print' => [
+                    'DejaVu Sans digunakan pada jalur PDF quotation agar simbol Unicode seperti tanda kutip cerdas, tanda derajat, dan simbol merek tercetak dengan benar.',
+                    'Aksi Print membuka layout quotation-only berukuran A4.',
+                ],
+            ],
+        ],
         [
             'version' => 'v2.4.0',
             'week' => '2026 - Minggu ke-45 (02 Nov - 08 Nov 2026)',
             'date' => '2026-11-08',
-            'is_current' => true,
+            'is_current' => false,
             'tag' => 'Major Feature Update',
             'summary' => 'Peluncuran Ekosistem Lead Pipeline 360, Download Center Antrian Ekspor ZIP, Integrasi Google Calendar & Zoom, Redesain Template Email, dan Peningkatan Simulasi SO Excel.',
             'highlights' => [

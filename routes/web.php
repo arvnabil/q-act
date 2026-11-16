@@ -223,7 +223,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('/settings/master-terms', [SettingController::class, 'updateMasterTerms'])->name('settings.master-terms');
         Route::post('/settings/domain-logo', [SettingController::class, 'updateDomainLogoMap'])->name('settings.domain-logo');
         Route::post('/settings/maintenance-mode', [SettingController::class, 'updateMaintenanceMode'])->name('settings.maintenance-mode');
-        Route::post('/settings/integrations/google-calendar', [SettingController::class, 'updateGoogleCalendar'])->name('settings.google-calendar');
+        Route::get('/settings/integrations/google-calendar/connect', [SettingController::class, 'connectGoogleCalendar'])->name('settings.google-calendar.connect');
+        Route::get('/settings/integrations/google-calendar/callback', [SettingController::class, 'googleCalendarCallback'])->name('settings.google-calendar.callback');
+        Route::post('/settings/integrations/google-calendar/disconnect', [SettingController::class, 'disconnectGoogleCalendar'])->name('settings.google-calendar.disconnect');
         Route::post('/settings/integrations/zoom', [SettingController::class, 'updateZoom'])->name('settings.zoom');
         Route::post('/settings/users/{user}/integrations', [SettingController::class, 'updateUserIntegrations'])->name('settings.users.integrations');
         Route::post('/settings/integrations/sharepoint', [SettingController::class, 'updateSharePoint'])->name('settings.sharepoint');

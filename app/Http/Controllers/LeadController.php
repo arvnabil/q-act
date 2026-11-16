@@ -14,6 +14,8 @@ use App\Models\LeadVisit;
 use App\Models\SystemSetting;
 use App\Models\User;
 use App\Services\GoogleCalendarService;
+use App\Services\LeadVisitCalendarSyncService;
+use App\Services\OutlookCalendarService;
 use App\Services\ZoomService;
 use App\Services\WorkflowAccess;
 use App\Services\DocumentVisibility;
@@ -84,6 +86,16 @@ class LeadController extends Controller
             'featured_stage_2' => $val['featured_stage_2'] ?? 'win',
             'stages'           => $val['stages'] ?? $defaultStages,
         ];
+    }
+
+    private function calendarInviteUsers()
+    {
+        return User::query()
+            ->where('is_active', true)
+            ->whereNotNull('email')
+            ->select('id', 'name', 'email')
+            ->orderBy('name')
+            ->get();
     }
 
     private function getAllowedStageKeys(): array
@@ -408,6 +420,8 @@ class LeadController extends Controller
             'sources'                  => Lead::SOURCES,
             'pipelineSettings'         => $this->getPipelineSettings(),
             'googleCalendarConfigured' => (new GoogleCalendarService())->isConfigured(),
+            'outlookCalendarConfigured' => (new OutlookCalendarService(app(\App\Services\MicrosoftGraphTokenService::class)))->isConfigured(),
+            'calendarInviteUsers'      => $this->calendarInviteUsers(),
             'zoomConfigured'           => (new ZoomService())->isConfigured(),
             'userHasZoomLicense'       => (bool) (Auth::user()->has_zoom_license ?? false),
         ]);
@@ -1024,6 +1038,8 @@ class LeadController extends Controller
             'customerPics'             => \App\Models\CustomerPic::whereIn('customer_id', $customerIds)->select('id', 'customer_id', 'name', 'email', 'position', 'phone')->get(),
             'isManagerOrAdmin'         => $isManagerOrAdmin,
             'googleCalendarConfigured' => (new GoogleCalendarService())->isConfigured(),
+            'outlookCalendarConfigured' => (new OutlookCalendarService(app(\App\Services\MicrosoftGraphTokenService::class)))->isConfigured(),
+            'calendarInviteUsers'      => $this->calendarInviteUsers(),
             'zoomConfigured'           => (new ZoomService())->isConfigured(),
             'userHasZoomLicense'       => (bool) (Auth::user()->has_zoom_license ?? false),
         ]);
@@ -1047,9 +1063,10 @@ class LeadController extends Controller
             'notes'        => 'nullable|string',
             'create_zoom'        => 'nullable|boolean',
             'sync_calendar'      => 'nullable|boolean',
+            'sync_outlook_calendar' => 'nullable|boolean',
             'include_lead_info'  => 'nullable|boolean',
-            'attendee_emails'    => 'nullable|array',
-            'attendee_emails.*'  => 'email',
+            'attendee_emails'    => 'nullable|array|max:50',
+            'attendee_emails.*'  => 'email|max:254',
         ]);
 
         if (!empty($data['quotation_id'])) {
@@ -1112,9 +1129,14 @@ class LeadController extends Controller
         // Clean out extra form flags before creating model
         $createZoom      = !empty($data['create_zoom']);
         $syncCalendar    = $data['sync_calendar'] ?? false;
+        $syncOutlook     = $data['sync_outlook_calendar'] ?? false;
         $includeLeadInfo = $data['include_lead_info'] ?? true;
-        $attendeeEmails  = array_filter($data['attendee_emails'] ?? []);
-        unset($data['create_zoom'], $data['sync_calendar'], $data['include_lead_info'], $data['attendee_emails']);
+        $attendeeEmails  = collect($data['attendee_emails'] ?? [])->map(fn ($email) => mb_strtolower(trim($email)))->unique()->values()->all();
+        unset($data['create_zoom'], $data['sync_calendar'], $data['sync_outlook_calendar'], $data['include_lead_info'], $data['attendee_emails']);
+        $data['sync_google_calendar'] = (bool) $syncCalendar;
+        $data['sync_outlook_calendar'] = (bool) $syncOutlook;
+        $data['attendee_emails'] = $attendeeEmails;
+        $data['include_lead_info'] = (bool) $includeLeadInfo;
 
         $visit = DB::transaction(function () use ($data) {
             // Lock the owner to make double clicks/retries idempotent across both entry points.
@@ -1150,58 +1172,12 @@ class LeadController extends Controller
             }
         }
 
-        // 2. Google Calendar Integration (if requested/enabled)
-        if ($syncCalendar) {
-            try {
-                $calendarService = new GoogleCalendarService();
-                if ($calendarService->isConfigured()) {
-                    if ($isAllDay) {
-                        $gStart = $startCarbon->format('Y-m-d');
-                        $gEnd   = (clone $endCarbon)->addDay()->format('Y-m-d');
-                    } else {
-                        $gStart = $startCarbon->toIso8601String();
-                        $gEnd   = $endCarbon->toIso8601String();
-                    }
-
-                    $notes = trim($visit->notes ?? '');
-                    $desc  = $visit->subject . "\n";
-                    if ($visit->location) $desc .= "\nLokasi: " . $visit->location;
-                    if ($notes) $desc .= "\n\n" . $notes;
-                    if (!empty($attendeeEmails)) {
-                        $desc .= "\n\nPeserta / Tamu:\n- " . implode("\n- ", $attendeeEmails);
-                    }
-                    if ($includeLeadInfo) {
-                        $desc .= "\n\n---\nSales: " . Auth::user()->name;
-                        if ($visit->lead_id) {
-                            $ld = Lead::find($visit->lead_id);
-                            if ($ld) $desc .= "\nLead: {$ld->lead_code} - {$ld->title}";
-                        }
-                        if ($visit->quotation_id) $desc .= "\nQuotation: " . url('/quotations/'.$visit->quotation_id);
-                    }
-
-                    $body = GoogleCalendarService::buildEventBody(
-                        $visit->subject,
-                        $desc,
-                        $gStart,
-                        $gEnd,
-                        $visit->location,
-                        $visit->zoom_join_url,
-                        $isAllDay,
-                        $attendeeEmails ?: null
-                    );
-
-                    $eventId = $calendarService->createEvent($body);
-                    if ($eventId) {
-                        $visit->update(['gc_event_id' => $eventId]);
-                    }
-                }
-            } catch (\Throwable $e) {
-                \Log::warning('[LeadVisit] Auto Google Calendar sync skipped: ' . $e->getMessage());
-            }
-        }
+        // 2. Sync selected calendar providers. Zoom is created first so its URL
+        // appears in both invitations. Provider failures do not discard the visit.
+        $warnings = array_merge($warnings, app(LeadVisitCalendarSyncService::class)->sync($visit->fresh()));
+        $visit->refresh();
 
         if ($createZoom && !$visit->zoom_meeting_id) $warnings[] = 'Agenda tersimpan, tetapi tautan Zoom belum berhasil dibuat.';
-        if ($syncCalendar && !$visit->gc_event_id) $warnings[] = 'Agenda tersimpan di kalender internal; sinkronisasi Google Calendar belum berhasil.';
 
         // Log on lead if linked
         if ($visit->lead_id) {
@@ -1209,6 +1185,11 @@ class LeadController extends Controller
             if ($lead) {
                 $details = ['visit_id' => $visit->id];
                 if ($visit->zoom_join_url) $details['zoom_url'] = $visit->zoom_join_url;
+                $details['calendar_sync'] = [
+                    'google' => ['requested' => (bool) $visit->sync_google_calendar, 'status' => $visit->google_sync_status],
+                    'outlook' => ['requested' => (bool) $visit->sync_outlook_calendar, 'status' => $visit->outlook_sync_status],
+                    'attendees' => $visit->attendee_emails ?? [],
+                ];
                 $this->logActivity($lead, 'visit', 'Kunjungan/Jadwal dibuat: ' . $visit->subject, null, $details);
             }
         }
@@ -1233,11 +1214,21 @@ class LeadController extends Controller
             'notes'             => 'nullable|string',
             'outcome'           => 'nullable|string',
             'include_lead_info' => 'nullable|boolean',
+            'sync_calendar'     => 'nullable|boolean',
+            'sync_outlook_calendar' => 'nullable|boolean',
+            'attendee_emails'   => 'nullable|array|max:50',
+            'attendee_emails.*' => 'email|max:254',
         ]);
 
-        $includeLeadInfo = $data['include_lead_info'] ?? true;
-        $attendeeEmails  = [];
-        unset($data['include_lead_info']);
+        $data['sync_google_calendar'] = array_key_exists('sync_calendar', $data)
+            ? (bool) $data['sync_calendar'] : (bool) ($visit->sync_google_calendar || $visit->gc_event_id);
+        $data['sync_outlook_calendar'] = array_key_exists('sync_outlook_calendar', $data)
+            ? (bool) $data['sync_outlook_calendar'] : (bool) ($visit->sync_outlook_calendar || $visit->outlook_event_id);
+        if (array_key_exists('attendee_emails', $data)) {
+            $data['attendee_emails'] = collect($data['attendee_emails'] ?? [])->map(fn ($email) => mb_strtolower(trim($email)))->unique()->values()->all();
+        }
+        unset($data['sync_calendar']);
+        $data['include_lead_info'] = $data['include_lead_info'] ?? $visit->include_lead_info;
 
         $isAllDay = !empty($data['is_all_day']);
         $data['is_all_day'] = $isAllDay;
@@ -1270,62 +1261,25 @@ class LeadController extends Controller
             try {
                 if (!app(ZoomService::class)->updateMeeting($visit->zoom_meeting_id, $visit->subject, $visit->scheduled_at->toIso8601String(), $visit->notes)) {
                     $warnings[] = 'Jadwal internal tersimpan; jadwal Zoom belum berhasil diperbarui.';
-                } else { $warnings[] = 'Google Calendar belum terhubung; jadwal eksternal belum diperbarui.'; }
+                }
             } catch (\Throwable $e) { $warnings[] = 'Jadwal internal tersimpan; jadwal Zoom belum berhasil diperbarui.'; }
         }
 
-        // Sync with Google Calendar if event exists
-        if ($visit->gc_event_id) {
-            try {
-                $calendarService = app(GoogleCalendarService::class);
-                if ($calendarService->isConfigured()) {
-                    if ($visit->is_all_day) {
-                        $gStart = Carbon::parse($visit->scheduled_at)->format('Y-m-d');
-                        $gEnd   = Carbon::parse($visit->end_at ?: $visit->scheduled_at)->addDay()->format('Y-m-d');
-                    } else {
-                        $gStart = Carbon::parse($visit->scheduled_at)->toIso8601String();
-                        $gEnd   = Carbon::parse($visit->end_at ?: $visit->scheduled_at)->toIso8601String();
-                    }
-
-                    $notes = trim($visit->notes ?? '');
-                    $desc  = $visit->subject . "\n";
-                    if ($visit->location) $desc .= "\nLokasi: " . $visit->location;
-                    if ($notes) $desc .= "\n\n" . $notes;
-                    if (!empty($attendeeEmails)) {
-                        $desc .= "\n\nPeserta / Tamu:\n- " . implode("\n- ", $attendeeEmails);
-                    }
-                    if ($includeLeadInfo) {
-                        $desc .= "\n\n---\nSales: " . Auth::user()->name;
-                        if ($visit->lead_id) {
-                            $ld = Lead::find($visit->lead_id);
-                            if ($ld) $desc .= "\nLead: {$ld->lead_code} - {$ld->title}";
-                        }
-                        if ($visit->quotation_id) $desc .= "\nQuotation: " . url('/quotations/'.$visit->quotation_id);
-                    }
-
-                    $body = GoogleCalendarService::buildEventBody(
-                        $visit->subject,
-                        $desc,
-                        $gStart,
-                        $gEnd,
-                        $visit->location,
-                        $visit->zoom_join_url,
-                        (bool) $visit->is_all_day
-                    );
-
-                    if (!$calendarService->updateEvent($visit->gc_event_id, $body)) $warnings[] = 'Jadwal Google Calendar belum berhasil diperbarui.';
-                } else { $warnings[] = 'Google Calendar belum terhubung; jadwal eksternal belum diperbarui.'; }
-            } catch (\Throwable $e) {
-                $warnings[] = 'Jadwal Google Calendar belum berhasil diperbarui.';
-                \Log::warning('[LeadVisit] Update Google Calendar sync skipped: ' . $e->getMessage());
-            }
-        }
+        $warnings = array_merge($warnings, app(LeadVisitCalendarSyncService::class)->sync($visit->fresh()));
+        $visit->refresh();
 
         // Log on lead if linked
         if ($visit->lead_id) {
             $lead = Lead::find($visit->lead_id);
             if ($lead) {
-                $this->logActivity($lead, 'visit', 'Perubahan jadwal kunjungan: ' . $visit->subject);
+                $this->logActivity($lead, 'visit', 'Perubahan jadwal kunjungan: ' . $visit->subject, null, [
+                    'visit_id' => $visit->id,
+                    'calendar_sync' => [
+                        'google' => ['requested' => (bool) $visit->sync_google_calendar, 'status' => $visit->google_sync_status],
+                        'outlook' => ['requested' => (bool) $visit->sync_outlook_calendar, 'status' => $visit->outlook_sync_status],
+                        'attendees' => $visit->attendee_emails ?? [],
+                    ],
+                ]);
             }
         }
 
@@ -1338,17 +1292,7 @@ class LeadController extends Controller
     public function destroyVisit(LeadVisit $visit)
     {
         WorkflowAccess::visit(request()->user(), $visit);
-        // 1. Remove from Google Calendar if linked
-        if ($visit->gc_event_id) {
-            try {
-                $calendarService = new GoogleCalendarService();
-                if ($calendarService->isConfigured()) {
-                    $calendarService->deleteEvent($visit->gc_event_id);
-                }
-            } catch (\Throwable $e) {
-                \Log::warning('[LeadVisit] Delete Google Calendar sync skipped: ' . $e->getMessage());
-            }
-        }
+        app(LeadVisitCalendarSyncService::class)->deleteProviderEvents($visit);
 
         // 2. Remove Zoom meeting if linked
         if ($visit->zoom_meeting_id) {
@@ -1401,28 +1345,8 @@ class LeadController extends Controller
             'zoom_join_url'   => $meeting['join_url'],
         ]);
 
-        // If Google Calendar event exists, patch it with Zoom URL
-        if ($visit->gc_event_id) {
-            try {
-                $calendarService = new GoogleCalendarService();
-                if ($calendarService->isConfigured()) {
-                    $startDt = Carbon::parse($visit->scheduled_at);
-                    $endDt   = (clone $startDt)->addHour();
-                    $desc    = ($visit->notes ?? '') . "\n\n🎥 Zoom: " . $meeting['join_url'];
-                    $body    = GoogleCalendarService::buildEventBody(
-                        $visit->subject,
-                        $desc,
-                        $startDt->toIso8601String(),
-                        $endDt->toIso8601String(),
-                        $visit->location,
-                        $meeting['join_url']
-                    );
-                    $calendarService->updateEvent($visit->gc_event_id, $body);
-                }
-            } catch (\Throwable $e) {
-                // Ignore
-            }
-        }
+        $calendarWarnings = app(LeadVisitCalendarSyncService::class)->sync($visit->fresh());
+        $visit->refresh();
 
         if ($visit->lead_id) {
             $lead = Lead::find($visit->lead_id);
@@ -1434,7 +1358,7 @@ class LeadController extends Controller
             }
         }
 
-        return back()->with('message', 'Zoom meeting berhasil dibuat dan ditautkan ke kunjungan!');
+        return back()->with('message', 'Zoom meeting berhasil dibuat dan ditautkan ke kunjungan!' . ($calendarWarnings ? ' ' . implode(' ', $calendarWarnings) : ''));
     }
 
     // ─── Team Calendar View ──────────────────────────────────────────────────────
@@ -1491,6 +1415,8 @@ class LeadController extends Controller
             'customerPics'             => \App\Models\CustomerPic::whereIn('customer_id', $calCustomerIds)->select('id', 'customer_id', 'name', 'email', 'position', 'phone')->get(),
             'isManagerOrAdmin'         => $isManagerOrAdmin,
             'googleCalendarConfigured' => $googleCalendarConfigured,
+            'outlookCalendarConfigured' => (new OutlookCalendarService(app(\App\Services\MicrosoftGraphTokenService::class)))->isConfigured(),
+            'calendarInviteUsers'      => $this->calendarInviteUsers(),
             'zoomConfigured'           => $zoomConfigured,
             'userHasZoomLicense'       => (bool) (Auth::user()->has_zoom_license ?? false),
         ]);

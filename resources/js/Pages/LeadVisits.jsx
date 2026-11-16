@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { Head, router, Link, usePage } from '@inertiajs/react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import SearchableLeadSelect from '@/Components/SearchableLeadSelect';
+import CalendarProviderOptions from '@/Components/CalendarProviderOptions';
 import {
     MapPin, Plus, X, Calendar, Clock, CheckCircle2, Navigation,
     Building2, User, ChevronDown, AlertCircle, FileText,
@@ -11,8 +12,12 @@ import {
 
 // ─── Helpers ────────────────────────────────────────────────────────────────────
 
-const formatDate = (d) => {
+const formatDate = (d, dateOnly = false) => {
     if (!d) return '—';
+    if (dateOnly && typeof d === 'string') {
+        const [year, month, day] = d.slice(0, 10).split('-').map(Number);
+        return new Date(year, month - 1, day).toLocaleDateString('id-ID', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
+    }
     return new Date(d).toLocaleDateString('id-ID', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
 };
 
@@ -163,9 +168,9 @@ function VisitTable({ visits, onCheckIn, zoomConfigured, onDeleteVisit, onCreate
                                 </td>
                                 <td className="px-4 py-3">
                                     <p className="text-sm text-surface-700">
-                                        {visit.end_at && formatDate(visit.scheduled_at) !== formatDate(visit.end_at)
-                                            ? `${formatDate(visit.scheduled_at)} – ${formatDate(visit.end_at)}`
-                                            : formatDate(visit.scheduled_at)}
+                                        {visit.end_at && formatDate(visit.scheduled_at, visit.is_all_day) !== formatDate(visit.end_at, visit.is_all_day)
+                                            ? `${formatDate(visit.scheduled_at, visit.is_all_day)} – ${formatDate(visit.end_at, visit.is_all_day)}`
+                                            : formatDate(visit.scheduled_at, visit.is_all_day)}
                                     </p>
                                     <p className="text-xs font-semibold text-surface-400">
                                         {visit.is_all_day ? (
@@ -293,49 +298,31 @@ function CalendarPlaceholder() {
 
 // ─── Add Visit Modal ──────────────────────────────────────────────────────────────
 
-function AddVisitModal({ open, onClose, leads, customers, customerPics = [], googleCalendarConfigured, zoomConfigured, userHasZoomLicense }) {
+function AddVisitModal({ open, onClose, leads, customers, customerPics = [], calendarInviteUsers = [], googleCalendarConfigured, outlookCalendarConfigured, zoomConfigured, userHasZoomLicense }) {
     const [form, setForm] = useState({
         lead_id: '', customer_id: '', visit_type: 'visit',
         subject: '', location: '', scheduled_at: '', end_at: '', is_all_day: false, notes: '',
-        sync_calendar: googleCalendarConfigured,
+        sync_calendar: true,
+        sync_outlook_calendar: true,
         create_zoom: false,
         attendee_emails: [],
     });
     const [submitting, setSubmitting] = useState(false);
     const [showDirectCustomer, setShowDirectCustomer] = useState(false);
     const [errors, setErrors] = useState({});
-    const [customEmail, setCustomEmail] = useState('');
     const canCreateZoom = Boolean(zoomConfigured && userHasZoomLicense);
-
-    const addAttendeeEmail = (emailToAdd) => {
-        const trimmed = (emailToAdd || customEmail).trim().toLowerCase();
-        if (!trimmed || !trimmed.includes('@')) return;
-        if (!(form.attendee_emails || []).includes(trimmed)) {
-            setForm((f) => ({
-                ...f,
-                attendee_emails: [...(f.attendee_emails || []), trimmed],
-            }));
-        }
-        setCustomEmail('');
-    };
-
-    const removeAttendeeEmail = (emailToRemove) => {
-        setForm((f) => ({
-            ...f,
-            attendee_emails: (f.attendee_emails || []).filter((e) => e !== emailToRemove),
-        }));
-    };
 
     useEffect(() => {
         if (open) {
             setForm(f => ({
                 ...f,
-                sync_calendar: Boolean(googleCalendarConfigured),
-                create_zoom: Boolean(canCreateZoom),
+                sync_calendar: true,
+                sync_outlook_calendar: true,
+                create_zoom: false,
                 attendee_emails: [],
             }));
         }
-    }, [open, googleCalendarConfigured, canCreateZoom]);
+    }, [open, canCreateZoom]);
 
     const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
@@ -556,64 +543,7 @@ function AddVisitModal({ open, onClose, leads, customers, customerPics = [], goo
                             value={form.notes} onChange={e => set('notes', e.target.value)} />
                     </div>
 
-                    {/* Integration Options */}
-                    <div className="bg-surface-50 rounded-xl p-3 border border-surface-200 space-y-2">
-                        <label className="flex items-center gap-2 cursor-pointer select-none">
-                            <input
-                                type="checkbox"
-                                checked={form.sync_calendar}
-                                onChange={e => set('sync_calendar', e.target.checked)}
-                                className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500 cursor-pointer"
-                            />
-                            <span className="text-xs font-semibold text-surface-800 flex items-center gap-1.5">
-                                <Calendar className="w-3.5 h-3.5 text-blue-600" /> Sinkron ke Google Calendar Tim
-                            </span>
-                        </label>
-
-                        {canCreateZoom && (
-                            <label className="flex items-center gap-2 cursor-pointer select-none pt-1">
-                                <input
-                                    type="checkbox"
-                                    checked={form.create_zoom}
-                                    onChange={e => set('create_zoom', e.target.checked)}
-                                    className="w-4 h-4 rounded text-sky-600 focus:ring-sky-500 cursor-pointer"
-                                />
-                                <span className="text-xs font-semibold text-surface-800 flex items-center gap-1.5">
-                                    <Video className="w-3.5 h-3.5 text-sky-600" /> Buat Link Zoom Meeting Otomatis
-                                </span>
-                            </label>
-                        )}
-
-                        {/* PIC & Attendee Emails */}
-                        {form.sync_calendar && (() => {
-                            const leadPics = form.lead_id
-                                ? customerPics.filter(p => {
-                                    const lead = leads.find(l => String(l.id) === String(form.lead_id));
-                                    return lead && String(p.customer_id) === String(lead.customer_id);
-                                  })
-                                : form.customer_id
-                                ? customerPics.filter(p => String(p.customer_id) === String(form.customer_id))
-                                : [];
-
-                            return (
-                                <div className="pt-2.5 border-t border-surface-200 space-y-1.5 opacity-80">
-                                    <div className="flex items-center justify-between">
-                                        <span className="text-xs font-semibold text-surface-700 flex items-center gap-1.5">
-                                            <Users className="w-3.5 h-3.5 text-surface-400" /> Undang Peserta / Tamu (Google Calendar)
-                                        </span>
-                                        <span className="px-2 py-0.5 text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200 rounded-full">
-                                            Coming Soon
-                                        </span>
-                                    </div>
-                                    <div className="p-2.5 bg-surface-50 border border-dashed border-surface-300 rounded-lg text-xs text-surface-500">
-                                        <p className="text-[11px] text-surface-500 leading-relaxed">
-                                            Pengiriman undangan email langsung ke peserta sedang dinonaktifkan sementara dan akan hadir pada pembaruan Google OAuth.
-                                        </p>
-                                    </div>
-                                </div>
-                            );
-                        })()}
-                    </div>
+                    <CalendarProviderOptions form={form} setForm={setForm} calendarInviteUsers={calendarInviteUsers} googleCalendarConfigured={googleCalendarConfigured} outlookCalendarConfigured={outlookCalendarConfigured} canCreateZoom={canCreateZoom} />
 
                     <div className="flex justify-end gap-2 pt-2 border-t border-surface-100">
                         <button type="button" onClick={onClose}
@@ -642,6 +572,8 @@ export default function LeadVisits({
     customerPics = [],
     isManagerOrAdmin = false,
     googleCalendarConfigured = false,
+    outlookCalendarConfigured = false,
+    calendarInviteUsers = [],
     zoomConfigured = false,
     userHasZoomLicense = false
 }) {
@@ -786,6 +718,8 @@ export default function LeadVisits({
                 customers={customers}
                 customerPics={customerPics}
                 googleCalendarConfigured={googleCalendarConfigured}
+                outlookCalendarConfigured={outlookCalendarConfigured}
+                calendarInviteUsers={calendarInviteUsers}
                 zoomConfigured={zoomConfigured}
                 userHasZoomLicense={userHasZoomLicense}
             />

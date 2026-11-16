@@ -12,6 +12,7 @@ use App\Models\Quotation;
 use App\Models\QuotationItem;
 use App\Models\User;
 use App\Services\GoogleCalendarService;
+use App\Services\OutlookCalendarService;
 use App\Services\PersonalDashboard;
 use App\Services\ZoomService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -230,6 +231,40 @@ class WorkflowTest extends TestCase
         Http::assertNothingSent();
     }
 
+    public function test_calendar_provider_selections_and_invitee_audit_are_persisted(): void
+    {
+        $u = $this->actor();
+        $lead = Lead::create(['title' => 'Calendar invitation lead', 'sales_id' => $u->id]);
+        $this->mock(GoogleCalendarService::class, function ($mock) use ($u) {
+            $mock->shouldReceive('isConfigured')->once()->andReturn(true);
+            $mock->shouldReceive('createEvent')->once()->withArgs(function (array $payload) use ($u) {
+                $emails = collect($payload['attendees'] ?? [])->pluck('email')->all();
+                return in_array($u->email, $emails, true) && in_array('nabil@example.test', $emails, true);
+            })->andReturn('google-event-1');
+        });
+        $this->mock(OutlookCalendarService::class, function ($mock) {
+            $mock->shouldReceive('isConfigured')->once()->andReturn(false);
+        });
+
+        $response = $this->actingAs($u)->postJson('/leads/visits', $this->agenda([
+            'lead_id' => $lead->id,
+            'sync_calendar' => true,
+            'sync_outlook_calendar' => true,
+            'attendee_emails' => [' Nabil@Example.Test '],
+        ]))->assertOk()->assertJsonCount(1, 'warnings');
+
+        $visit = LeadVisit::findOrFail($response->json('visit.id'));
+        $this->assertTrue($visit->sync_google_calendar);
+        $this->assertTrue($visit->sync_outlook_calendar);
+        $this->assertSame(['nabil@example.test'], $visit->attendee_emails);
+        $this->assertSame('google-event-1', $visit->gc_event_id);
+        $this->assertSame('synced', $visit->google_sync_status);
+        $this->assertSame('failed', $visit->outlook_sync_status);
+        $activity = LeadActivity::where('lead_id', $lead->id)->latest('id')->firstOrFail();
+        $this->assertSame(['nabil@example.test'], $activity->metadata['calendar_sync']['attendees']);
+        $this->assertTrue($activity->metadata['calendar_sync']['google']['requested']);
+    }
+
     public function test_scheduled_progress_creates_one_actionable_agenda_not_duplicate_dashboard_tasks(): void
     {
         $u = $this->actor();
@@ -305,14 +340,16 @@ class WorkflowTest extends TestCase
         $this->mock(GoogleCalendarService::class, function ($m) {
             $m->shouldReceive('isConfigured')->once()->andReturn(true);
             $m->shouldReceive('updateEvent')->once()->andReturn(false);
+            $m->shouldReceive('createEvent')->once()->andReturn('qactrecreated');
         });
         $this->mock(ZoomService::class, function ($m) {
             $m->shouldReceive('updateMeeting')->once()->andReturn(false);
         });
-        $this->actingAs($u)->putJson('/leads/visits/'.$visit->id, $this->agenda(['scheduled_at' => '2026-11-08T11:00']))
-            ->assertOk()->assertJsonCount(2, 'warnings');
+        $this->actingAs($u)->putJson('/leads/visits/'.$visit->id, $this->agenda(['scheduled_at' => '2026-11-08T11:00', 'sync_calendar' => true]))
+            ->assertOk()->assertJsonCount(1, 'warnings');
         $this->assertSame('2026-11-08 11:00', $visit->fresh()->scheduled_at->format('Y-m-d H:i'));
-        $this->assertSame('g1', $visit->fresh()->gc_event_id);
+        $this->assertSame('qactrecreated', $visit->fresh()->gc_event_id);
+        $this->assertSame('synced', $visit->fresh()->google_sync_status);
         Http::assertNothingSent();
     }
 

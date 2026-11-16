@@ -7,6 +7,7 @@ use App\Models\SystemSetting;
 use App\Models\User;
 use App\Models\UserTermsTemplate;
 use App\Services\GoogleCalendarService;
+use App\Services\OutlookCalendarService;
 use App\Services\ZoomService;
 use App\Services\SharePointService;
 use Illuminate\Http\Request;
@@ -65,14 +66,18 @@ class SettingController extends Controller
         $bankAccounts = CompanyBankAccount::orderByDesc('is_default')->get();
 
         // Integrations (Google Calendar & Zoom)
-        $gcSetting = SystemSetting::find('google_calendar_credentials');
-        $gcVal = $gcSetting ? $gcSetting->value : null;
+        $googleCalendarService = new GoogleCalendarService();
         $googleCalendarSettings = [
-            'is_configured' => (new GoogleCalendarService())->isConfigured(),
-            'calendar_id'   => $gcVal['calendar_id'] ?? '',
-            'client_email'  => $gcVal['client_email'] ?? '',
-            'project_id'    => $gcVal['project_id'] ?? '',
-            'has_private_key' => !empty($gcVal['private_key']),
+            'is_configured' => $googleCalendarService->isConfigured(),
+            'credentials_configured' => $googleCalendarService->credentialsConfigured(),
+            'connected_account' => $googleCalendarService->connectedAccount(),
+            'calendar_id' => config('services.google_calendar.calendar_id', 'primary'),
+            'legacy_service_account_present' => SystemSetting::where('key', 'google_calendar_credentials')->exists(),
+        ];
+        $outlookCalendar = app(OutlookCalendarService::class);
+        $outlookCalendarSettings = [
+            'is_configured' => $outlookCalendar->isConfigured(),
+            'mailbox' => $outlookCalendar->organizerMailbox(),
         ];
 
         $zoomSetting = SystemSetting::find('zoom_credentials');
@@ -122,6 +127,7 @@ class SettingController extends Controller
             'domainLogoMap'          => $domainLogoMap,
             'maintenanceMode'        => $maintenanceMode,
             'googleCalendarSettings' => $googleCalendarSettings,
+            'outlookCalendarSettings' => $outlookCalendarSettings,
             'zoomSettings'           => $zoomSettings,
             'sharePointSettings'     => $sharePointSettings,
             'emailNotificationSettings' => $emailNotificationSettings,
@@ -307,51 +313,47 @@ class SettingController extends Controller
 
     // ─── Integrations (Google Calendar & Zoom) ───────────────────────────────────
 
-    public function updateGoogleCalendar(Request $request)
+    public function connectGoogleCalendar(Request $request, GoogleCalendarService $googleCalendar)
     {
-        $data = $request->validate([
-            'action'        => 'required|in:save,clear,test',
-            'calendar_id'   => 'nullable|string|max:255',
-            'service_json'  => 'nullable|string', // Pasted service account JSON file
-            'client_email'  => 'nullable|string|max:255',
-            'private_key'   => 'nullable|string',
-        ]);
+        if (! $googleCalendar->credentialsConfigured()) {
+            return back()->withErrors(['google_calendar' => 'Isi GOOGLE_CALENDAR_CLIENT_ID, GOOGLE_CALENDAR_CLIENT_SECRET, dan GOOGLE_CALENDAR_REDIRECT_URI di environment aplikasi.']);
+        }
 
-        if ($data['action'] === 'clear') {
+        $state = Str::random(64);
+        $request->session()->put('google_calendar_oauth_state', $state);
+
+        return redirect()->away($googleCalendar->authorizationUrl($state));
+    }
+
+    public function googleCalendarCallback(Request $request, GoogleCalendarService $googleCalendar)
+    {
+        $expectedState = $request->session()->pull('google_calendar_oauth_state');
+        $actualState = (string) $request->query('state', '');
+        if (! is_string($expectedState) || $expectedState === '' || ! hash_equals($expectedState, $actualState)) {
+            return redirect()->route('settings')->withErrors(['google_calendar' => 'State OAuth Google tidak valid. Coba hubungkan kembali.']);
+        }
+
+        if ($request->filled('error')) {
+            return redirect()->route('settings')->withErrors(['google_calendar' => 'Persetujuan Google Calendar dibatalkan atau ditolak.']);
+        }
+
+        try {
+            $account = $googleCalendar->connectWithAuthorizationCode((string) $request->query('code', ''));
+            // Remove legacy service-account private keys after OAuth is confirmed.
             SystemSetting::where('key', 'google_calendar_credentials')->delete();
-            return back()->with('message', 'Kredensial Google Calendar berhasil dihapus.');
-        }
 
-        $existing = SystemSetting::find('google_calendar_credentials')?->value ?? [];
-
-        // If user pasted raw JSON from Google Service Account file
-        if (!empty($data['service_json'])) {
-            $parsed = json_decode($data['service_json'], true);
-            if (is_array($parsed) && !empty($parsed['client_email']) && !empty($parsed['private_key'])) {
-                $existing['client_email'] = $parsed['client_email'];
-                $existing['private_key']  = $parsed['private_key'];
-                $existing['project_id']   = $parsed['project_id'] ?? '';
-            } else {
-                return back()->withErrors(['service_json' => 'Format JSON Service Account tidak valid. Pastikan file JSON resmi dari Google Cloud Console.']);
-            }
+            return redirect()->route('settings')->with('message', "Google Calendar berhasil dihubungkan sebagai {$account}.");
+        } catch (\Throwable $exception) {
+            return redirect()->route('settings')->withErrors(['google_calendar' => $exception->getMessage()]);
         }
+    }
 
-        if (!empty($data['calendar_id'])) {
-            $existing['calendar_id'] = trim($data['calendar_id']);
-        }
-        if (!empty($data['client_email'])) {
-            $existing['client_email'] = trim($data['client_email']);
-        }
-        if (!empty($data['private_key'])) {
-            $existing['private_key'] = $data['private_key'];
-        }
+    public function disconnectGoogleCalendar(GoogleCalendarService $googleCalendar)
+    {
+        $googleCalendar->disconnect();
+        SystemSetting::where('key', 'google_calendar_credentials')->delete();
 
-        SystemSetting::updateOrCreate(
-            ['key' => 'google_calendar_credentials'],
-            ['value' => $existing]
-        );
-
-        return back()->with('message', 'Pengaturan Google Calendar berhasil disimpan!');
+        return back()->with('message', 'Akun OAuth Google Calendar diputus dan kredensial Service Account lama dihapus.');
     }
 
     public function updateZoom(Request $request)

@@ -1,6 +1,7 @@
 import useAgendaCancellation from '@/Components/useAgendaCancellation';
 import LeadInformationEditor from '@/Components/LeadInformationEditor';
 import WorkflowPanel from '@/Components/WorkflowPanel';
+import CalendarProviderOptions from '@/Components/CalendarProviderOptions';
 import React, { useState, useEffect, useRef } from 'react';
 import { Head, router, Link, usePage } from '@inertiajs/react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
@@ -87,18 +88,19 @@ const formatDateTime = (d) => {
 
 const formatVisitSchedule = (v) => {
     if (!v?.scheduled_at) return '—';
-    const start = new Date(v.scheduled_at);
     if (v.is_all_day) {
-        const startStr = start.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
+        const formatDateOnly = (value) => {
+            const [year, month, day] = value.slice(0, 10).split('-').map(Number);
+            return new Date(year, month - 1, day).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
+        };
+        const startStr = formatDateOnly(v.scheduled_at);
         if (v.end_at) {
-            const end = new Date(v.end_at);
-            if (end >= start) {
-                const endStr = end.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
-                return startStr === endStr ? `${startStr} (Seharian)` : `${startStr} – ${endStr} (Seharian)`;
-            }
+            const endStr = formatDateOnly(v.end_at);
+            return startStr === endStr ? `${startStr} (Seharian)` : `${startStr} – ${endStr} (Seharian)`;
         }
         return `${startStr} (Seharian)`;
     }
+    const start = new Date(v.scheduled_at);
     const startStr = start.toLocaleString('id-ID', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
     if (v.end_at) {
         const end = new Date(v.end_at);
@@ -882,7 +884,7 @@ function PicsTab({ lead, pics, onOpenAdd }) {
 
 // ─── Schedule Visit Modal ─────────────────────────────────────────────────────────
 
-function ScheduleVisitModal({ open, onClose, lead, customerPics = [], googleCalendarConfigured, zoomConfigured }) {
+function ScheduleVisitModal({ open, onClose, lead, customerPics = [], calendarInviteUsers = [], googleCalendarConfigured, outlookCalendarConfigured, zoomConfigured, userHasZoomLicense }) {
     const [form, setForm] = useState({
         visit_type: 'visit',
         subject: '',
@@ -891,31 +893,12 @@ function ScheduleVisitModal({ open, onClose, lead, customerPics = [], googleCale
         end_at: '',
         is_all_day: false,
         notes: '',
-        sync_calendar: Boolean(googleCalendarConfigured),
-        create_zoom: Boolean(zoomConfigured),
+        sync_calendar: true,
+        sync_outlook_calendar: true,
+        create_zoom: false,
         attendee_emails: [],
     });
     const [submitting, setSubmitting] = useState(false);
-    const [customEmail, setCustomEmail] = useState('');
-
-    const addAttendeeEmail = (emailToAdd) => {
-        const trimmed = (emailToAdd || customEmail).trim().toLowerCase();
-        if (!trimmed || !trimmed.includes('@')) return;
-        if (!(form.attendee_emails || []).includes(trimmed)) {
-            setForm((f) => ({
-                ...f,
-                attendee_emails: [...(f.attendee_emails || []), trimmed],
-            }));
-        }
-        setCustomEmail('');
-    };
-
-    const removeAttendeeEmail = (emailToRemove) => {
-        setForm((f) => ({
-            ...f,
-            attendee_emails: (f.attendee_emails || []).filter((e) => e !== emailToRemove),
-        }));
-    };
 
     useEffect(() => {
         if (open) {
@@ -932,12 +915,13 @@ function ScheduleVisitModal({ open, onClose, lead, customerPics = [], googleCale
                 end_at: '',
                 is_all_day: false,
                 notes: '',
-                sync_calendar: Boolean(googleCalendarConfigured),
-                create_zoom: Boolean(zoomConfigured),
+                sync_calendar: true,
+                sync_outlook_calendar: true,
+                create_zoom: false,
                 attendee_emails: [],
             });
         }
-    }, [open, lead, googleCalendarConfigured, zoomConfigured]);
+    }, [open, lead]);
 
     if (!open) return null;
 
@@ -955,6 +939,7 @@ function ScheduleVisitModal({ open, onClose, lead, customerPics = [], googleCale
             is_all_day: Boolean(form.is_all_day),
             notes: form.notes,
             sync_calendar: form.sync_calendar,
+            sync_outlook_calendar: form.sync_outlook_calendar,
             create_zoom: form.create_zoom,
             attendee_emails: form.attendee_emails,
         }, {
@@ -1111,59 +1096,7 @@ function ScheduleVisitModal({ open, onClose, lead, customerPics = [], googleCale
                         />
                     </div>
 
-                    {/* Integration Options */}
-                    <div className="bg-surface-50 rounded-xl p-3 border border-surface-200/80 space-y-2">
-                        <label className="flex items-center gap-2 cursor-pointer select-none">
-                            <input
-                                type="checkbox"
-                                checked={form.sync_calendar}
-                                onChange={e => setForm({ ...form, sync_calendar: e.target.checked })}
-                                className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500 cursor-pointer"
-                            />
-                            <div className="text-xs">
-                                <span className="font-semibold text-surface-800 flex items-center gap-1.5">
-                                    <Calendar className="w-3.5 h-3.5 text-blue-600" /> Sinkron ke Google Calendar Tim
-                                </span>
-                                <p className="text-[10px] text-surface-400">Jadwal akan otomatis masuk ke Google Calendar kantor dan handphone tim</p>
-                            </div>
-                        </label>
-
-                        {zoomConfigured && (
-                            <label className="flex items-center gap-2 cursor-pointer select-none pt-1">
-                                <input
-                                    type="checkbox"
-                                    checked={form.create_zoom}
-                                    onChange={e => setForm({ ...form, create_zoom: e.target.checked })}
-                                    className="w-4 h-4 rounded text-sky-600 focus:ring-sky-500 cursor-pointer"
-                                />
-                                <div className="text-xs">
-                                    <span className="font-semibold text-surface-800 flex items-center gap-1.5">
-                                        <Video className="w-3.5 h-3.5 text-sky-600" /> Buat Link Zoom Meeting Otomatis
-                                    </span>
-                                    <p className="text-[10px] text-surface-400">Menghasilkan link Zoom meeting instan dari lisensi akun perusahaan</p>
-                                </div>
-                            </label>
-                        )}
-
-                        {/* PIC & Attendee Emails */}
-                        {form.sync_calendar && (
-                            <div className="pt-2.5 border-t border-surface-200 space-y-1.5 opacity-80">
-                                <div className="flex items-center justify-between">
-                                    <span className="text-xs font-semibold text-surface-700 flex items-center gap-1.5">
-                                        <Users className="w-3.5 h-3.5 text-surface-400" /> Undang Peserta / Tamu (Google Calendar)
-                                    </span>
-                                    <span className="px-2 py-0.5 text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200 rounded-full">
-                                        Coming Soon
-                                    </span>
-                                </div>
-                                <div className="p-2.5 bg-surface-50 border border-dashed border-surface-300 rounded-lg text-xs text-surface-500">
-                                    <p className="text-[11px] text-surface-500 leading-relaxed">
-                                        Pengiriman undangan email langsung ke peserta sedang dinonaktifkan sementara dan akan hadir pada pembaruan Google OAuth.
-                                    </p>
-                                </div>
-                            </div>
-                        )}
-                    </div>
+                    <CalendarProviderOptions form={form} setForm={setForm} calendarInviteUsers={calendarInviteUsers} googleCalendarConfigured={googleCalendarConfigured} outlookCalendarConfigured={outlookCalendarConfigured} canCreateZoom={Boolean(zoomConfigured && userHasZoomLicense)} />
 
                     </div>
 
@@ -1374,6 +1307,8 @@ export default function LeadDetail({
     sources = [],
     pipelineSettings = null,
     googleCalendarConfigured = false,
+    outlookCalendarConfigured = false,
+    calendarInviteUsers = [],
     zoomConfigured = false,
     userHasZoomLicense = false
 }) {
@@ -1900,7 +1835,10 @@ export default function LeadDetail({
                 lead={lead}
                 customerPics={customerPics}
                 googleCalendarConfigured={googleCalendarConfigured}
+                outlookCalendarConfigured={outlookCalendarConfigured}
+                calendarInviteUsers={calendarInviteUsers}
                 zoomConfigured={zoomConfigured}
+                userHasZoomLicense={userHasZoomLicense}
             />
 
             {/* Modal Tambah PIC */}

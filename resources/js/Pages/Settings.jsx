@@ -19,6 +19,7 @@ export default function Settings({
   domainLogoMap = [], 
   maintenanceMode = { enabled: false, domains: [] },
   googleCalendarSettings = { is_configured: false },
+  outlookCalendarSettings = { is_configured: false },
   zoomSettings = { is_configured: false },
   sharePointSettings = { is_configured: false, enabled: false, site_id: '', drive_id: '', base_folder: 'Documents/Purchase Orders' },
   emailNotificationSettings = {},
@@ -333,38 +334,23 @@ export default function Settings({
   };
 
   // Integrations State
-  const [gcCalendarId, setGcCalendarId] = useState(googleCalendarSettings?.calendar_id || '');
-  const [gcServiceJson, setGcServiceJson] = useState('');
-  const [isSavingGc, setIsSavingGc] = useState(false);
-
   const [zoomAccountId, setZoomAccountId] = useState(zoomSettings?.account_id || '');
   const [zoomClientId, setZoomClientId] = useState(zoomSettings?.client_id || '');
   const [zoomClientSecret, setZoomClientSecret] = useState('');
   const [isSavingZoom, setIsSavingZoom] = useState(false);
 
   useEffect(() => {
-    if (googleCalendarSettings?.calendar_id) setGcCalendarId(googleCalendarSettings.calendar_id);
     if (zoomSettings?.account_id) setZoomAccountId(zoomSettings.account_id);
     if (zoomSettings?.client_id) setZoomClientId(zoomSettings.client_id);
-  }, [googleCalendarSettings, zoomSettings]);
+  }, [zoomSettings]);
 
-  const handleSaveGoogleCalendar = (e) => {
-    e.preventDefault();
-    setIsSavingGc(true);
-    router.post(route('settings.google-calendar'), {
-      action: 'save',
-      calendar_id: gcCalendarId,
-      service_json: gcServiceJson,
-    }, {
-      preserveScroll: true,
-      onSuccess: () => setGcServiceJson(''),
-      onFinish: () => setIsSavingGc(false),
-    });
+  const handleConnectGoogleCalendar = () => {
+    window.location.assign(route('settings.google-calendar.connect'));
   };
 
-  const handleClearGoogleCalendar = () => {
-    if (!window.confirm('Hapus konfigurasi Google Calendar? Sinkronisasi kunjungan tim ke Google Calendar akan dihentikan.')) return;
-    router.post(route('settings.google-calendar'), { action: 'clear' }, { preserveScroll: true });
+  const handleDisconnectGoogleCalendar = () => {
+    if (!window.confirm('Putuskan akun OAuth Google Calendar? Event yang sudah ada tetap berada di kalender Google.')) return;
+    router.post(route('settings.google-calendar.disconnect'), {}, { preserveScroll: true });
   };
 
   const handleSaveZoom = (e) => {
@@ -406,7 +392,7 @@ export default function Settings({
       { id: 'terms', label: 'Terms & Conditions', icon: FileText, badge: masterTemplatesList?.length || 0 },
       { id: 'domains', label: 'Pemetaan Logo Domain', icon: ImageIcon, badge: domainMapList?.length || 0 },
       { id: 'maintenance', label: 'Mode Maintenance', icon: Wrench, badge: maintenanceMode?.enabled ? 'Aktif' : 'Nonaktif', badgeColor: maintenanceMode?.enabled ? 'bg-amber-100 text-amber-800' : 'bg-surface-100 text-surface-500' },
-      { id: 'integrations', label: 'Integrasi Eksternal', icon: Globe, badge: `${(googleCalendarSettings?.is_configured ? 1 : 0) + (zoomSettings?.is_configured ? 1 : 0)} Aktif` },
+      { id: 'integrations', label: 'Integrasi Eksternal', icon: Globe, badge: `${(googleCalendarSettings?.is_configured ? 1 : 0) + (outlookCalendarSettings?.is_configured ? 1 : 0) + (zoomSettings?.is_configured ? 1 : 0)} Aktif` },
       { id: 'sharepoint', label: 'SharePoint Storage', icon: FolderOpen, badge: sharePointSettings?.is_configured ? 'Terhubung' : (sharePointSettings?.enabled ? 'Config' : 'Nonaktif'), badgeColor: sharePointSettings?.is_configured ? 'bg-emerald-100 text-emerald-800' : (sharePointSettings?.enabled ? 'bg-amber-100 text-amber-800' : 'bg-surface-100 text-surface-500') },
       { id: 'email_notifications', label: 'Notifikasi Email', icon: Mail, badge: 'Konfigurasi' },
     ] : [])
@@ -899,98 +885,71 @@ export default function Settings({
                   <h2 className="text-sm font-bold text-gray-800">Integrasi Eksternal (Google Calendar & Zoom)</h2>
                 </div>
                 <p className="text-xs text-gray-500 mt-1">
-                  Sinkronisasi jadwal kunjungan ke Google Calendar perusahaan dan pembuatan link meeting Zoom secara otomatis.
+                  Sinkronisasi jadwal kunjungan ke Google Calendar Team dan Outlook, dengan Zoom opsional.
                 </p>
               </div>
             </div>
 
             <div className="p-6 space-y-8">
-              {/* 1. Google Calendar Section */}
+              {/* 1. Google Calendar OAuth Section */}
               <div className="rounded-xl border border-gray-200 p-5 bg-gray-50/30 space-y-4">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-gray-200/60 pb-3">
                   <div className="flex items-center gap-2.5">
-                    <div className="w-8 h-8 rounded-lg bg-blue-100 text-blue-600 flex items-center justify-center shrink-0">
-                      <Calendar className="w-4 h-4" />
-                    </div>
+                    <div className="w-8 h-8 rounded-lg bg-blue-100 text-blue-600 flex items-center justify-center shrink-0"><Calendar className="w-4 h-4" /></div>
                     <div>
-                      <h3 className="text-sm font-bold text-gray-800">Google Calendar Tim (Shared Calendar)</h3>
-                      <p className="text-xs text-gray-500">Seluruh kunjungan yang dijadwalkan sales akan otomatis masuk ke kalender kantor.</p>
+                      <h3 className="text-sm font-bold text-gray-800">Google Calendar Tim (OAuth)</h3>
+                      <p className="text-xs text-gray-500">Satu akun resmi Google menjadi penyelenggara kalender bersama.</p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    {googleCalendarSettings.is_configured ? (
-                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                        <CheckCircle2 className="w-3.5 h-3.5" /> Tersambung
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200">
-                        <AlertCircle className="w-3.5 h-3.5" /> Belum Terkonfigurasi
-                      </span>
-                    )}
-                  </div>
+                  {googleCalendarSettings.is_configured ? (
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200"><CheckCircle2 className="w-3.5 h-3.5" /> Tersambung</span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200"><AlertCircle className="w-3.5 h-3.5" /> Belum tersambung</span>
+                  )}
                 </div>
 
                 {googleCalendarSettings.is_configured && (
-                  <div className="p-3 bg-emerald-50/50 rounded-lg border border-emerald-100 text-xs text-emerald-800 space-y-1">
-                    <p><strong>Calendar ID:</strong> <code className="font-mono bg-white/80 px-1.5 py-0.5 rounded border border-emerald-200">{googleCalendarSettings.calendar_id}</code></p>
-                    {googleCalendarSettings.client_email && (
-                      <p><strong>Service Account:</strong> <code className="font-mono bg-white/80 px-1.5 py-0.5 rounded border border-emerald-200">{googleCalendarSettings.client_email}</code></p>
-                    )}
+                  <div className="p-3 bg-emerald-50/50 rounded-lg border border-emerald-100 text-xs text-emerald-800">
+                    <strong>Akun organizer:</strong> <code className="font-mono bg-white/80 px-1.5 py-0.5 rounded border border-emerald-200">{googleCalendarSettings.connected_account}</code>
+                    <span className="ml-2 text-emerald-700">· Kalender: {googleCalendarSettings.calendar_id}</span>
                   </div>
                 )}
 
-                <form onSubmit={handleSaveGoogleCalendar} className="space-y-4">
-                  <div>
-                    <label className="text-xs font-bold text-gray-700 block mb-1">
-                      Calendar ID Gmail Kantor <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      value={gcCalendarId}
-                      onChange={e => setGcCalendarId(e.target.value)}
-                      placeholder="Contoh: calendar@activ.co.id atau xxxx@group.calendar.google.com"
-                      className="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-800 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 outline-none font-mono"
-                      required
-                    />
-                    <p className="text-[11px] text-gray-400 mt-1">Ditemukan di Google Calendar → Settings of shared calendar → Calendar ID.</p>
-                  </div>
+                {!googleCalendarSettings.credentials_configured && (
+                  <p className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
+                    Lengkapi GOOGLE_CALENDAR_CLIENT_ID, GOOGLE_CALENDAR_CLIENT_SECRET, dan GOOGLE_CALENDAR_REDIRECT_URI pada environment aplikasi sebelum menghubungkan akun.
+                  </p>
+                )}
 
-                  <div>
-                    <label className="text-xs font-bold text-gray-700 block mb-1">
-                      Service Account Credentials JSON <span className="text-gray-400 font-normal">({googleCalendarSettings.has_private_key ? 'Sudah tersimpan, paste baru untuk update' : 'Wajib diisi'})</span>
-                    </label>
-                    <textarea
-                      rows={3}
-                      value={gcServiceJson}
-                      onChange={e => setGcServiceJson(e.target.value)}
-                      placeholder='Paste isi file credentials JSON dari Google Cloud Console Service Account di sini: {"type": "service_account", "client_email": "...", ...}'
-                      className="w-full bg-white border border-gray-300 rounded-lg p-2.5 text-xs text-gray-800 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 outline-none font-mono"
-                    />
-                    <p className="text-[11px] text-gray-500 mt-1 leading-relaxed">
-                      💡 <strong>Catatan:</strong> Pastikan email Service Account diinvite ke Google Calendar kantor dengan akses <em>"Make changes to events"</em>.
-                    </p>
-                  </div>
+                <div className="flex flex-wrap items-center justify-end gap-3 pt-1">
+                  {googleCalendarSettings.is_configured && (
+                    <button type="button" onClick={handleDisconnectGoogleCalendar} className="px-4 py-2 text-xs font-bold text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors">Putuskan OAuth</button>
+                  )}
+                  <button type="button" onClick={handleConnectGoogleCalendar} disabled={!googleCalendarSettings.credentials_configured}
+                    className="flex items-center gap-2 px-4 py-2 text-xs font-bold bg-brand-600 text-white rounded-lg hover:bg-brand-700 transition-all shadow-sm disabled:cursor-not-allowed disabled:opacity-50">
+                    <Link2 className="w-3.5 h-3.5" /> {googleCalendarSettings.is_configured ? 'Hubungkan Ulang Akun Google' : 'Hubungkan Akun Google'}
+                  </button>
+                </div>
+                {googleCalendarSettings.legacy_service_account_present && <p className="text-[11px] text-amber-700">Kredensial Service Account lama akan dihapus setelah akun OAuth berhasil dihubungkan.</p>}
+              </div>
 
-                  <div className="flex items-center justify-end gap-3 pt-2">
-                    {googleCalendarSettings.is_configured && (
-                      <button
-                        type="button"
-                        onClick={handleClearGoogleCalendar}
-                        className="px-4 py-2 text-xs font-bold text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors cursor-pointer"
-                      >
-                        Hapus Kredensial
-                      </button>
-                    )}
-                    <button
-                      type="submit"
-                      disabled={isSavingGc}
-                      className="flex items-center gap-2 px-4 py-2 text-xs font-bold bg-brand-600 text-white rounded-lg hover:bg-brand-700 transition-all shadow-sm cursor-pointer disabled:opacity-60"
-                    >
-                      {isSavingGc && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-                      Simpan Konfigurasi Google Calendar
-                    </button>
+              {/* Outlook invitations are sent from the shared Microsoft Graph mailbox. */}
+              <div className="rounded-xl border border-gray-200 p-5 bg-gray-50/30 space-y-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-lg bg-sky-100 text-sky-600 flex items-center justify-center shrink-0"><Mail className="w-4 h-4" /></div>
+                    <div>
+                      <h3 className="text-sm font-bold text-gray-800">Undangan Outlook Calendar</h3>
+                      <p className="text-xs text-gray-500">Undangan dikirim melalui Microsoft Graph dari mailbox penyelenggara bersama.</p>
+                    </div>
                   </div>
-                </form>
+                  {outlookCalendarSettings.is_configured ? (
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200"><CheckCircle2 className="w-3.5 h-3.5" /> Terkonfigurasi</span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200"><AlertCircle className="w-3.5 h-3.5" /> Belum dikonfigurasi</span>
+                  )}
+                </div>
+                <p className="text-xs text-gray-600">Organizer: <code className="font-mono bg-white px-1.5 py-0.5 rounded border border-gray-200">{outlookCalendarSettings.mailbox || 'OUTLOOK_CALENDAR_MAILBOX'}</code>. Pastikan Microsoft Graph memiliki izin aplikasi Calendars.ReadWrite dan akses mailbox dibatasi ke alamat ini.</p>
               </div>
 
               {/* 2. Zoom Server-to-Server OAuth Section */}
