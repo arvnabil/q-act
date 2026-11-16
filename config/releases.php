@@ -1,14 +1,53 @@
 <?php
 
 return [
-    'current_version' => 'v2.5.0',
+    'current_version' => 'v2.5.2',
     'last_updated' => '2026-11-16',
     'releases' => [
+        [
+            'version' => 'v2.5.2',
+            'week' => '2026 - Minggu ke-47 (16 Nov - 22 Nov 2026)',
+            'date' => '2026-11-16',
+            'is_current' => true,
+            'tag' => 'Sales Order PO Date Correction',
+            'summary' => 'Tanggal PO dapat dikoreksi langsung dari detail SO oleh Manager, Administrator, atau Sales pemilik SO.',
+            'highlights' => [
+                'Tombol Edit Tanggal PO hanya mengubah tanggal PO; nomor PO, status, dan lampiran tidak berubah.',
+                'Tanggal yang dikoreksi disinkronkan ke SO, quotation, dan catatan PO terkait agar filter dan laporan memakai tanggal yang konsisten.',
+                'Perubahan tanggal PO tercatat di audit trail dengan nilai tanggal sebelum dan sesudah perubahan.',
+            ],
+            'categories' => [
+                'Sales Order & Purchase Order' => [
+                    'Akses koreksi tanggal PO dibatasi untuk Administrator, Manager, Sales Manager, dan Sales pemilik SO.',
+                    'Pembaruan tanggal berlangsung atomik agar data PO terkait tidak berbeda jika terjadi kegagalan.',
+                ],
+            ],
+        ],
+        [
+            'version' => 'v2.5.1',
+            'week' => '2026 - Minggu ke-47 (16 Nov - 22 Nov 2026)',
+            'date' => '2026-11-16',
+            'is_current' => false,
+            'tag' => 'Quotation Delegation',
+            'summary' => 'Delegasi quotation ke Sales dengan riwayat yang tertaut, pilihan untuk menyertakan Sub Quotation, dan permission yang dapat diatur per role.',
+            'highlights' => [
+                'Delegasi membuat quotation baru dengan nomor Sales penerima; quotation asal tetap disimpan sebagai riwayat dan tidak dapat diedit atau diproses menjadi PO.',
+                'Sub Quotation dapat disertakan saat delegasi. Jika tidak disertakan, item digabung pada quotation utama baru dan Sub Quotation lama diarsipkan sebagai riwayat.',
+                'Permission Delegasikan Quotation tersedia di User Management → Roles; default hanya diberikan ke Manager dan Administrator, tanpa mereset permission role lain.',
+            ],
+            'categories' => [
+                'Delegasi Quotation & Hak Akses' => [
+                    'Audit trail dan tautan quotation asal/baru menjaga riwayat delegasi tetap terlihat.',
+                    'Delegasi hanya berlaku untuk quotation draft tanpa PO/SO; notifikasi dikirim ke Sales penerima.',
+                    'Permission dapat diberikan atau dicabut per role melalui Role Editor.',
+                ],
+            ],
+        ],
         [
             'version' => 'v2.5.0',
             'week' => '2026 - Minggu ke-47 (16 Nov - 22 Nov 2026)',
             'date' => '2026-11-16',
-            'is_current' => true,
+            'is_current' => false,
             'tag' => 'Lead, Finance & Calendar Integrations',
             'summary' => 'Primary Quotation & Auto Lead Estimation, bukti pembayaran terhubung ke SharePoint, PDF Unicode dan cetak A4, serta integrasi Google OAuth dan undangan Outlook.',
             'highlights' => [

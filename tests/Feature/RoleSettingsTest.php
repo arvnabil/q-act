@@ -2,11 +2,13 @@
 
 namespace Tests\Feature;
 
-use App\Models\{User, BusinessUnitMember};
+use App\Models\BusinessUnitMember;
+use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
-use Spatie\Permission\Models\{Role, Permission};
+use Spatie\Permission\Models\Permission;
+use Spatie\Permission\Models\Role;
 use Tests\TestCase;
 
 class RoleSettingsTest extends TestCase
@@ -17,6 +19,7 @@ class RoleSettingsTest extends TestCase
     {
         $user = User::factory()->create();
         $user->givePermissionTo(Permission::findOrCreate('manage_roles', 'web'));
+
         return $user;
     }
 
@@ -49,6 +52,23 @@ class RoleSettingsTest extends TestCase
         $this->assertTrue($sales->fresh()->hasPermissionTo('custom_feature'));
         $this->assertTrue($sales->fresh()->hasPermissionTo('quotations_view_bu'));
         $this->assertTrue($finance->fresh()->hasPermissionTo('quotations_view'));
+    }
+
+    public function test_quotation_delegation_permission_can_be_assigned_from_role_settings(): void
+    {
+        $manager = Role::findOrCreate('Manager', 'web');
+        $finance = Role::findOrCreate('Finance', 'web');
+
+        $this->actingAs($this->editor())->get('/roles')->assertOk()->assertInertia(fn ($page) => $page
+            ->where('features', fn ($features) => $features->contains('quotations_delegate'))
+            ->where('rolePermissions.Manager.quotations_delegate', false));
+
+        $this->actingAs($this->editor())->put('/roles', ['rolePermissions' => [
+            'Manager' => ['quotations_delegate' => true],
+        ]])->assertSessionHasNoErrors()->assertRedirect();
+
+        $this->assertTrue($manager->fresh()->hasPermissionTo('quotations_delegate'));
+        $this->assertFalse($finance->fresh()->hasPermissionTo('quotations_delegate'));
     }
 
     public function test_invalid_permissions_are_rejected_without_partial_changes(): void

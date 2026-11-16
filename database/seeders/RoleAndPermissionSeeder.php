@@ -2,8 +2,11 @@
 
 namespace Database\Seeders;
 
-use Illuminate\Database\Console\Seeds\WithoutModelEvents;
+use App\Models\User;
 use Illuminate\Database\Seeder;
+use Spatie\Permission\Models\Permission;
+use Spatie\Permission\Models\Role;
+use Spatie\Permission\PermissionRegistrar;
 
 class RoleAndPermissionSeeder extends Seeder
 {
@@ -12,11 +15,11 @@ class RoleAndPermissionSeeder extends Seeder
      */
     public function run(): void
     {
-        app()[\Spatie\Permission\PermissionRegistrar::class]->forgetCachedPermissions();
+        app()[PermissionRegistrar::class]->forgetCachedPermissions();
 
         $permissions = [
             'dashboard', 'dashboard_view', 'dashboard_view_bu', 'dashboard_view_all', 'sales_targets_edit', 'quotations_view', 'quotations_create',
-            'quotations_edit', 'quotations_delete', 'quotations_import_legacy', 'sales_orders_view', 'sales_orders_edit',
+            'quotations_edit', 'quotations_delete', 'quotations_delegate', 'quotations_import_legacy', 'sales_orders_view', 'sales_orders_edit',
             'sales_orders_delete', 'sales_orders_delete_bulk', 'customers_view',
             'customers_create', 'customers_edit', 'customers_delete', 'products_view',
             'products_create', 'products_edit', 'products_delete', 'view_reports',
@@ -33,12 +36,12 @@ class RoleAndPermissionSeeder extends Seeder
         ];
 
         foreach ($permissions as $permission) {
-            \Spatie\Permission\Models\Permission::firstOrCreate([
+            Permission::firstOrCreate([
                 'name' => $permission, 'guard_name' => 'web',
             ]);
         }
 
-        $existingRoleNames = \Spatie\Permission\Models\Role::where('guard_name', 'web')->pluck('name')->all();
+        $existingRoleNames = Role::where('guard_name', 'web')->pluck('name')->all();
 
         // 1. Create Roles
         $roles = [
@@ -47,11 +50,11 @@ class RoleAndPermissionSeeder extends Seeder
             'Sales Manager',
             'Sales',
             'Presales',
-            'Finance'
+            'Finance',
         ];
 
         foreach ($roles as $role) {
-            \Spatie\Permission\Models\Role::firstOrCreate(['name' => $role, 'guard_name' => 'web']);
+            Role::firstOrCreate(['name' => $role, 'guard_name' => 'web']);
         }
 
         $defaults = [
@@ -64,28 +67,32 @@ class RoleAndPermissionSeeder extends Seeder
         ];
 
         foreach ($defaults as $roleName => $rolePermissions) {
-            $role = \Spatie\Permission\Models\Role::findByName($roleName, 'web');
+            $role = Role::findByName($roleName, 'web');
             $existingScopes = $role->permissions->pluck('name')->filter(fn ($name) => str_ends_with($name, '_view_bu') || str_ends_with($name, '_view_all'))->all();
             if (in_array($roleName, $existingRoleNames, true)) {
-                $rolePermissions = array_filter($rolePermissions, fn ($name) => !str_ends_with($name, '_view_bu') && !str_ends_with($name, '_view_all'));
+                $rolePermissions = array_filter($rolePermissions, fn ($name) => ! str_ends_with($name, '_view_bu') && ! str_ends_with($name, '_view_all'));
             }
             if (in_array($roleName, $existingRoleNames, true)) {
                 $rolePermissions = array_filter($rolePermissions, fn ($name) => $name !== 'dashboard_view');
-                if ($role->permissions->contains('name', 'dashboard_view')) $rolePermissions[] = 'dashboard_view';
+                if ($role->permissions->contains('name', 'dashboard_view')) {
+                    $rolePermissions[] = 'dashboard_view';
+                }
             }
             $role->syncPermissions(array_unique(array_merge($rolePermissions, $existingScopes)));
         }
 
         // 2. Migrate existing users from the string `role` column to Spatie roles
-        $users = \App\Models\User::all();
+        $users = User::all();
         foreach ($users as $user) {
-            if (!empty($user->role)) {
+            if (! empty($user->role)) {
                 // Determine the correct role name based on existing string
                 $roleName = $user->role;
-                if ($roleName === 'admin') $roleName = 'Administrator';
-                
+                if ($roleName === 'admin') {
+                    $roleName = 'Administrator';
+                }
+
                 // Assign role if it exists
-                if (\Spatie\Permission\Models\Role::where('name', $roleName)->exists()) {
+                if (Role::where('name', $roleName)->exists()) {
                     $user->assignRole($roleName);
                 }
             }

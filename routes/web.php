@@ -83,6 +83,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::put('/quotations/{quotation}', [QuotationController::class, 'update'])->name('quotations.update');
     Route::post('/quotations/{quotation}/reorder-items', [QuotationController::class, 'reorderItems'])->name('quotations.reorder-items');
     Route::post('/quotations/{quotation}/duplicate', [QuotationController::class, 'duplicate'])->name('quotations.duplicate');
+    Route::post('/quotations/{quotation}/delegate', [QuotationController::class, 'delegate'])->name('quotations.delegate');
     Route::post('/quotations/{quotation}/download-pdf', [QuotationController::class, 'downloadPdf'])->name('quotations.download-pdf');
     Route::post('/quotations/{quotation}/sub-quotation', [QuotationController::class, 'createSubQuotation'])->name('quotations.sub-quotation.store');
     Route::post('/quotations/{quotation}/items/{item}/move', [QuotationController::class, 'moveItemToSubQuotation'])->name('quotations.items.move');
@@ -109,6 +110,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/sales-orders/{salesOrder}', [SalesOrderController::class, 'show'])->name('sales-orders.show');
     Route::put('/sales-orders/{salesOrder}', [SalesOrderController::class, 'update'])->name('sales-orders.update');
     Route::post('/sales-orders/{salesOrder}/purchase-order-metadata', [SalesOrderController::class, 'updatePurchaseOrderMetadata'])->name('sales-orders.purchase-order-metadata');
+    Route::put('/sales-orders/{salesOrder}/purchase-order-date', [SalesOrderController::class, 'updatePurchaseOrderDate'])->name('sales-orders.purchase-order-date');
     Route::delete('/sales-orders/{salesOrder}', [SalesOrderController::class, 'destroy'])->name('sales-orders.destroy');
     Route::post('/sales-orders/{salesOrder}/costs', [SalesOrderController::class, 'storeCost'])->name('sales-orders.costs.store');
     Route::post('/sales-orders/{salesOrder}/costs/{cost}', [SalesOrderController::class, 'updateCost'])->name('sales-orders.costs.update');

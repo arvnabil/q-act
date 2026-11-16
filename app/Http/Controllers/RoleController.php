@@ -2,12 +2,15 @@
 
 namespace App\Http\Controllers;
 
-use Illuminate\Http\Request;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
-use Spatie\Permission\Models\Role;
 use Spatie\Permission\Models\Permission;
+use Spatie\Permission\Models\Role;
+use Spatie\Permission\PermissionRegistrar;
 
 // All features/permissions available in the system
 // These are seeded once and then toggled per-role.
@@ -35,6 +38,7 @@ const SYSTEM_PERMISSIONS = [
     'quotations_create',
     'quotations_edit',
     'quotations_delete',
+    'quotations_delegate',
     'quotations_import_legacy',
     'sales_orders_view',
     'sales_orders_view_bu',
@@ -67,22 +71,22 @@ const DEFAULT_ROLE_PERMISSIONS = [
     'Administrator' => SYSTEM_PERMISSIONS,
     'Manager' => [
         'dashboard', 'sales_targets_edit', 'leads_view', 'leads_view_all', 'leads_manage', 'leads_manage_all', 'leads_visits', 'leads_visits_all',
-        'calendar_view', 'calendar_view_all', 'quotations_view', 'quotations_create', 'quotations_edit', 'quotations_delete',
+        'calendar_view', 'calendar_view_all', 'quotations_view', 'quotations_create', 'quotations_edit', 'quotations_delete', 'quotations_delegate',
         'sales_orders_view', 'sales_orders_edit', 'sales_orders_delete', 'sales_orders_delete_bulk', 'customers_view', 'customers_create', 'customers_edit',
-        'products_view', 'view_reports', 'manager_view'
+        'products_view', 'view_reports', 'manager_view',
     ],
     'Sales' => [
         'dashboard', 'leads_view', 'leads_view_bu', 'leads_manage', 'leads_manage_bu', 'leads_visits', 'leads_visits_bu',
         'calendar_view', 'quotations_view', 'quotations_create', 'quotations_edit', 'quotations_delete',
-        'sales_orders_view', 'sales_orders_edit', 'customers_view', 'customers_create', 'customers_edit', 'products_view'
+        'sales_orders_view', 'sales_orders_edit', 'customers_view', 'customers_create', 'customers_edit', 'products_view',
     ],
     'Presales' => [
         'dashboard', 'leads_view', 'leads_view_bu', 'leads_manage', 'leads_manage_bu', 'leads_visits', 'leads_visits_bu',
         'calendar_view', 'quotations_view', 'quotations_create', 'quotations_edit', 'quotations_delete',
-        'sales_orders_view', 'customers_view', 'products_view'
+        'sales_orders_view', 'customers_view', 'products_view',
     ],
     'Finance' => [
-        'dashboard', 'calendar_view', 'quotations_view', 'sales_orders_view', 'sales_orders_edit', 'view_reports', 'manager_view'
+        'dashboard', 'calendar_view', 'quotations_view', 'sales_orders_view', 'sales_orders_edit', 'view_reports', 'manager_view',
     ],
 ];
 
@@ -96,6 +100,7 @@ class RoleController extends Controller
         // Load roles with their permissions ordered by standard order
         $roles = Role::with(['permissions', 'users.businessUnit'])->get()->sortBy(function ($role) {
             $idx = array_search($role->name, STANDARD_ROLES);
+
             return $idx !== false ? $idx : 999;
         })->values();
 
@@ -111,8 +116,8 @@ class RoleController extends Controller
 
         return Inertia::render('Roles', [
             'rolePermissions' => $rolePermissions,
-            'rolesList'       => $roles->pluck('name')->values(),
-            'features'        => SYSTEM_PERMISSIONS,
+            'rolesList' => $roles->pluck('name')->values(),
+            'features' => SYSTEM_PERMISSIONS,
             'roleMembers' => $roles->mapWithKeys(fn ($role) => [$role->name => $role->users->map(fn ($user) => [
                 'id' => $user->id,
                 'name' => $user->name,
@@ -137,30 +142,30 @@ class RoleController extends Controller
 
         $roles = Role::where('guard_name', 'web')->whereIn('name', array_keys($data['rolePermissions']))->get()->keyBy('name');
         foreach ($data['rolePermissions'] as $roleName => $permissions) {
-            if (!isset($roles[$roleName]) || array_diff(array_keys($permissions), SYSTEM_PERMISSIONS)) {
-                throw \Illuminate\Validation\ValidationException::withMessages(['rolePermissions' => 'Role atau permission tidak valid.']);
+            if (! isset($roles[$roleName]) || array_diff(array_keys($permissions), SYSTEM_PERMISSIONS)) {
+                throw ValidationException::withMessages(['rolePermissions' => 'Role atau permission tidak valid.']);
             }
             foreach (['dashboard', 'calendar', 'leads', 'quotations', 'sales_orders', 'customers'] as $module) {
-                if (!empty($permissions[$module.'_view_all']) && !empty($permissions[$module.'_view_bu'])) {
+                if (! empty($permissions[$module.'_view_all']) && ! empty($permissions[$module.'_view_bu'])) {
                     $data['rolePermissions'][$roleName][$module.'_view_bu'] = false;
                 }
             }
             foreach (['leads_manage', 'leads_visits'] as $action) {
-                if (!empty($permissions[$action.'_all']) && !empty($permissions[$action.'_bu'])) {
+                if (! empty($permissions[$action.'_all']) && ! empty($permissions[$action.'_bu'])) {
                     $data['rolePermissions'][$roleName][$action.'_bu'] = false;
                 }
             }
             if ($roleName === 'Administrator') {
                 foreach (['user_management', 'manage_roles'] as $permission) {
                     if ($roles[$roleName]->permissions->contains('name', $permission)
-                        && array_key_exists($permission, $permissions) && !$permissions[$permission]) {
-                        throw \Illuminate\Validation\ValidationException::withMessages(['rolePermissions' => 'Akses pengelolaan pengguna dan role Administrator harus tetap tersedia.']);
+                        && array_key_exists($permission, $permissions) && ! $permissions[$permission]) {
+                        throw ValidationException::withMessages(['rolePermissions' => 'Akses pengelolaan pengguna dan role Administrator harus tetap tersedia.']);
                     }
                 }
             }
         }
 
-        \Illuminate\Support\Facades\DB::transaction(function () use ($data, $roles) {
+        DB::transaction(function () use ($data, $roles) {
             foreach ($data['rolePermissions'] as $roleName => $permissions) {
                 $role = $roles[$roleName];
                 // Change only submitted permissions. Preserve unexposed/custom grants.
@@ -176,7 +181,7 @@ class RoleController extends Controller
         });
 
         // Clear Spatie cache
-        app()[\Spatie\Permission\PermissionRegistrar::class]->forgetCachedPermissions();
+        app()[PermissionRegistrar::class]->forgetCachedPermissions();
 
         return back()->with('message', 'Hak akses berhasil disimpan!');
     }

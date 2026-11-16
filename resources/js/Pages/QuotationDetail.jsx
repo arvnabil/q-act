@@ -4,7 +4,7 @@ import ReactDOM from 'react-dom';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head, Link, router } from '@inertiajs/react';
 import {
-    ArrowLeft, ExternalLink, Edit, Download, Printer, CheckCircle2, Clock, XCircle,
+    ArrowLeft, ExternalLink, Edit, Download, Printer, CheckCircle2, Clock, XCircle, Users,
     AlertCircle, FileText, CreditCard, Loader2, Trash2, AlertTriangle, Copy, Layers, ChevronDown, X, UploadCloud, History
 } from 'lucide-react';
 import { printQuotation, downloadQuotationPDF } from '@/utils/printQuotation';
@@ -39,26 +39,30 @@ const formatBrandName = (brand) => {
     return String(brand);
 };
 
-const statusBadge = (s) => {
+const statusBadge = (s, label = null) => {
     switch (s) {
         case 'approved': return <span className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 uppercase tracking-wide"><CheckCircle2 className="w-3.5 h-3.5" /> PO</span>;
         case 'sent': return <span className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full text-xs font-bold bg-blue-50 text-blue-700 border border-blue-200 uppercase tracking-wide"><Clock className="w-3.5 h-3.5" /> Sent</span>;
         case 'rejected': return <span className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full text-xs font-bold bg-red-50 text-red-700 border border-red-200 uppercase tracking-wide"><XCircle className="w-3.5 h-3.5" /> Rejected</span>;
         case 'expired': return <span className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full text-xs font-bold bg-orange-50 text-orange-700 border border-orange-200 uppercase tracking-wide"><AlertCircle className="w-3.5 h-3.5" /> Expired</span>;
         case 'cancelled': return <span className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full text-xs font-bold bg-red-50 text-red-700 border border-red-200 uppercase tracking-wide"><XCircle className="w-3.5 h-3.5" /> Cancelled</span>;
-        case 'superseded': return <span className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full text-xs font-bold bg-amber-50 text-amber-700 border border-amber-200 uppercase tracking-wide"><AlertCircle className="w-3.5 h-3.5" /> Superseded</span>;
+        case 'superseded': return <span className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full text-xs font-bold bg-amber-50 text-amber-700 border border-amber-200 uppercase tracking-wide"><AlertCircle className="w-3.5 h-3.5" /> {label || 'Superseded'}</span>;
         case 'revision_draft': return <span className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full text-xs font-bold bg-violet-50 text-violet-700 border border-violet-200 uppercase tracking-wide"><FileText className="w-3.5 h-3.5" /> Draft Revisi</span>;
         default: return <span className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full text-xs font-bold bg-surface-100 text-surface-600 border border-surface-200 uppercase tracking-wide"><FileText className="w-3.5 h-3.5" /> Created</span>;
     }
 };
 
-export default function QuotationDetail({ quotation, printDocuments = [], bankAccounts, currentUser, companyInfo = {}, domainLogoMap = [] }) {
+export default function QuotationDetail({ quotation, printDocuments = [], bankAccounts, currentUser, companyInfo = {}, domainLogoMap = [], canDelegate = false, delegationSales = [], delegationHasSubQuotations = false }) {
     const [withImage, setWithImage] = useState(false);
     const [pdfLanguage, setPdfLanguage] = useState('id');
     const [deleteTarget, setDeleteTarget] = useState(null);
     const [isDeleting, setIsDeleting] = useState(false);
     const [showDuplicateConfirm, setShowDuplicateConfirm] = useState(false);
     const [isDuplicating, setIsDuplicating] = useState(false);
+    const [showDelegateModal, setShowDelegateModal] = useState(false);
+    const [delegateSalesId, setDelegateSalesId] = useState('');
+    const [includeSubQuotations, setIncludeSubQuotations] = useState(false);
+    const [isDelegating, setIsDelegating] = useState(false);
     const [changeRequestType, setChangeRequestType] = useState(null);
     const [changeRequestReason, setChangeRequestReason] = useState('');
     const [isSubmittingChangeRequest, setIsSubmittingChangeRequest] = useState(false);
@@ -179,6 +183,16 @@ export default function QuotationDetail({ quotation, printDocuments = [], bankAc
 
     const createFromCancelled = () => {
         router.post(route('quotations.new-from-cancelled', quotation.id));
+    };
+
+    const submitDelegation = (event) => {
+        event.preventDefault();
+        if (!delegateSalesId || isDelegating) return;
+        setIsDelegating(true);
+        router.post(route('quotations.delegate', quotation.id), { sales_id: delegateSalesId, include_sub_quotations: includeSubQuotations }, {
+            onSuccess: () => { setShowDelegateModal(false); setDelegateSalesId(''); },
+            onFinish: () => setIsDelegating(false),
+        });
     };
 
     const openBulkPoModal = () => {
@@ -329,7 +343,7 @@ export default function QuotationDetail({ quotation, printDocuments = [], bankAc
                         <div>
                             <div className="flex items-center gap-3 mb-1">
                                 <h2 className="text-2xl font-bold text-surface-900 font-mono tracking-tight">{quotation.id}</h2>
-                                {statusBadge(quotation.status)}
+                                {statusBadge(quotation.status, quotation.revisions?.some((revision) => revision.relation_type === 'delegation') ? 'Didelegasikan' : null)}
                             </div>
                             <p className="text-xs text-surface-400">Dibuat pada {formatDateStr(quotation.date || quotation.created_at)}</p>
                         </div>
@@ -346,7 +360,7 @@ export default function QuotationDetail({ quotation, printDocuments = [], bankAc
                                     {quotation.status === 'cancelled' && (
                                         <button type="button" onClick={createFromCancelled} className="px-3 py-2 text-xs font-semibold border border-brand-200 rounded-lg text-brand-700 hover:bg-brand-50">Buat Penawaran Baru</button>
                                     )}
-                                    {quotation.status !== 'approved' && (
+                                    {!['approved', 'superseded'].includes(quotation.status) && (
                                         <Link
                                             href={route('quotations.edit', quotation.id)}
                                             className="flex items-center gap-1.5 px-4 py-2 text-xs font-semibold border border-surface-200 rounded-lg text-surface-700 hover:bg-surface-50 transition-colors cursor-pointer"
@@ -355,22 +369,31 @@ export default function QuotationDetail({ quotation, printDocuments = [], bankAc
                                             Edit Quotation
                                         </Link>
                                     )}
-                                    <button
-                                        type="button"
-                                        onClick={() => setShowDuplicateConfirm(true)}
-                                        className="flex items-center gap-1.5 px-4 py-2 text-xs font-semibold border border-brand-200 rounded-lg text-brand-700 hover:bg-brand-50 transition-colors cursor-pointer"
-                                    >
-                                        <Copy className="w-4 h-4" />
-                                        Duplikat Quotation
-                                    </button>
-                                    <button
-                                        onClick={() => setDeleteTarget(quotation)}
-                                        className="flex items-center gap-1.5 px-4 py-2 text-xs font-semibold border border-red-200 rounded-lg text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
-                                    >
-                                        <Trash2 className="w-4 h-4" />
-                                        Hapus
-                                    </button>
+                                    {quotation.status !== 'superseded' && (
+                                        <>
+                                            <button
+                                                type="button"
+                                                onClick={() => setShowDuplicateConfirm(true)}
+                                                className="flex items-center gap-1.5 px-4 py-2 text-xs font-semibold border border-brand-200 rounded-lg text-brand-700 hover:bg-brand-50 transition-colors cursor-pointer"
+                                            >
+                                                <Copy className="w-4 h-4" />
+                                                Duplikat Quotation
+                                            </button>
+                                            <button
+                                                onClick={() => setDeleteTarget(quotation)}
+                                                className="flex items-center gap-1.5 px-4 py-2 text-xs font-semibold border border-red-200 rounded-lg text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
+                                            >
+                                                <Trash2 className="w-4 h-4" />
+                                                Hapus
+                                            </button>
+                                        </>
+                                    )}
                                 </>
+                            )}
+                            {canDelegate && (
+                                <button type="button" onClick={() => { setIncludeSubQuotations(false); setShowDelegateModal(true); }} className="flex items-center gap-1.5 rounded-lg border border-violet-200 px-4 py-2 text-xs font-semibold text-violet-700 transition-colors hover:bg-violet-50">
+                                    <Users className="h-4 w-4" /> Delegasikan ke Sales
+                                </button>
                             )}
                             {/* Tombol Download PDF Langsung (dengan opsi sub-quotation jika ada) */}
                             <button
@@ -661,8 +684,8 @@ export default function QuotationDetail({ quotation, printDocuments = [], bankAc
                             <span className="rounded-full bg-surface-50 px-2.5 py-1">{quotation.timeline?.length || 0} aktivitas</span>
                         </div>
                                 {!quotation.parent_quotation && !quotation.revisions?.length && !quotation.change_requests?.length && !quotation.timeline?.length && <p className="py-5 text-center text-surface-400">Belum ada aktivitas untuk quotation ini.</p>}
-                                {quotation.parent_quotation && <div className="rounded-lg bg-surface-50 p-3">Dibuat dari quotation sebelumnya: <Link className="font-bold text-brand-600" href={route('quotations.show', quotation.parent_quotation.id)}>{quotation.parent_quotation.id}</Link></div>}
-                                {quotation.revisions?.map(r => <div key={r.id} className="flex items-center justify-between gap-3 rounded-lg bg-surface-50 p-3"><span>{r.relation_type === 'split' ? 'Sub quotation:' : 'Quotation revisi:'} <Link className="font-bold text-brand-600" href={route('quotations.show', r.id)}>{r.id}</Link> · {r.status}</span>{r.relation_type === 'split' && <span className="rounded-full bg-brand-100 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-brand-700">Split PO</span>}</div>)}
+                                {quotation.parent_quotation && <div className="rounded-lg bg-surface-50 p-3">{quotation.relation_type === 'delegation' ? 'Didelegasikan dari quotation:' : 'Dibuat dari quotation sebelumnya:'} <Link className="font-bold text-brand-600" href={route('quotations.show', quotation.parent_quotation.id)}>{quotation.parent_quotation.id}</Link></div>}
+                                {quotation.revisions?.map(r => <div key={r.id} className="flex items-center justify-between gap-3 rounded-lg bg-surface-50 p-3"><span>{r.relation_type === 'split' ? 'Sub quotation:' : r.relation_type === 'delegation' ? 'Didelegasikan sebagai:' : 'Quotation revisi:'} <Link className="font-bold text-brand-600" href={route('quotations.show', r.id)}>{r.id}</Link> · {r.status}</span>{r.relation_type === 'split' && <span className="rounded-full bg-brand-100 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-brand-700">Split PO</span>}</div>)}
                                 {quotation.change_requests?.map(cr => (
                                     <div key={cr.id} className="border-l-4 border-brand-300 py-1 pl-3">
                                         <div className="font-semibold">{cr.type === 'revision' ? 'Pengajuan revisi' : 'Pengajuan pembatalan'} · <span className="uppercase">{cr.status}</span></div>
@@ -768,6 +791,42 @@ export default function QuotationDetail({ quotation, printDocuments = [], bankAc
                             </button>
                         </div>
                     </div>
+                </div>,
+                document.body
+            )}
+
+            {showDelegateModal && ReactDOM.createPortal(
+                <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-surface-900/60 p-4 backdrop-blur-sm">
+                    <form onSubmit={submitDelegation} className="w-full max-w-lg overflow-hidden rounded-2xl bg-white shadow-2xl">
+                        <div className="border-b border-surface-100 px-6 py-5">
+                            <h3 className="text-base font-bold text-surface-900">Delegasikan Quotation</h3>
+                            <p className="mt-1 text-xs text-surface-500">Quotation asal tetap disimpan sebagai riwayat. Sistem membuat nomor baru sesuai Sales penerima.</p>
+                        </div>
+                        <div className="space-y-4 px-6 py-5">
+                            <label className="block text-xs font-semibold text-surface-700">Sales penerima
+                                <select required value={delegateSalesId} onChange={(event) => setDelegateSalesId(event.target.value)} className="mt-2 block w-full rounded-lg border border-surface-200 px-3 py-2.5 text-sm">
+                                    <option value="">Pilih Sales</option>
+                                    {delegationSales.map((sales) => <option key={sales.id} value={sales.id}>{sales.name} · {sales.sales_code}</option>)}
+                                </select>
+                            </label>
+                            {delegationHasSubQuotations && (
+                                <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-surface-200 p-3 text-xs text-surface-700">
+                                    <input type="checkbox" checked={includeSubQuotations} onChange={(event) => setIncludeSubQuotations(event.target.checked)} className="mt-0.5 rounded border-surface-300 text-brand-600 focus:ring-brand-500" />
+                                    <span><strong>Sertakan Sub Quotation</strong><span className="mt-1 block leading-relaxed text-surface-500">Jika dicentang, sub quotation ikut disalin ke Sales penerima. Jika tidak, item akan digabung di quotation utama baru dan sub quotation lama disimpan sebagai riwayat.</span></span>
+                                </label>
+                            )}
+                            <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs leading-relaxed text-amber-800">
+                                Konfirmasi: quotation baru akan berstatus Created dan disalin dari <strong>{quotation.id}</strong>. Setelah berhasil, quotation asal akan ditandai Superseded. Sales penerima dapat melanjutkan dan mengirim quotation baru tersebut.
+                            </div>
+                        </div>
+                        <div className="flex justify-end gap-3 border-t border-surface-100 bg-surface-50 px-6 py-4">
+                            <button type="button" onClick={() => setShowDelegateModal(false)} disabled={isDelegating} className="rounded-lg border border-surface-200 bg-white px-4 py-2 text-xs font-semibold text-surface-700 hover:bg-surface-100 disabled:opacity-50">Batal</button>
+                            <button type="submit" disabled={!delegateSalesId || isDelegating} className="flex items-center gap-2 rounded-lg bg-violet-600 px-4 py-2 text-xs font-bold text-white hover:bg-violet-700 disabled:opacity-50">
+                                {isDelegating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Users className="h-4 w-4" />}
+                                {isDelegating ? 'Mendelegasikan...' : 'Konfirmasi Delegasi'}
+                            </button>
+                        </div>
+                    </form>
                 </div>,
                 document.body
             )}

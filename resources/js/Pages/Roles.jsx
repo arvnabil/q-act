@@ -27,6 +27,7 @@ const FEATURE_LABELS = {
     'quotations_create': 'Quotations - Buat',
     'quotations_edit': 'Quotations - Edit',
     'quotations_delete': 'Quotations - Hapus',
+    'quotations_delegate': 'Quotations - Delegasikan ke Sales',
     'quotations_import_legacy': 'Quotations - Import Legacy',
     'sales_orders_view_bu': 'Sales Orders - Lihat data sendiri + BU',
     'sales_orders_view_all': 'Sales Orders - Lihat semua data',
@@ -68,6 +69,7 @@ const GROUPS = [
 const SCOPED = ['dashboard_view', 'leads_view', 'leads_manage', 'leads_visits', 'calendar_view', 'quotations_view', 'sales_orders_view', 'customers_view'];
 const isScope = f => f.endsWith('_bu') || f.endsWith('_all');
 const describe = f => {
+    if (f === 'quotations_delegate') return 'Mendelegasikan quotation draft ke Sales dan membuat nomor quotation baru.';
     if (f === 'leads_manage') return 'Mengelola (tambah, edit, pindah stage) lead sesuai cakupan data.';
     if (f === 'leads_visits') return 'Mengelola agenda kunjungan & follow-up sesuai cakupan data.';
     if (f === 'leads_view') return 'Melihat board dan detail lead sesuai cakupan data.';

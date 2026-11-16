@@ -11,6 +11,7 @@ use App\Models\User;
 use App\Services\NotificationService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -102,6 +103,8 @@ class SalesOrderController extends Controller
         ]);
         // Finance action must only be available to the Finance role.
         $isFinance = $user->role === 'Finance';
+        $canEditPoDate = in_array($user->role, ['Administrator', 'Manager', 'Sales Manager'], true)
+            || (string) $salesOrder->sales_id === (string) $user->id;
 
         $costCategories = CostCategory::orderBy('sort_order')->orderBy('name')->get();
 
@@ -206,6 +209,7 @@ class SalesOrderController extends Controller
             ],
             'costCategories' => $costCategories,
             'isFinance' => $isFinance,
+            'canEditPoDate' => $canEditPoDate,
         ]);
     }
 
@@ -307,6 +311,45 @@ class SalesOrderController extends Controller
         ]);
 
         return back()->with('message', 'Data PO berhasil dilengkapi.');
+    }
+
+    public function updatePurchaseOrderDate(Request $request, SalesOrder $salesOrder)
+    {
+        $user = $request->user();
+        $canEditPoDate = in_array($user->role, ['Administrator', 'Manager', 'Sales Manager'], true)
+            || (string) $salesOrder->sales_id === (string) $user->id;
+
+        abort_unless($canEditPoDate, 403, 'Anda tidak memiliki izin untuk mengubah tanggal PO ini.');
+
+        $data = $request->validate([
+            'po_date' => 'required|date',
+        ]);
+        $previousDate = $salesOrder->po_date?->toDateString();
+        $newDate = \Illuminate\Support\Carbon::parse($data['po_date'])->toDateString();
+
+        DB::transaction(function () use ($request, $salesOrder, $previousDate, $newDate) {
+            $salesOrder->update(['po_date' => $newDate]);
+
+            if ($salesOrder->quotation) {
+                $salesOrder->quotation->update(['po_date' => $newDate]);
+
+                if ($salesOrder->po_number) {
+                    $salesOrder->quotation->purchaseOrders()
+                        ->where('po_number', $salesOrder->po_number)
+                        ->update(['po_date' => $newDate]);
+                }
+            }
+
+            ActivityLog::create([
+                'user_id' => $request->user()->id,
+                'action' => 'PURCHASE_ORDER_DATE_UPDATED',
+                'entity_type' => 'SALES_ORDER',
+                'entity_id' => $salesOrder->id,
+                'description' => "Tanggal PO SO {$salesOrder->id} diubah dari {$previousDate} menjadi {$newDate}.",
+            ]);
+        });
+
+        return back()->with('message', 'Tanggal PO berhasil diperbarui.');
     }
 
     public function destroy(SalesOrder $salesOrder, Request $request)

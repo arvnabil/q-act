@@ -2,15 +2,14 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Quotation;
 use App\Models\Brand;
-use App\Models\User;
-use App\Models\Product;
+use App\Models\Quotation;
 use App\Models\SalesTarget;
+use App\Models\User;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
-use Carbon\Carbon;
 
 class AnalyticsController extends Controller
 {
@@ -20,6 +19,7 @@ class AnalyticsController extends Controller
 
         // 1. Fetch active quotations with items and relations
         $quotations = Quotation::active()
+            ->where('status', '!=', 'superseded')
             ->with(['customer', 'sales', 'creator', 'items.product.brand'])
             ->get();
 
@@ -44,18 +44,19 @@ class AnalyticsController extends Controller
             $mStart = $monthDate->copy()->startOfMonth();
             $mEnd = $monthDate->copy()->endOfMonth();
 
-            $qInMonth = $quotations->filter(fn($q) => $q->created_at && $q->created_at >= $mStart && $q->created_at <= $mEnd);
+            $qInMonth = $quotations->filter(fn ($q) => $q->created_at && $q->created_at >= $mStart && $q->created_at <= $mEnd);
             $approvedInMonth = $qInMonth->where('status', 'approved');
             $poInMonth = $approved->filter(function ($q) use ($mStart, $mEnd) {
                 $poDate = $q->po_date ?: $q->created_at;
+
                 return $poDate && Carbon::parse($poDate)->betweenIncluded($mStart, $mEnd);
             });
 
             $monthlyTrend[] = [
-                'month'      => $monthDate->locale('id')->translatedFormat('M'),
-                'revenue'    => (float) $poInMonth->sum('grand_total'),
+                'month' => $monthDate->locale('id')->translatedFormat('M'),
+                'revenue' => (float) $poInMonth->sum('grand_total'),
                 'quotations' => $qInMonth->count(),
-                'approved'   => $poInMonth->count(),
+                'approved' => $poInMonth->count(),
             ];
         }
 
@@ -74,6 +75,7 @@ class AnalyticsController extends Controller
             $brandQ = $quotations->filter(function ($q) use ($b) {
                 return $q->items->contains(function ($item) use ($b) {
                     $bName = $item->brand ?: ($item->product?->brand?->name ?? '');
+
                     return strtolower(trim($bName)) === strtolower(trim($b->name));
                 });
             });
@@ -82,13 +84,13 @@ class AnalyticsController extends Controller
             $bConv = $brandQ->count() > 0 ? (int) round(($brandApproved->count() / $brandQ->count()) * 100) : 0;
 
             return [
-                'id'            => $b->id,
-                'name'          => $b->name,
-                'color'         => $b->color_hex ?: '#6366f1',
-                'quoCount'      => $brandQ->count(),
+                'id' => $b->id,
+                'name' => $b->name,
+                'color' => $b->color_hex ?: '#6366f1',
+                'quoCount' => $brandQ->count(),
                 'approvedCount' => $brandApproved->count(),
-                'revenue'       => $revenue,
-                'convRate'      => $bConv,
+                'revenue' => $revenue,
+                'convRate' => $bConv,
             ];
         })->sortByDesc('revenue')->values()->toArray();
 
@@ -98,25 +100,25 @@ class AnalyticsController extends Controller
         $defaultTarget = 600_000_000;
 
         $salesLeaderboard = $salesUsers->map(function ($s) use ($quotations, $salesTargets, $defaultTarget) {
-            $userQ = $quotations->filter(fn($q) => $q->sales_id === $s->id || $q->created_by === $s->id);
+            $userQ = $quotations->filter(fn ($q) => $q->sales_id === $s->id || $q->created_by === $s->id);
             $userApp = $userQ->where('status', 'approved');
             $revenue = (float) $userApp->sum('grand_total');
             $conv = $userQ->count() > 0 ? (int) round(($userApp->count() / $userQ->count()) * 100) : 0;
             $target = $salesTargets[$s->id] ?? $defaultTarget;
 
             $parts = explode(' ', trim($s->name));
-            $avatar = strtoupper(substr($parts[0], 0, 1) . (isset($parts[1]) ? substr($parts[1], 0, 1) : ''));
+            $avatar = strtoupper(substr($parts[0], 0, 1).(isset($parts[1]) ? substr($parts[1], 0, 1) : ''));
 
             return [
-                'id'       => $s->id,
-                'name'     => $s->name,
-                'role'     => $s->role,
-                'avatar'   => $avatar,
-                'quo'      => $userQ->count(),
+                'id' => $s->id,
+                'name' => $s->name,
+                'role' => $s->role,
+                'avatar' => $avatar,
+                'quo' => $userQ->count(),
                 'approved' => $userApp->count(),
-                'conv'     => $conv,
-                'revenue'  => $revenue,
-                'target'   => $target,
+                'conv' => $conv,
+                'revenue' => $revenue,
+                'target' => $target,
             ];
         })->sortByDesc('revenue')->values()->toArray();
 
@@ -129,15 +131,15 @@ class AnalyticsController extends Controller
                 $brand = $item->brand ?: ($item->product?->brand?->name ?: 'Brand');
                 $price = (float) ($item->price ?: 0);
                 $qty = (int) ($item->qty ?: 0);
-                $key = $sku . '_' . $name;
+                $key = $sku.'_'.$name;
 
-                if (!isset($productMap[$key])) {
+                if (! isset($productMap[$key])) {
                     $productMap[$key] = [
-                        'sku'     => $sku,
-                        'name'    => $name,
-                        'brand'   => $brand,
-                        'price'   => $price,
-                        'qty'     => 0,
+                        'sku' => $sku,
+                        'name' => $name,
+                        'brand' => $brand,
+                        'price' => $price,
+                        'qty' => 0,
                         'revenue' => 0,
                     ];
                 }
@@ -147,22 +149,22 @@ class AnalyticsController extends Controller
                 }
             }
         }
-        usort($productMap, fn($a, $b) => ($b['revenue'] <=> $a['revenue']) ?: ($b['qty'] <=> $a['qty']));
+        usort($productMap, fn ($a, $b) => ($b['revenue'] <=> $a['revenue']) ?: ($b['qty'] <=> $a['qty']));
         $topProducts = array_slice(array_values($productMap), 0, 8);
 
         return Inertia::render('Analytics', [
             'metrics' => [
-                'totalQ'           => $totalQ,
-                'totalRevenue'     => $totalRevenue,
-                'pipelineRevenue'  => $pipelineRevenue,
-                'lostRevenue'      => $lostRevenue,
-                'convRate'         => $convRate,
-                'avgDealSize'      => $avgDealSize,
-                'monthlyTrend'     => $monthlyTrend,
-                'funnel'           => $funnel,
-                'brandPerf'        => $brandPerf,
+                'totalQ' => $totalQ,
+                'totalRevenue' => $totalRevenue,
+                'pipelineRevenue' => $pipelineRevenue,
+                'lostRevenue' => $lostRevenue,
+                'convRate' => $convRate,
+                'avgDealSize' => $avgDealSize,
+                'monthlyTrend' => $monthlyTrend,
+                'funnel' => $funnel,
+                'brandPerf' => $brandPerf,
                 'salesLeaderboard' => $salesLeaderboard,
-                'topProducts'      => $topProducts,
+                'topProducts' => $topProducts,
             ],
         ]);
     }

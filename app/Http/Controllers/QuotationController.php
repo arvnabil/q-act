@@ -2,8 +2,10 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Brand;
+use App\Jobs\SyncDocumentsToSharePoint;
 use App\Models\ActivityLog;
+use App\Models\Brand;
+use App\Models\BusinessUnitMember;
 use App\Models\CompanyBankAccount;
 use App\Models\Customer;
 use App\Models\CustomerPic;
@@ -11,23 +13,29 @@ use App\Models\Lead;
 use App\Models\LeadActivity;
 use App\Models\Product;
 use App\Models\Quotation;
-use App\Jobs\SyncDocumentsToSharePoint;
 use App\Models\QuotationItem;
-use App\Models\QuotationSalesNote;
 use App\Models\QuotationPurchaseOrder;
+use App\Models\QuotationSalesNote;
 use App\Models\SalesOrder;
 use App\Models\SalesOrderItem;
 use App\Models\SystemSetting;
 use App\Models\User;
 use App\Models\UserTermsTemplate;
+use App\Services\DocumentVisibility;
 use App\Services\NotificationService;
+use App\Services\PrimaryQuotationSync;
 use App\Services\QuotationCalculator;
+use App\Services\WorkflowAccess;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Database\QueryException;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -37,12 +45,13 @@ class QuotationController extends Controller
     private function serializeForList(Quotation $q): array
     {
         $effectiveSales = $q->sales;
-        if ((!$effectiveSales || $effectiveSales->role === 'Presales')) {
+        if ((! $effectiveSales || $effectiveSales->role === 'Presales')) {
             $bu = $q->businessUnit ?: $q->creator?->businessUnit;
             if ($bu?->defaultSales) {
                 $effectiveSales = $bu->defaultSales;
             }
         }
+
         return [
             'id' => $q->id,
             'lead_id' => $q->lead_id,
@@ -77,7 +86,7 @@ class QuotationController extends Controller
     private function serializeFull(Quotation $q, bool $forPrint = false): array
     {
         $effectiveSales = $q->sales;
-        if (!$effectiveSales || $effectiveSales->role === 'Presales') {
+        if (! $effectiveSales || $effectiveSales->role === 'Presales') {
             $bu = $q->businessUnit ?: $q->creator?->businessUnit;
             if ($bu?->defaultSales) {
                 $effectiveSales = $bu->defaultSales;
@@ -86,9 +95,9 @@ class QuotationController extends Controller
         if (request()->routeIs('quotations.show')) {
             $user = request()->user();
             $q->load([
-                'parentQuotation' => fn ($r) => \App\Services\DocumentVisibility::apply($r, $user, 'quotations'),
-                'revisions' => fn ($r) => \App\Services\DocumentVisibility::apply($r, $user, 'quotations'),
-                'salesOrders' => fn ($r) => \App\Services\DocumentVisibility::apply($r, $user, 'sales_orders'),
+                'parentQuotation' => fn ($r) => DocumentVisibility::apply($r, $user, 'quotations'),
+                'revisions' => fn ($r) => DocumentVisibility::apply($r, $user, 'quotations'),
+                'salesOrders' => fn ($r) => DocumentVisibility::apply($r, $user, 'sales_orders'),
             ]);
         }
         $rootQuotationId = ($q->relation_type ?? 'main') === 'split' && $q->parent_quotation_id
@@ -96,14 +105,14 @@ class QuotationController extends Controller
             : $q->id;
         $rootQuery = Quotation::query();
         if (request()->routeIs('quotations.show')) {
-            \App\Services\DocumentVisibility::apply($rootQuery, request()->user(), 'quotations');
+            DocumentVisibility::apply($rootQuery, request()->user(), 'quotations');
         }
         $rootQuotation = $rootQuery
             ->select(['id', 'status', 'relation_type', 'parent_quotation_id', 'revision_no', 'grand_total'])
             ->with(['revisions:id,parent_quotation_id,status,relation_type,revision_no,grand_total,po_status,po_number,po_date,po_document_path', 'revisions.items:id,quotation_id,source_quotation_item_id,qty,price'])
             ->find($rootQuotationId);
         if ($rootQuotation && request()->routeIs('quotations.show')) {
-            $rootQuotation->load(['revisions' => fn ($r) => \App\Services\DocumentVisibility::apply($r, request()->user(), 'quotations')]);
+            $rootQuotation->load(['revisions' => fn ($r) => DocumentVisibility::apply($r, request()->user(), 'quotations')]);
         }
 
         $quotationStructure = [
@@ -358,11 +367,11 @@ class QuotationController extends Controller
             $q->whereNull('relation_type')->orWhere('relation_type', '!=', 'split');
         });
 
-        \App\Services\DocumentVisibility::apply($query, $user, 'quotations');
+        DocumentVisibility::apply($query, $user, 'quotations');
 
         $quotations = $query->orderByDesc('created_at')->get()->map(fn ($q) => $this->serializeForList($q));
 
-        $availableLeads = \App\Services\WorkflowAccess::leads($user)->active()
+        $availableLeads = WorkflowAccess::leads($user)->active()
             ->with('customer:id,name')
             ->select('id', 'title', 'lead_code', 'customer_id')
             ->orderBy('title')
@@ -413,20 +422,20 @@ class QuotationController extends Controller
             'is_default' => $b->is_default ?? false,
         ]);
 
-        $leadsQuery = \App\Services\WorkflowAccess::leads($user)->active();
+        $leadsQuery = WorkflowAccess::leads($user)->active();
         $leads = $leadsQuery->select('id', 'title', 'lead_code', 'customer_id', 'customer_name', 'customer_address', 'customer_email', 'pic_name', 'pic_phone')
             ->orderBy('title')
             ->get();
 
         $leadId = $request->query('lead_id');
-        $prefilledLead = $leadId ? \App\Services\WorkflowAccess::leads($user)->with('customer.pics')->findOrFail($leadId) : null;
+        $prefilledLead = $leadId ? WorkflowAccess::leads($user)->with('customer.pics')->findOrFail($leadId) : null;
 
         $defaultSalesId = null;
         $buSalesUsers = [];
         if ($user->role === 'Presales' && $user->businessUnit) {
             $defaultSalesId = $user->businessUnit->default_sales_id;
-            $memberUserIds = \App\Models\BusinessUnitMember::where('business_unit_id', $user->businessUnit->id)->pluck('user_id');
-            $buSalesUsers = \App\Models\User::whereIn('id', $memberUserIds)
+            $memberUserIds = BusinessUnitMember::where('business_unit_id', $user->businessUnit->id)->pluck('user_id');
+            $buSalesUsers = User::whereIn('id', $memberUserIds)
                 ->whereIn('role', ['Sales', 'Sales Manager', 'Manager'])
                 ->where('is_active', true)
                 ->orderBy('name')
@@ -475,9 +484,9 @@ class QuotationController extends Controller
 
         $user = $request->user()->load('businessUnit');
 
-        $contextLead = $request->filled('lead_id') ? \App\Services\WorkflowAccess::leads($user)->active()->findOrFail($request->lead_id) : null;
+        $contextLead = $request->filled('lead_id') ? WorkflowAccess::leads($user)->active()->findOrFail($request->lead_id) : null;
         if ($contextLead && $contextLead->customer_id && $request->input('customer_id') !== $contextLead->customer_id) {
-            throw \Illuminate\Validation\ValidationException::withMessages(['customer_id' => 'Customer quotation harus sama dengan lead.']);
+            throw ValidationException::withMessages(['customer_id' => 'Customer quotation harus sama dengan lead.']);
         }
         $customerId = $request->input('customer_id');
         $picId = $request->input('pic_id');
@@ -486,7 +495,7 @@ class QuotationController extends Controller
         if (! $customerId && $request->filled('new_customer_name')) {
             $customerName = trim($request->input('new_customer_name'));
             $duplicateMessage = 'Nama customer sudah terdaftar. Pilih Customer Existing. Jika tidak muncul dalam daftar, hubungi admin untuk memeriksa akses customer.';
-            \Illuminate\Support\Facades\Validator::make(
+            Validator::make(
                 ['new_customer_name' => $customerName],
                 ['new_customer_name' => 'required|string|max:255|unique:customers,name'],
                 ['new_customer_name.unique' => $duplicateMessage]
@@ -498,12 +507,12 @@ class QuotationController extends Controller
                     'address' => $request->input('new_customer_address') ?: null,
                     'created_by' => $user->id,
                 ]);
-            } catch (\Illuminate\Database\UniqueConstraintViolationException $e) {
+            } catch (UniqueConstraintViolationException $e) {
                 // Another request may have saved the same name after validation.
-                if (!Customer::where('name', $customerName)->exists()) {
+                if (! Customer::where('name', $customerName)->exists()) {
                     throw $e;
                 }
-                throw \Illuminate\Validation\ValidationException::withMessages([
+                throw ValidationException::withMessages([
                     'new_customer_name' => $duplicateMessage,
                 ]);
             }
@@ -567,7 +576,7 @@ class QuotationController extends Controller
         if ($quotation->lead_id) {
             $lead = Lead::find($quotation->lead_id);
             if ($lead) {
-                \App\Services\WorkflowAccess::fillFromQuotation($lead, $quotation, $user);
+                WorkflowAccess::fillFromQuotation($lead, $quotation, $user);
                 LeadActivity::create([
                     'lead_id' => $lead->id,
                     'user_id' => $user->id,
@@ -600,7 +609,7 @@ class QuotationController extends Controller
     // ─── SHOW ─────────────────────────────────────────────────────────────────
     public function show(Quotation $quotation, Request $request): Response
     {
-        \App\Services\DocumentVisibility::authorize($request->user(), 'quotations', $quotation);
+        DocumentVisibility::authorize($request->user(), 'quotations', $quotation);
         if ($quotation->is_deleted || $quotation->deleted_at) {
             if (($quotation->relation_type ?? 'main') === 'split' && $quotation->parent_quotation_id) {
                 return redirect()->route('quotations.show', $quotation->parent_quotation_id)
@@ -611,12 +620,12 @@ class QuotationController extends Controller
                 ->with('message', 'Quotation tersebut sudah berada di Sampah.');
         }
 
-        $quotation->load(['customer.pics', 'pic', 'sales', 'creator.businessUnit.defaultSales', 'businessUnit.defaultSales', 'items.product.brand', 'bankAccount', 'parentQuotation', 'revisions', 'salesOrders', 'purchaseOrders.sharePointDocuments', 'sharePointDocuments', 'changeRequests.requester', 'changeRequests.approver', 'lead']);
+        $quotation->load(['customer.pics', 'pic', 'sales', 'creator.businessUnit.defaultSales', 'businessUnit.defaultSales', 'items.product.brand', 'bankAccount', 'parentQuotation', 'revisions.items', 'revisions.salesOrders', 'revisions.purchaseOrders', 'revisions.sharePointDocuments', 'revisions.salesNotes', 'salesOrders', 'purchaseOrders.sharePointDocuments', 'sharePointDocuments', 'changeRequests.requester', 'changeRequests.approver', 'lead']);
 
         $rootQuotationId = ($quotation->relation_type ?? 'main') === 'split' && $quotation->parent_quotation_id
             ? $quotation->parent_quotation_id
             : $quotation->id;
-        $printQuotations = \App\Services\DocumentVisibility::apply(Quotation::query(), $request->user(), 'quotations')
+        $printQuotations = DocumentVisibility::apply(Quotation::query(), $request->user(), 'quotations')
             ->where(function ($query) use ($rootQuotationId) {
                 $query->where('id', $rootQuotationId)
                     ->orWhere('parent_quotation_id', $rootQuotationId);
@@ -640,6 +649,43 @@ class QuotationController extends Controller
         $user = $request->user();
         $companyInfo = SystemSetting::find('company_info')?->value;
         $domainLogoMap = SystemSetting::find('domain_logo_map')?->value ?? [];
+        $splitQuotations = $quotation->revisions->where('relation_type', 'split')->values();
+        $unsupportedChildrenExist = $quotation->revisions->contains(fn ($child) => $child->relation_type !== 'split');
+        $childrenAreDelegable = $splitQuotations->every(fn ($child) => in_array($child->status, ['created', 'draft'], true)
+            && ! $child->po_number && ! $child->po_date && ! $child->po_document_path && ! $child->po_status
+            && $child->salesOrders->isEmpty() && $child->purchaseOrders->isEmpty() && $child->sharePointDocuments->isEmpty()
+        );
+        $canDelegate = $this->canDelegateQuotation($user)
+            && in_array($quotation->status, ['created', 'draft'], true)
+            && ($quotation->relation_type ?? 'main') === 'main'
+            && ! $quotation->is_deleted
+            && ! $quotation->deleted_at
+            && ! $quotation->po_number
+            && ! $quotation->po_date
+            && ! $quotation->po_document_path
+            && ! $quotation->po_status
+            && $quotation->salesOrders->isEmpty()
+            && $quotation->purchaseOrders->isEmpty()
+            && $quotation->sharePointDocuments->isEmpty()
+            && ! $unsupportedChildrenExist
+            && $childrenAreDelegable;
+        $delegationSales = collect();
+        if ($canDelegate) {
+            $salesQuery = User::query()
+                ->where('role', 'Sales')
+                ->where('is_active', true)
+                ->whereNotNull('sales_code')
+                ->where('sales_code', '!=', '');
+            if ($user->role !== 'Administrator' && $user->role !== 'admin') {
+                $businessUnitId = $quotation->bu_id ?: $user->businessUnitMember?->business_unit_id;
+                $memberIds = $businessUnitId
+                    ? BusinessUnitMember::where('business_unit_id', $businessUnitId)->pluck('user_id')
+                    : collect();
+                $salesQuery->whereIn('id', $memberIds);
+            }
+            $delegationSales = $salesQuery->orderBy('name')->get(['id', 'name', 'sales_code']);
+            $canDelegate = $delegationSales->isNotEmpty();
+        }
 
         return Inertia::render('QuotationDetail', [
             'quotation' => $this->serializeFull($quotation),
@@ -654,12 +700,19 @@ class QuotationController extends Controller
                 'role' => $user->role,
                 'spatie_role' => $user->roles->first()?->name ?? $user->role,
             ],
+            'canDelegate' => $canDelegate,
+            'delegationSales' => $delegationSales,
+            'delegationHasSubQuotations' => $splitQuotations->isNotEmpty(),
         ]);
     }
 
     // ─── EDIT ─────────────────────────────────────────────────────────────────
-    public function edit(Quotation $quotation, Request $request): Response
+    public function edit(Quotation $quotation, Request $request)
     {
+        if ($quotation->status === 'superseded') {
+            return redirect()->route('quotations.show', $quotation->id)
+                ->with('error', 'Quotation yang sudah didelegasikan hanya dapat dilihat sebagai riwayat.');
+        }
         $quotation->load(['customer.pics', 'pic', 'sales', 'creator', 'items.product.brand', 'bankAccount', 'parentQuotation', 'revisions', 'salesOrders', 'changeRequests.requester', 'changeRequests.approver']);
 
         $user = $request->user();
@@ -748,7 +801,7 @@ class QuotationController extends Controller
         return Inertia::render('QuotationEdit', [
             'quotation' => $this->serializeFull($quotation),
             'customers' => $customers,
-            'leads' => \App\Services\WorkflowAccess::leads($request->user())->active()->select('id', 'title', 'lead_code', 'customer_id')->orderBy('title')->get(),
+            'leads' => WorkflowAccess::leads($request->user())->active()->select('id', 'title', 'lead_code', 'customer_id')->orderBy('title')->get(),
             'products' => $products,
             'brands' => $brands,
             'bankAccounts' => $bankAccounts,
@@ -817,12 +870,18 @@ class QuotationController extends Controller
         ]);
 
         if (array_key_exists('lead_id', $data) && $data['lead_id'] !== $quotation->lead_id) {
-            throw \Illuminate\Validation\ValidationException::withMessages(['lead_id' => 'Gunakan Hubungkan lead pada detail quotation agar revisi/sub tetap terhubung.']);
+            throw ValidationException::withMessages(['lead_id' => 'Gunakan Hubungkan lead pada detail quotation agar revisi/sub tetap terhubung.']);
         }
         if ($quotation->lead_id && isset($data['customer_id']) && $data['customer_id'] !== $quotation->customer_id) {
-            throw \Illuminate\Validation\ValidationException::withMessages(['customer_id' => 'Quotation terkait lead tidak dapat dipindahkan ke customer lain.']);
+            throw ValidationException::withMessages(['customer_id' => 'Quotation terkait lead tidak dapat dipindahkan ke customer lain.']);
         }
         $previousStatus = $quotation->status;
+
+        if ($previousStatus === 'superseded') {
+            return back()->withErrors([
+                'quotation' => 'Quotation yang sudah didelegasikan hanya dapat dilihat sebagai riwayat. Lanjutkan perubahan pada quotation penerima.',
+            ]);
+        }
 
         // An approved quotation is the immutable source document for its SO.
         // Changes must go through the manager-approved revision workflow.
@@ -864,7 +923,7 @@ class QuotationController extends Controller
         if ($leadChanged && $quotation->lead_id) {
             $lead = Lead::find($quotation->lead_id);
             if ($lead) {
-                (new LeadController())->logActivity($lead, 'quotation_linked', "Quotation {$quotation->id} ditautkan ke lead");
+                (new LeadController)->logActivity($lead, 'quotation_linked', "Quotation {$quotation->id} ditautkan ke lead");
             }
         }
 
@@ -946,7 +1005,7 @@ class QuotationController extends Controller
 
         // Sent quotations are the sole source of automated estimates. Drafts
         // and unsent revisions leave manual values untouched.
-        app(\App\Services\PrimaryQuotationSync::class)->sync(
+        app(PrimaryQuotationSync::class)->sync(
             $quotation->fresh(['customer']), $request->user(), createLeadWhenSent: true
         );
 
@@ -1064,9 +1123,10 @@ class QuotationController extends Controller
     {
         $existing = $quotation->purchaseOrders()->first();
         if ($existing) {
-            if ($quotation->po_document_path && !$existing->document_path) {
+            if ($quotation->po_document_path && ! $existing->document_path) {
                 $existing->update(['document_path' => $quotation->po_document_path]);
             }
+
             return $existing;
         }
 
@@ -1090,6 +1150,9 @@ class QuotationController extends Controller
     {
         if (($quotation->relation_type ?? 'main') === 'split') {
             $quotation = Quotation::findOrFail($quotation->parent_quotation_id);
+        }
+        if ($quotation->status === 'superseded') {
+            return back()->withErrors(['entries' => 'Quotation yang sudah didelegasikan tidak dapat diproses menjadi PO. Gunakan quotation baru milik Sales penerima.']);
         }
 
         $data = $request->validate([
@@ -1168,8 +1231,8 @@ class QuotationController extends Controller
                 }
 
                 $syncedPOs[] = [
-                    'quotation_id'  => $target->id,
-                    'po_id'         => $poId,
+                    'quotation_id' => $target->id,
+                    'po_id' => $poId,
                     'document_path' => $documentPath,
                 ];
 
@@ -1195,7 +1258,7 @@ class QuotationController extends Controller
         });
 
         foreach ($syncedPOs as $pInfo) {
-            if (!empty($pInfo['document_path'])) {
+            if (! empty($pInfo['document_path'])) {
                 dispatch(new SyncDocumentsToSharePoint(
                     quotationId: $pInfo['quotation_id'],
                     purchaseOrderId: $pInfo['po_id'],
@@ -1383,6 +1446,219 @@ class QuotationController extends Controller
                 return back()->with('error', 'Gagal menduplikasi quotation. Silakan coba lagi.');
             }
         }
+    }
+
+    public function delegate(Request $request, Quotation $quotation)
+    {
+        $user = $request->user();
+        if (! $this->canDelegateQuotation($user)) {
+            abort(403, 'Anda tidak memiliki izin untuk mendelegasikan quotation.');
+        }
+        DocumentVisibility::authorize($user, 'quotations', $quotation);
+
+        $validated = $request->validate([
+            'sales_id' => ['required', 'uuid', 'exists:users,id'],
+            'include_sub_quotations' => ['nullable', 'boolean'],
+        ]);
+        $includeSubQuotations = (bool) ($validated['include_sub_quotations'] ?? false);
+        $targetQuery = User::query()->whereKey($validated['sales_id'])
+            ->where('role', 'Sales')->where('is_active', true)
+            ->whereNotNull('sales_code')->where('sales_code', '!=', '');
+        if (! in_array($user->role, ['Administrator', 'admin'], true)) {
+            $businessUnitId = $quotation->bu_id ?: $user->businessUnitMember?->business_unit_id;
+            $memberIds = $businessUnitId
+                ? BusinessUnitMember::where('business_unit_id', $businessUnitId)->pluck('user_id')
+                : collect();
+            $targetQuery->whereIn('id', $memberIds);
+        }
+        $targetSales = $targetQuery->firstOrFail();
+
+        $attempts = 0;
+        while (true) {
+            try {
+                $newQuotation = DB::transaction(function () use ($quotation, $user, $targetSales, $includeSubQuotations) {
+                    $source = Quotation::whereKey($quotation->id)->lockForUpdate()->firstOrFail();
+                    $source->load(['items', 'salesNotes', 'salesOrders', 'purchaseOrders', 'sharePointDocuments', 'revisions.items', 'revisions.salesNotes', 'revisions.salesOrders', 'revisions.purchaseOrders', 'revisions.sharePointDocuments']);
+                    $sourceSplits = $source->revisions->where('relation_type', 'split')->values();
+                    $unsupportedChildrenExist = $source->revisions->contains(fn ($child) => $child->relation_type !== 'split');
+                    $childrenAreDelegable = $sourceSplits->every(fn ($child) => in_array($child->status, ['created', 'draft'], true)
+                        && ! $child->po_number && ! $child->po_date && ! $child->po_document_path && ! $child->po_status
+                        && $child->salesOrders->isEmpty() && $child->purchaseOrders->isEmpty() && $child->sharePointDocuments->isEmpty()
+                    );
+                    abort_unless(
+                        in_array($source->status, ['created', 'draft'], true)
+                        && ($source->relation_type ?? 'main') === 'main'
+                        && ! $source->is_deleted && ! $source->deleted_at
+                        && ! $source->po_number && ! $source->po_date && ! $source->po_document_path
+                        && ! $source->po_status
+                        && $source->salesOrders->isEmpty() && $source->purchaseOrders->isEmpty()
+                        && $source->sharePointDocuments->isEmpty()
+                        && ! $unsupportedChildrenExist && $childrenAreDelegable,
+                        422,
+                        'Hanya quotation draft yang belum memiliki PO, SO, dokumen, atau turunan yang dapat didelegasikan.'
+                    );
+
+                    $newId = $this->generateQuotationId($targetSales->sales_code);
+                    $newQuotation = Quotation::create([
+                        'id' => $newId,
+                        'customer_id' => $source->customer_id,
+                        'pic_id' => $source->pic_id,
+                        'lead_id' => $source->lead_id,
+                        'sales_id' => $targetSales->id,
+                        'bu_id' => $source->bu_id,
+                        'bank_account_id' => $source->bank_account_id,
+                        'status' => 'created',
+                        'date' => now()->toDateString(),
+                        'expired' => $source->expired?->toDateString(),
+                        'calc_tax' => $source->calc_tax,
+                        'show_tax' => $source->show_tax,
+                        'ppn_rate' => $source->ppn_rate,
+                        'calc_pph' => $source->calc_pph,
+                        'show_pph' => $source->show_pph,
+                        'pph_rate' => $source->pph_rate,
+                        'subtotal' => $source->subtotal,
+                        'tax_amount' => $source->tax_amount,
+                        'grand_total' => $source->grand_total,
+                        'notes' => $source->notes,
+                        'terms' => $source->terms,
+                        'is_deleted' => false,
+                        'parent_quotation_id' => $source->id,
+                        'revision_no' => 0,
+                        'relation_type' => 'delegation',
+                        'created_by' => $user->id,
+                        'updated_by' => $user->id,
+                    ]);
+
+                    $itemIdMap = [];
+                    foreach ($source->items as $item) {
+                        $newItem = QuotationItem::create([
+                            'quotation_id' => $newQuotation->id,
+                            'product_id' => $item->product_id,
+                            'sku' => $item->sku,
+                            'name' => $item->name,
+                            'brand' => $item->brand,
+                            'description' => $item->description,
+                            'image_url' => $item->image_url,
+                            'qty' => $item->qty,
+                            'hpp' => $item->hpp,
+                            'price' => $item->price,
+                            'margin' => $item->margin,
+                            'is_pph_applied' => $item->is_pph_applied,
+                            'sort_order' => $item->sort_order,
+                        ]);
+                        $itemIdMap[$item->id] = $newItem->id;
+                    }
+                    foreach ($source->salesNotes as $note) {
+                        QuotationSalesNote::create([
+                            'quotation_id' => $newQuotation->id,
+                            'adjustments' => $note->adjustments,
+                        ]);
+                    }
+
+                    if ($includeSubQuotations) {
+                        foreach ($sourceSplits as $split) {
+                            $splitNumber = max(1, (int) ($split->revision_no ?? 1));
+                            $splitId = $newQuotation->id.'-'.$splitNumber;
+                            while (Quotation::whereKey($splitId)->exists()) {
+                                $splitNumber++;
+                                $splitId = $newQuotation->id.'-'.$splitNumber;
+                            }
+                            $newSplit = Quotation::create([
+                                'id' => $splitId,
+                                'parent_quotation_id' => $newQuotation->id,
+                                'relation_type' => 'split',
+                                'revision_no' => $splitNumber,
+                                'customer_id' => $source->customer_id,
+                                'pic_id' => $source->pic_id,
+                                'lead_id' => $source->lead_id,
+                                'sales_id' => $targetSales->id,
+                                'bu_id' => $source->bu_id,
+                                'bank_account_id' => $source->bank_account_id,
+                                'status' => 'created',
+                                'date' => now()->toDateString(),
+                                'expired' => $split->expired?->toDateString() ?: $source->expired?->toDateString(),
+                                'calc_tax' => $split->calc_tax,
+                                'show_tax' => $split->show_tax,
+                                'ppn_rate' => $split->ppn_rate,
+                                'calc_pph' => $split->calc_pph,
+                                'show_pph' => $split->show_pph,
+                                'pph_rate' => $split->pph_rate,
+                                'subtotal' => $split->subtotal,
+                                'tax_amount' => $split->tax_amount,
+                                'grand_total' => $split->grand_total,
+                                'notes' => $split->notes,
+                                'terms' => $split->terms,
+                                'is_deleted' => false,
+                                'created_by' => $user->id,
+                                'updated_by' => $user->id,
+                            ]);
+
+                            foreach ($split->items as $item) {
+                                QuotationItem::create([
+                                    'quotation_id' => $newSplit->id,
+                                    'source_quotation_item_id' => $itemIdMap[$item->source_quotation_item_id] ?? null,
+                                    'product_id' => $item->product_id,
+                                    'sku' => $item->sku,
+                                    'name' => $item->name,
+                                    'brand' => $item->brand,
+                                    'description' => $item->description,
+                                    'image_url' => $item->image_url,
+                                    'qty' => $item->qty,
+                                    'hpp' => $item->hpp,
+                                    'price' => $item->price,
+                                    'margin' => $item->margin,
+                                    'is_pph_applied' => $item->is_pph_applied,
+                                    'sort_order' => $item->sort_order,
+                                ]);
+                            }
+                            foreach ($split->salesNotes as $note) {
+                                QuotationSalesNote::create([
+                                    'quotation_id' => $newSplit->id,
+                                    'adjustments' => $note->adjustments,
+                                ]);
+                            }
+                        }
+                    }
+
+                    foreach ($sourceSplits as $split) {
+                        $split->update(['status' => 'superseded', 'updated_by' => $user->id]);
+                    }
+
+                    $source->update(['status' => 'superseded', 'updated_by' => $user->id]);
+                    ActivityLog::create([
+                        'user_id' => $user->id,
+                        'action' => 'QUOTATION_DELEGATED',
+                        'entity_type' => 'QUOTATION',
+                        'entity_id' => $source->id,
+                        'description' => "Quotation {$source->id} didelegasikan ke {$targetSales->name} sebagai {$newQuotation->id}. ".($includeSubQuotations && $sourceSplits->isNotEmpty() ? "{$sourceSplits->count()} sub quotation ikut disalin." : ($sourceSplits->isNotEmpty() ? 'Sub quotation lama disimpan sebagai riwayat dan item digabung dalam quotation utama baru.' : '')),
+                    ]);
+                    ActivityLog::create([
+                        'user_id' => $user->id,
+                        'action' => 'QUOTATION_RECEIVED_BY_DELEGATION',
+                        'entity_type' => 'QUOTATION',
+                        'entity_id' => $newQuotation->id,
+                        'description' => "Quotation {$newQuotation->id} diterima dari delegasi {$source->id} oleh {$targetSales->name}.",
+                    ]);
+                    NotificationService::notifyUser(
+                        $targetSales->id,
+                        'Quotation Didelegasikan',
+                        "Quotation {$source->id} didelegasikan kepada Anda sebagai {$newQuotation->id}.",
+                        "/quotations/{$newQuotation->id}"
+                    );
+
+                    return $newQuotation;
+                });
+                break;
+            } catch (QueryException $e) {
+                $attempts++;
+                if (! $this->isUniqueConstraintViolation($e) || $attempts >= 3) {
+                    throw $e;
+                }
+            }
+        }
+
+        return redirect()->route('quotations.show', $newQuotation->id)
+            ->with('message', "Quotation berhasil didelegasikan ke {$targetSales->name} sebagai {$newQuotation->id}.");
     }
 
     /**
@@ -1749,125 +2025,126 @@ class QuotationController extends Controller
 
         try {
             DB::transaction(function () use ($data, $itemsByQuotation, $poByQuotation, $user) {
-            foreach ($data['quotations'] as $row) {
-                $legacyId = trim($row['legacy_quotation_no']);
-                if (Quotation::where('id', $legacyId)->exists()) {
-                    throw \Illuminate\Validation\ValidationException::withMessages([
-                        'import' => "Quotation {$legacyId} sudah ada di sistem.",
-                    ]);
-                }
-
-                $customer = Customer::whereRaw('LOWER(name) = ?', [strtolower(trim($row['customer_name']))])->first();
-                $sales = ! empty($row['sales_email']) ? User::where('email', $row['sales_email'])->first() : null;
-                if (! $customer) {
-                    $customer = Customer::create([
-                        'id' => $this->generateLegacyCustomerId(),
-                        'name' => trim($row['customer_name']),
-                        'address' => null,
-                        'created_by' => $user->id,
-                    ]);
-
-                    ActivityLog::create([
-                        'user_id' => $user->id,
-                        'action' => 'CUSTOMER_CREATED_FROM_LEGACY_IMPORT',
-                        'entity_type' => 'CUSTOMER',
-                        'entity_id' => $customer->id,
-                        'description' => "Customer {$customer->name} dibuat otomatis saat import quotation lama.",
-                    ]);
-                }
-                $quotation = Quotation::create([
-                    'id' => $legacyId,
-                    'customer_id' => $customer->id,
-                    'sales_id' => $sales?->id ?: $user->id,
-                    'bu_id' => $sales?->bu_id,
-                    'status' => $row['quotation_status'],
-                    'date' => $row['quotation_date'],
-                    'expired' => $row['expired'] ?? $row['quotation_date'],
-                    'notes' => $row['notes'] ?? null,
-                    'calc_tax' => true,
-                    'show_tax' => true,
-                    'ppn_rate' => 0.11,
-                    'created_by' => $sales?->id ?: $user->id,
-                    'updated_by' => $user->id,
-                ]);
-
-                foreach ($itemsByQuotation->get($legacyId, collect()) as $index => $itemRow) {
-                    $product = Product::where('sku', trim($itemRow['sku']))->first();
-                    if (! $product) {
-                        throw \Illuminate\Validation\ValidationException::withMessages([
-                            'import' => "SKU tidak ditemukan: {$itemRow['sku']}.",
+                foreach ($data['quotations'] as $row) {
+                    $legacyId = trim($row['legacy_quotation_no']);
+                    if (Quotation::where('id', $legacyId)->exists()) {
+                        throw ValidationException::withMessages([
+                            'import' => "Quotation {$legacyId} sudah ada di sistem.",
                         ]);
                     }
-                    QuotationItem::create([
-                        'quotation_id' => $quotation->id,
-                        'sku' => $product->sku,
-                        'product_id' => $product->sku,
-                        'name' => $itemRow['product_name'] ?? $product->name,
-                        'brand' => $itemRow['brand'] ?? $product->brand?->name,
-                        'description' => $itemRow['description'] ?? $product->description,
-                        'qty' => $itemRow['qty'],
-                        'hpp' => $itemRow['hpp'] ?? $product->modal ?? 0,
-                        'price' => $itemRow['unit_price'],
-                        'margin' => $itemRow['margin'] ?? 0,
-                        'sort_order' => $index + 1,
-                    ]);
-                }
 
-                $quotation->load('items');
-                $totals = app(QuotationCalculator::class)->calculateTotals($quotation, $quotation->items);
-                $quotation->update(['subtotal' => $totals['subtotal'], 'tax_amount' => $totals['ppn_amount'], 'grand_total' => $totals['grand_total']]);
+                    $customer = Customer::whereRaw('LOWER(name) = ?', [strtolower(trim($row['customer_name']))])->first();
+                    $sales = ! empty($row['sales_email']) ? User::where('email', $row['sales_email'])->first() : null;
+                    if (! $customer) {
+                        $customer = Customer::create([
+                            'id' => $this->generateLegacyCustomerId(),
+                            'name' => trim($row['customer_name']),
+                            'address' => null,
+                            'created_by' => $user->id,
+                        ]);
 
-                $firstHistoricalPo = $poByQuotation->get($legacyId, collect())->first();
-                if ($firstHistoricalPo) {
-                    $quotation->update([
-                        'po_status' => $firstHistoricalPo['po_status'],
-                        'po_number' => $firstHistoricalPo['po_number'],
-                        'po_date' => $firstHistoricalPo['po_date'],
-                    ]);
-                }
-
-                foreach ($poByQuotation->get($legacyId, collect())->groupBy('po_number') as $poRows) {
-                    $firstPo = $poRows->first();
-                    $itemIds = $poRows->pluck('item_no')->filter()->map(fn ($no) => $quotation->items->values()->get($no - 1)?->id)->filter()->values()->all();
-                    QuotationPurchaseOrder::create([
-                        'id' => (string) Str::uuid(),
-                        'quotation_id' => $quotation->id,
-                        'status' => $firstPo['po_status'],
-                        'po_number' => $firstPo['po_number'],
-                        'po_date' => $firstPo['po_date'],
-                        'quotation_item_ids' => $itemIds ?: $quotation->items->pluck('id')->values()->all(),
-                        'created_by' => $user->id,
+                        ActivityLog::create([
+                            'user_id' => $user->id,
+                            'action' => 'CUSTOMER_CREATED_FROM_LEGACY_IMPORT',
+                            'entity_type' => 'CUSTOMER',
+                            'entity_id' => $customer->id,
+                            'description' => "Customer {$customer->name} dibuat otomatis saat import quotation lama.",
+                        ]);
+                    }
+                    $quotation = Quotation::create([
+                        'id' => $legacyId,
+                        'customer_id' => $customer->id,
+                        'sales_id' => $sales?->id ?: $user->id,
+                        'bu_id' => $sales?->bu_id,
+                        'status' => $row['quotation_status'],
+                        'date' => $row['quotation_date'],
+                        'expired' => $row['expired'] ?? $row['quotation_date'],
+                        'notes' => $row['notes'] ?? null,
+                        'calc_tax' => true,
+                        'show_tax' => true,
+                        'ppn_rate' => 0.11,
+                        'created_by' => $sales?->id ?: $user->id,
+                        'updated_by' => $user->id,
                     ]);
 
-                    $soNumber = $firstPo['so_number'] ?? null;
-                    if ($soNumber && ! SalesOrder::where('id', $soNumber)->exists()) {
-                        $so = SalesOrder::create([
-                            'id' => $soNumber,
+                    foreach ($itemsByQuotation->get($legacyId, collect()) as $index => $itemRow) {
+                        $product = Product::where('sku', trim($itemRow['sku']))->first();
+                        if (! $product) {
+                            throw ValidationException::withMessages([
+                                'import' => "SKU tidak ditemukan: {$itemRow['sku']}.",
+                            ]);
+                        }
+                        QuotationItem::create([
                             'quotation_id' => $quotation->id,
-                            'customer_id' => $customer->id,
-                            'sales_id' => $quotation->sales_id,
-                            'bu_id' => $quotation->bu_id,
-                            'date' => $firstPo['so_date'] ?? $firstPo['po_date'],
+                            'sku' => $product->sku,
+                            'product_id' => $product->sku,
+                            'name' => $itemRow['product_name'] ?? $product->name,
+                            'brand' => $itemRow['brand'] ?? $product->brand?->name,
+                            'description' => $itemRow['description'] ?? $product->description,
+                            'qty' => $itemRow['qty'],
+                            'hpp' => $itemRow['hpp'] ?? $product->modal ?? 0,
+                            'price' => $itemRow['unit_price'],
+                            'margin' => $itemRow['margin'] ?? 0,
+                            'sort_order' => $index + 1,
+                        ]);
+                    }
+
+                    $quotation->load('items');
+                    $totals = app(QuotationCalculator::class)->calculateTotals($quotation, $quotation->items);
+                    $quotation->update(['subtotal' => $totals['subtotal'], 'tax_amount' => $totals['ppn_amount'], 'grand_total' => $totals['grand_total']]);
+
+                    $firstHistoricalPo = $poByQuotation->get($legacyId, collect())->first();
+                    if ($firstHistoricalPo) {
+                        $quotation->update([
+                            'po_status' => $firstHistoricalPo['po_status'],
+                            'po_number' => $firstHistoricalPo['po_number'],
+                            'po_date' => $firstHistoricalPo['po_date'],
+                        ]);
+                    }
+
+                    foreach ($poByQuotation->get($legacyId, collect())->groupBy('po_number') as $poRows) {
+                        $firstPo = $poRows->first();
+                        $itemIds = $poRows->pluck('item_no')->filter()->map(fn ($no) => $quotation->items->values()->get($no - 1)?->id)->filter()->values()->all();
+                        QuotationPurchaseOrder::create([
+                            'id' => (string) Str::uuid(),
+                            'quotation_id' => $quotation->id,
+                            'status' => $firstPo['po_status'],
                             'po_number' => $firstPo['po_number'],
                             'po_date' => $firstPo['po_date'],
-                            'po_status' => $firstPo['po_status'],
-                            'status' => 'Historical',
-                            'grand_total' => $quotation->grand_total,
-                            'total_item_value' => $quotation->grand_total,
+                            'quotation_item_ids' => $itemIds ?: $quotation->items->pluck('id')->values()->all(),
+                            'created_by' => $user->id,
                         ]);
-                        foreach ($quotation->items as $index => $item) {
-                            SalesOrderItem::create(['so_id' => $so->id, 'sku' => $item->sku, 'item_name' => $item->name, 'qty' => $item->qty, 'price' => $item->price, 'hpp' => $item->hpp, 'sort_order' => $index]);
+
+                        $soNumber = $firstPo['so_number'] ?? null;
+                        if ($soNumber && ! SalesOrder::where('id', $soNumber)->exists()) {
+                            $so = SalesOrder::create([
+                                'id' => $soNumber,
+                                'quotation_id' => $quotation->id,
+                                'customer_id' => $customer->id,
+                                'sales_id' => $quotation->sales_id,
+                                'bu_id' => $quotation->bu_id,
+                                'date' => $firstPo['so_date'] ?? $firstPo['po_date'],
+                                'po_number' => $firstPo['po_number'],
+                                'po_date' => $firstPo['po_date'],
+                                'po_status' => $firstPo['po_status'],
+                                'status' => 'Historical',
+                                'grand_total' => $quotation->grand_total,
+                                'total_item_value' => $quotation->grand_total,
+                            ]);
+                            foreach ($quotation->items as $index => $item) {
+                                SalesOrderItem::create(['so_id' => $so->id, 'sku' => $item->sku, 'item_name' => $item->name, 'qty' => $item->qty, 'price' => $item->price, 'hpp' => $item->hpp, 'sort_order' => $index]);
+                            }
                         }
                     }
-                }
 
-                ActivityLog::create(['user_id' => $user->id, 'action' => 'LEGACY_IMPORT', 'entity_type' => 'QUOTATION', 'entity_id' => $quotation->id, 'description' => "Quotation {$quotation->id} diimpor dari data historis."]);
-            }
+                    ActivityLog::create(['user_id' => $user->id, 'action' => 'LEGACY_IMPORT', 'entity_type' => 'QUOTATION', 'entity_id' => $quotation->id, 'description' => "Quotation {$quotation->id} diimpor dari data historis."]);
+                }
             });
-        } catch (\Illuminate\Validation\ValidationException $exception) {
+        } catch (ValidationException $exception) {
             throw $exception;
         } catch (\Throwable $exception) {
             report($exception);
+
             return back()->withErrors([
                 'import' => 'Import gagal diproses: '.($exception->getMessage() ?: 'terjadi kesalahan server.'),
             ]);
@@ -1883,6 +2160,11 @@ class QuotationController extends Controller
     private function canCreateQuotation(User $user): bool
     {
         return in_array($user->role, ['Administrator', 'Manager', 'Sales Manager', 'Sales', 'Presales', 'admin'], true);
+    }
+
+    private function canDelegateQuotation(User $user): bool
+    {
+        return DocumentVisibility::allows($user, 'quotations_delegate');
     }
 
     private function generateLegacyCustomerId(): string
@@ -1907,6 +2189,9 @@ class QuotationController extends Controller
     // ─── DESTROY ──────────────────────────────────────────────────────────────
     public function destroy(Quotation $quotation)
     {
+        if ($quotation->status === 'superseded') {
+            return back()->with('error', 'Quotation delegasi disimpan sebagai riwayat dan tidak dapat dihapus.');
+        }
         $id = $quotation->id;
         $redirectQuotationId = ($quotation->relation_type ?? 'main') === 'split'
             ? $quotation->parent_quotation_id
@@ -1932,6 +2217,9 @@ class QuotationController extends Controller
     public function bulkDestroy(Request $request)
     {
         $request->validate(['ids' => 'required|array', 'ids.*' => 'string']);
+        if (Quotation::whereIn('id', $request->ids)->where('status', 'superseded')->exists()) {
+            return back()->with('error', 'Quotation delegasi disimpan sebagai riwayat dan tidak dapat dihapus.');
+        }
         $count = Quotation::whereIn('id', $request->ids)->update(['is_deleted' => true, 'deleted_at' => now()]);
 
         NotificationService::notifyUser(
@@ -2017,7 +2305,7 @@ class QuotationController extends Controller
 
     public function downloadPdf(Request $request, Quotation $quotation)
     {
-        \App\Services\DocumentVisibility::authorize($request->user(), 'quotations', $quotation);
+        DocumentVisibility::authorize($request->user(), 'quotations', $quotation);
 
         $html = $request->input('html');
         if (! $html) {
@@ -2049,18 +2337,18 @@ class QuotationController extends Controller
             return $matches[0];
         }, $html);
 
-        $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadHTML($html);
+        $pdf = Pdf::loadHTML($html);
         $pdf->setPaper('a4', 'portrait');
         $pdf->getDomPDF()->getOptions()->set([
             'isHtml5ParserEnabled' => true,
-            'isRemoteEnabled'      => true,
+            'isRemoteEnabled' => true,
             // Use Dompdf's bundled Unicode font for quotation descriptions.
-            'defaultFont'          => 'DejaVu Sans',
-            'dpi'                  => 96,
+            'defaultFont' => 'DejaVu Sans',
+            'dpi' => 96,
         ]);
 
         return response($pdf->output(), 200, [
-            'Content-Type'        => 'application/pdf',
+            'Content-Type' => 'application/pdf',
             'Content-Disposition' => 'attachment; filename="'.$filename.'"',
         ]);
     }

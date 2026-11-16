@@ -20,7 +20,7 @@ const formatDate = (str) => {
     } catch { return str; }
 };
 
-export default function SalesOrderDetail({ so, costCategories = [], isFinance }) {
+export default function SalesOrderDetail({ so, costCategories = [], isFinance, canEditPoDate = false }) {
     const { auth } = usePage().props;
 
     const [categories, setCategories] = useState(costCategories || []);
@@ -51,6 +51,9 @@ export default function SalesOrderDetail({ so, costCategories = [], isFinance })
     const [poStatus, setPoStatus] = useState(so?.po_status || 'Diterima');
     const [poDocument, setPoDocument] = useState(null);
     const [isSavingPoMetadata, setIsSavingPoMetadata] = useState(false);
+    const [showPoDateModal, setShowPoDateModal] = useState(false);
+    const [editPoDate, setEditPoDate] = useState(so?.po_date || '');
+    const [isSavingPoDate, setIsSavingPoDate] = useState(false);
 
     // Modal state for managing cost categories
     const [showCategoryModal, setShowCategoryModal] = useState(false);
@@ -301,6 +304,20 @@ export default function SalesOrderDetail({ so, costCategories = [], isFinance })
         });
     };
 
+    const handleSavePoDate = () => {
+        if (!editPoDate) {
+            toast.error('Tanggal PO wajib diisi.');
+            return;
+        }
+        setIsSavingPoDate(true);
+        router.put(route('sales-orders.purchase-order-date', so.id), { po_date: editPoDate }, {
+            preserveScroll: true,
+            onSuccess: () => setShowPoDateModal(false),
+            onError: errors => toast.error(errors.po_date || 'Tanggal PO gagal diperbarui.'),
+            onFinish: () => setIsSavingPoDate(false),
+        });
+    };
+
     const openChangeRequest = (type) => {
         setChangeRequestType(type);
         setChangeRequestReason('');
@@ -410,6 +427,25 @@ export default function SalesOrderDetail({ so, costCategories = [], isFinance })
                     </div>
                 )}
 
+                {showPoDateModal && (
+                    <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-surface-900/60 backdrop-blur-sm">
+                        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
+                            <div className="px-6 py-5 border-b border-surface-100">
+                                <h3 className="text-base font-bold text-surface-900">Edit Tanggal PO</h3>
+                                <p className="text-xs text-surface-500 mt-1">Hanya tanggal PO yang diperbarui. Nomor, status, dan dokumen PO tetap.</p>
+                            </div>
+                            <div className="p-6">
+                                <label className="block text-xs font-semibold text-surface-700 mb-1">Tanggal PO *</label>
+                                <input type="date" value={editPoDate} onChange={e => setEditPoDate(e.target.value)} className="w-full rounded-lg border border-surface-200 text-sm" />
+                            </div>
+                            <div className="px-6 py-4 border-t border-surface-100 flex justify-end gap-3">
+                                <button type="button" onClick={() => setShowPoDateModal(false)} disabled={isSavingPoDate} className="px-4 py-2.5 text-xs font-semibold bg-surface-100 rounded-xl">Batal</button>
+                                <button type="button" onClick={handleSavePoDate} disabled={isSavingPoDate || !editPoDate} className="px-4 py-2.5 text-xs font-bold text-white bg-brand-600 rounded-xl disabled:opacity-50">{isSavingPoDate ? 'Menyimpan...' : 'Simpan Tanggal'}</button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
                 {/* Top Bar */}
                 <div className="flex flex-wrap items-center justify-between gap-3 mb-5">
                     <Link
@@ -454,6 +490,11 @@ export default function SalesOrderDetail({ so, costCategories = [], isFinance })
                             </p>
                         </div>
                         <div className="flex items-center gap-3">
+                            {so.po_date && canEditPoDate && (
+                                <button type="button" onClick={() => { setEditPoDate(so.po_date); setShowPoDateModal(true); }} className="flex items-center gap-2 px-4 py-2 text-xs font-bold bg-white text-surface-700 border border-surface-200 rounded-lg hover:bg-surface-50 cursor-pointer">
+                                    <Pencil className="w-4 h-4" /> Edit Tanggal PO
+                                </button>
+                            )}
                             {(!so.po_number || !so.po_date || !so.po_document_path) && (
                                 <button type="button" onClick={() => setShowPoMetadataModal(true)} className="flex items-center gap-2 px-4 py-2 text-xs font-bold bg-amber-50 text-amber-700 border border-amber-200 rounded-lg hover:bg-amber-100 cursor-pointer">
                                     <UploadCloud className="w-4 h-4" /> Lengkapi Data PO
