@@ -110,6 +110,12 @@ class EmailNotificationService
                 'bcc_roles'     => [],
                 'custom_bcc'    => [],
             ],
+
+            // Zoom license renewal reminder; delivered only to the account's assigned Sales PIC.
+            'zoom_renewal_reminder' => [
+                'enabled' => false,
+                'days_before' => [],
+            ],
         ];
     }
 
@@ -142,7 +148,7 @@ class EmailNotificationService
 
         foreach ($defaults as $eventKey => $defaultConfig) {
             $input = $settings[$eventKey] ?? [];
-            $clean[$eventKey] = [
+            $cleanEvent = [
                 'enabled'         => (bool) ($input['enabled'] ?? false),
                 'notify_user'     => (bool) ($input['notify_user'] ?? ($defaultConfig['notify_user'] ?? true)),
                 'notify_sales'    => (bool) ($input['notify_sales'] ?? ($defaultConfig['notify_sales'] ?? true)),
@@ -156,6 +162,17 @@ class EmailNotificationService
                 'bcc_roles'       => array_values(array_filter((array) ($input['bcc_roles'] ?? []))),
                 'custom_bcc'      => $this->cleanEmails($input['custom_bcc'] ?? []),
             ];
+
+            if (array_key_exists('days_before', $defaultConfig) && is_array($defaultConfig['days_before'])) {
+                $cleanEvent['days_before'] = array_values(array_unique(array_intersect(
+                    [7, 30, 90],
+                    array_map('intval', (array) ($input['days_before'] ?? $defaultConfig['days_before']))
+                )));
+            } elseif (array_key_exists('days_before', $defaultConfig)) {
+                $cleanEvent['days_before'] = (int) ($input['days_before'] ?? $defaultConfig['days_before']);
+            }
+
+            $clean[$eventKey] = $cleanEvent;
         }
 
         SystemSetting::updateOrCreate(

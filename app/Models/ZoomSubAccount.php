@@ -23,6 +23,7 @@ class ZoomSubAccount extends Model
         'last_seen_at',
         'last_sync_run_id',
         'customer_id',
+        'sales_pic_id',
         'matched_by',
         'matched_at',
     ];
@@ -50,5 +51,10 @@ class ZoomSubAccount extends Model
     public function matcher(): BelongsTo
     {
         return $this->belongsTo(User::class, 'matched_by');
+    }
+
+    public function salesPic(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'sales_pic_id');
     }
 }

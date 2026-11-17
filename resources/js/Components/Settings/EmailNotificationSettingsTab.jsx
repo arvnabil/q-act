@@ -108,6 +108,15 @@ export default function EmailNotificationSettingsTab({
       toLabel: 'Kirim Tambahan (TO) / CC ke Role:',
       defaultToHint: 'Opsional: CC ke Manager atau email tim customer relationship',
     },
+    {
+      key: 'zoom_renewal_reminder',
+      title: 'Reminder Renewal Lisensi Zoom',
+      description: 'Pengingat perpanjangan lisensi dikirim ke Sales PIC akun Zoom pada H-7, H-30, dan/atau H-90 sesuai pilihan. Jika Sales PIC belum ditentukan, email tidak dikirim.',
+      icon: RefreshCw,
+      color: 'blue',
+      hasReminderDays: true,
+      salesPicOnly: true,
+    },
   ];
 
   // Bagian 2: Daftar Informasi Notifikasi Langsung & Sistem (Otomatis ke user terkait, tanpa toggle)
@@ -179,6 +188,15 @@ export default function EmailNotificationSettingsTab({
     });
   };
 
+  const handleToggleReminderDay = (eventKey, day) => {
+    setEmailForm(prev => {
+      const event = prev[eventKey] || {};
+      const days = event.days_before || [];
+      const updated = days.includes(day) ? days.filter(value => value !== day) : [...days, day];
+      return { ...prev, [eventKey]: { ...event, days_before: updated.sort((a, b) => a - b) } };
+    });
+  };
+
   const handleCustomEmailsChange = (eventKey, field, rawValue) => {
     const arr = rawValue.split(',').map(s => s.trim());
     setEmailForm(prev => ({
@@ -242,6 +260,7 @@ export default function EmailNotificationSettingsTab({
             {configurableEvents.map((evt) => {
               const config = emailForm[evt.key] || {
                 enabled: false,
+                days_before: [],
                 notify_user: true,
                 notify_sales: true,
                 notify_assignee: true,
@@ -316,6 +335,20 @@ export default function EmailNotificationSettingsTab({
                   {/* Settings Body when Enabled */}
                   {config.enabled && (
                     <div className="p-4 sm:p-5 space-y-4 bg-gray-50/40 rounded-b-2xl">
+                      {evt.hasReminderDays && (
+                        <div className="rounded-xl border border-blue-100 bg-blue-50/60 p-3">
+                          <div className="mb-2 text-xs font-bold text-blue-900">Jadwal pengingat sebelum masa lisensi berakhir</div>
+                          <div className="flex flex-wrap gap-2">
+                            {[7, 30, 90].map(day => {
+                              const selected = (config.days_before || []).map(Number).includes(day);
+                              return <button type="button" key={day} onClick={() => handleToggleReminderDay(evt.key, day)} className={`rounded-lg border px-3 py-1.5 text-xs font-semibold ${selected ? 'border-blue-300 bg-white text-blue-700' : 'border-gray-200 bg-white text-gray-600'}`}>{selected ? '✓ ' : ''}H-{day}</button>;
+                            })}
+                            <button type="button" onClick={() => setEmailForm(prev => ({ ...prev, [evt.key]: { ...(prev[evt.key] || {}), days_before: [7, 30, 90] } }))} className="rounded-lg border border-dashed border-blue-300 px-3 py-1.5 text-xs font-semibold text-blue-700">Pilih semua</button>
+                            <button type="button" onClick={() => setEmailForm(prev => ({ ...prev, [evt.key]: { ...(prev[evt.key] || {}), days_before: [] } }))} className="rounded-lg border border-dashed border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-600">Hapus pilihan</button>
+                          </div>
+                          <p className="mt-2 text-[11px] text-blue-800">Penerima hanya Sales PIC yang tersimpan pada sub-account Zoom. Tidak ada PIC aktif atau tidak ada email: reminder dilewati.</p>
+                        </div>
+                      )}
                       {/* Context Checkboxes */}
                       {evt.hasNotifySales && (
                         <label className="flex items-center gap-2 p-2.5 bg-blue-50/60 border border-blue-100 rounded-xl text-xs text-blue-900 font-medium cursor-pointer select-none">
@@ -360,7 +393,7 @@ export default function EmailNotificationSettingsTab({
                       )}
 
                       {/* Penerima Utama (TO) */}
-                      <div>
+                      {!evt.salesPicOnly && <div>
                         <label className="text-xs font-bold text-gray-800 flex items-center gap-1.5 mb-2">
                           <Users className="w-3.5 h-3.5 text-brand-600" />
                           {evt.toLabel || 'Kirim Kepada (TO) — Pilih Role:'}
@@ -400,10 +433,10 @@ export default function EmailNotificationSettingsTab({
                         <span className="text-[10px] text-gray-400 mt-0.5 block">
                           Pisahkan dengan koma jika lebih dari satu alamat email.
                         </span>
-                      </div>
+                      </div>}
 
                       {/* CC & BCC */}
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-3 border-t border-gray-200">
+                      {!evt.salesPicOnly && <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-3 border-t border-gray-200">
                         {/* CC */}
                         <div className="space-y-2">
                           <label className="text-xs font-bold text-gray-800 block">
@@ -489,7 +522,7 @@ export default function EmailNotificationSettingsTab({
                             className="w-full bg-white border border-gray-200 rounded-lg px-3 py-1.5 text-xs outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-100"
                           />
                         </div>
-                      </div>
+                      </div>}
                     </div>
                   )}
                 </div>

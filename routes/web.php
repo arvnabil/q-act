@@ -164,6 +164,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // Zoom Server-to-Server sub-account synchronization
     Route::middleware('permission:zoom_sub_accounts_access')->prefix('zoom')->name('zoom.')->group(function () {
         Route::get('/sub-accounts', [\App\Http\Controllers\ZoomSubAccountController::class, 'index'])->name('sub-accounts.index');
+        Route::post('/sub-accounts/export/prepare', [\App\Http\Controllers\ZoomSubAccountController::class, 'prepareExport'])->name('sub-accounts.export.prepare')->middleware('permission:zoom_sub_accounts_details');
+        Route::get('/sub-accounts/export/excel', [\App\Http\Controllers\ZoomSubAccountController::class, 'exportExcel'])->name('sub-accounts.export.excel')->middleware('permission:zoom_sub_accounts_details');
+        Route::get('/sub-accounts/export/pdf', [\App\Http\Controllers\ZoomSubAccountController::class, 'exportPdf'])->name('sub-accounts.export.pdf')->middleware('permission:zoom_sub_accounts_details');
         Route::get('/sub-accounts/{zoomSubAccount:zoom_account_id}', [\App\Http\Controllers\ZoomSubAccountController::class, 'show'])->name('sub-accounts.show')->middleware('permission:zoom_sub_accounts_details');
         Route::post('/sub-accounts/sync', [\App\Http\Controllers\ZoomSubAccountController::class, 'sync'])->name('sub-accounts.sync')->middleware('permission:zoom_sub_accounts_sync');
         Route::get('/customers/search', [\App\Http\Controllers\ZoomSubAccountController::class, 'searchCustomers'])->name('customers.search')->middleware('permission:zoom_sub_accounts_match');

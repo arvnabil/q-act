@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\SystemSetting;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Cache;
 use RuntimeException;
 
 /**
@@ -44,6 +45,12 @@ class ZoomService
     {
         if (!$this->isConfigured()) return null;
 
+        $cacheKey = 'zoom:s2s:access-token:'.hash('sha256', $this->creds['client_id']);
+        $cachedToken = Cache::get($cacheKey);
+        if (is_string($cachedToken) && $cachedToken !== '') {
+            return $cachedToken;
+        }
+
         $response = Http::withBasicAuth(
             $this->creds['client_id'],
             $this->creds['client_secret']
@@ -57,7 +64,12 @@ class ZoomService
             return null;
         }
 
-        return $response->json('access_token');
+        $accessToken = $response->json('access_token');
+        if (is_string($accessToken) && $accessToken !== '') {
+            Cache::put($cacheKey, $accessToken, max(60, (int) $response->json('expires_in', 3600) - 120));
+        }
+
+        return $accessToken;
     }
 
     /**

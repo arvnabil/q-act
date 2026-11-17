@@ -19,3 +19,6 @@ Schedule::command('visits:auto-complete-overdue')->dailyAt('00:30');
 
 // Customer PIC birthday reminder (H-7): run daily at 07:30 WIB
 Schedule::command('customers:send-birthday-reminders')->dailyAt('07:30');
+
+// Zoom license renewal reminders: send only on selected H-7/H-30/H-90 dates and only to assigned Sales PIC.
+Schedule::command('zoom:send-renewal-reminders')->dailyAt('08:00')->withoutOverlapping();

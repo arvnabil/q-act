@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\User;
 use App\Models\ZoomSubAccount;
+use App\Models\ZoomSubAccountDetail;
 use App\Models\ZoomSubAccountSyncRun;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -33,6 +34,10 @@ class ZoomSubAccountSyncService
                 $added = 0;
                 $updated = 0;
                 $unchanged = 0;
+                $accountDetails = ZoomSubAccountDetail::query()
+                    ->where('detail_type', 'account')
+                    ->get()
+                    ->keyBy('zoom_account_id');
 
                 foreach ($result['accounts'] as $account) {
                     $zoomAccountId = trim((string) ($account['id'] ?? ''));
@@ -54,6 +59,15 @@ class ZoomSubAccountSyncService
                         'subscription_start_time' => $this->parseZoomDate($account['subscription_start_time'] ?? null),
                         'subscription_end_time' => $this->parseZoomDate($account['subscription_end_time'] ?? null),
                     ];
+
+                    // Zoom can return different account_type values from /accounts
+                    // and /accounts/{accountId}. Once the detail endpoint has supplied
+                    // this field, keep it as the canonical source during list syncs.
+                    $detailAccountType = $accountDetails->get($zoomAccountId)?->payload['account_type'] ?? null;
+                    if (is_string($detailAccountType) && $detailAccountType !== '') {
+                        $apiAttributes['account_type'] = $detailAccountType;
+                    }
+
                     $changed = $subAccount->isDirty();
                     $subAccount->fill($apiAttributes);
                     $changed = $changed || $subAccount->isDirty(array_keys($apiAttributes));
