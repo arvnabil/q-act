@@ -9,12 +9,9 @@ return [
             'week' => '2026 - Minggu ke-47 (16 Nov - 22 Nov 2026)',
             'date' => '2026-11-18',
             'is_current' => true,
-            'tag' => 'Zoom Sub Account Management & Renewal Reports',
-            'summary' => 'Pengelolaan sub-account Zoom, detail dan billing, PIC renewal, pengingat, filter masa berlaku, serta laporan Excel/PDF dalam satu fitur terintegrasi.',
+            'tag' => 'Zoom Sub Account Details & Renewal Reports',
+            'summary' => 'Penyempurnaan detail dan billing sub-account Zoom, PIC renewal, pengingat, filter masa berlaku, serta laporan Excel/PDF.',
             'highlights' => [
-                'Menu Zoom → Sub Account List menampilkan data akun, lisensi, masa langganan, status kehadiran di Zoom, dan monitor sinkronisasi; daftar diurutkan berdasarkan Creation Time terbaru.',
-                'Sinkronisasi membaca semua halaman API Zoom dan hanya menandai akun hilang setelah pembacaan lengkap berhasil; proses dilindungi lock agar tidak berjalan bersamaan.',
-                'Saran nama customer memerlukan konfirmasi sebelum ditautkan. Sales PIC renewal dipilih saat mengaitkan akun dan perubahan dicatat di audit log.',
                 'Tab Account Details, Current Plans, Pending Plans, dan Billing Information menampilkan data dari endpoint Zoom terkait.',
                 'Detail akun, plan, lisensi pending, dan billing disimpan dalam cache SQL terenkripsi berdasarkan Zoom Account ID dan jenis detail; tombol Perbarui dari Zoom meminta data terbaru.',
                 'Jika endpoint daftar dan detail Zoom berbeda untuk Account Type, nilai dari endpoint detail digunakan sebagai acuan setelah detail tersedia.',
@@ -26,15 +23,40 @@ return [
                 'Menu, sinkronisasi, pencocokan customer, detail akun/plan, billing, dan ekspor mengikuti permission yang tersedia per role.',
             ],
             'categories' => [
-                'Zoom & Sinkronisasi' => [
-                    'Monitor mencatat akun baru, diperbarui, tetap, dan kegagalan sinkronisasi.',
+                'Zoom Account Details' => [
                     'RPS Status tidak ditampilkan sebagai nilai tebakan jika tidak tersedia dari API; permintaan perubahan plan pending mungkin tidak tersedia melalui endpoint Zoom.',
-                    'Webhook perubahan sub-account/plan belum digunakan; sinkronisasi manual memperbarui daftar akun.',
+                    'Informasi plan dan billing yang tersedia dibaca dari endpoint Zoom terkait dan disimpan sebagai cache terenkripsi di database QSales.',
                 ],
                 'Renewal & Laporan' => [
                     'Jadwal reminder H-7/H-30/H-90 dapat dipilih di Settings → Notifikasi Email; H-120 tidak digunakan.',
                     'Filter renewal dan laporan menghormati pencarian, status kaitan customer, kehadiran sinkronisasi, serta rentang renewal yang dipilih.',
                     'Detail pembayaran dan Auto Renew yang belum ada di cache diperiksa ke API Zoom sebelum ekspor dan responsnya disimpan untuk kunjungan berikutnya.',
+                ],
+            ],
+        ],
+        [
+            'version' => 'v2.5.3',
+            'week' => '2026 - Minggu ke-47 (16 Nov - 22 Nov 2026)',
+            'date' => '2026-11-17',
+            'is_current' => false,
+            'tag' => 'Zoom Sub Account Monitor',
+            'summary' => 'Daftar sub-account Zoom tersinkronisasi lewat Server-to-Server, dengan monitor sinkronisasi dan saran pencocokan customer yang harus dikonfirmasi.',
+            'highlights' => [
+                'Menu Zoom → Sub Account List menampilkan sub-account, nomor ZAN, pemilik akun, tipe akun, jumlah lisensi, masa berlangganan, status sinkronisasi, serta saran customer QSales.',
+                'Daftar diurutkan berdasarkan Creation Time terbaru; sinkronisasi membaca seluruh halaman data Zoom dan mencatat akun baru, diperbarui, tetap, atau gagal.',
+                'Saran customer hanya untuk membantu pencocokan; pengguna harus mengonfirmasi sebelum akun Zoom ditautkan ke customer QSales.',
+                'Permission menu, sinkronisasi, dan pengaitan customer tersedia per role tanpa mereset konfigurasi role yang sudah ada.',
+                'Data sub-account disimpan di database QSales dengan Zoom Account ID sebagai identitas teknis dan ZAN sebagai nomor akun yang ditampilkan.',
+            ],
+            'categories' => [
+                'Zoom & Sinkronisasi' => [
+                    'Sinkronisasi Server-to-Server dapat dijalankan dari menu Zoom dan dilindungi lock agar tidak berjalan tumpang tindih.',
+                    'Akun yang tidak terlihat hanya ditandai tidak aktif setelah pembacaan data Zoom selesai dengan sukses.',
+                    'Webhook perubahan sub-account belum digunakan; data diperbarui melalui sinkronisasi.',
+                ],
+                'Customer & Hak Akses' => [
+                    'Pengaitan sub-account ke customer memerlukan konfirmasi pengguna dan perubahan dicatat di audit log.',
+                    'Hak akses menu, sinkronisasi, dan pengaitan customer dapat diatur melalui User Management → Roles.',
                 ],
             ],
         ],
