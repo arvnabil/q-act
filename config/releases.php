@@ -1,14 +1,61 @@
 <?php
 
 return [
-    'current_version' => 'v2.5.2',
-    'last_updated' => '2026-11-16',
+    'current_version' => 'v2.5.4',
+    'last_updated' => '2026-11-17',
     'releases' => [
+        [
+            'version' => 'v2.5.4',
+            'week' => '2026 - Minggu ke-47 (16 Nov - 22 Nov 2026)',
+            'date' => '2026-11-17',
+            'is_current' => true,
+            'tag' => 'Zoom Sub Account Details & Cache',
+            'summary' => 'Detail sub-account Zoom mencakup informasi akun, paket, lisensi pending, dan billing dengan cache SQL terenkripsi.',
+            'highlights' => [
+                'Nama dan nomor akun membuka detail menggunakan Zoom Account ID; daftar tetap diurutkan berdasarkan Creation Time terbaru.',
+                'Tab Account Details, Current Plans, Pending Plans, dan Billing Information menampilkan data dari endpoint Zoom terkait.',
+                'Informasi Seats diberi label Seats (License) pada daftar dan detail plan.',
+                'Respons detail tiap tab disimpan terenkripsi pada tabel zoom_sub_account_details, dikaitkan dengan Zoom Account ID dan jenis detail; kunjungan ulang membaca cache tanpa request API.',
+                'Tombol Perbarui dari Zoom mengambil data terbaru dan memperbarui cache; jika gagal, cache terakhir tetap ditampilkan.',
+                'Informasi kontak billing dilindungi permission tersendiri. Permission untuk melihat detail/plan dan billing dapat diatur per role.',
+            ],
+            'categories' => [
+                'Zoom & Sinkronisasi' => [
+                    'RPS Status tidak ditampilkan sebagai nilai tebakan jika tidak tersedia dari respons API Zoom.',
+                    'Tab Pending menampilkan jumlah lisensi pending dari API; permintaan perubahan plan yang menunggu aktivasi/pembatalan dapat tidak tersedia melalui API.',
+                    'Perubahan sub-account atau plan belum menggunakan webhook; sinkronisasi tetap menjadi cara memperbarui data daftar.',
+                ],
+            ],
+        ],
+        [
+            'version' => 'v2.5.3',
+            'week' => '2026 - Minggu ke-47 (16 Nov - 22 Nov 2026)',
+            'date' => '2026-11-17',
+            'is_current' => false,
+            'tag' => 'Zoom Sub Account Monitor',
+            'summary' => 'Daftar sub-account Zoom tersinkronisasi lewat Server-to-Server dengan saran pencocokan customer yang harus dikonfirmasi manual.',
+            'highlights' => [
+                'Menu Zoom → Sub Account List menampilkan data akun, lisensi, periode langganan, status kehadiran di Zoom, serta riwayat sinkronisasi.',
+                'Daftar diurutkan dari akun dengan Creation Time terbaru; nama dan nomor akun membuka detail Zoom, termasuk Account Details, Current Plans, Pending Plans, dan Billing Information.',
+                'Detail akun, plan, lisensi pending, dan Billing Information disimpan terenkripsi di cache lokal setelah pembacaan pertama; pembukaan ulang tidak memanggil API sampai pengguna memilih Perbarui dari Zoom.',
+                'Sinkronisasi membaca seluruh halaman Zoom dan menandai akun tidak terlihat hanya setelah pembacaan lengkap berhasil.',
+                'Nama yang mirip dengan customer QSales hanya ditampilkan sebagai saran; kaitan customer memerlukan konfirmasi pengguna dan tercatat di audit log.',
+                'Akses menu, sinkronisasi, dan pengaitan customer memiliki permission terpisah di User Management → Roles; permission awal diberikan kepada Administrator dan Manager tanpa mereset konfigurasi role lain.',
+                'Detail akun/plan serta kontak billing memiliki permission terpisah; endpoint Zoom yang tidak memberikan RPS status akan ditampilkan sebagai tidak tersedia, bukan ditebak.',
+            ],
+            'categories' => [
+                'Zoom & Sinkronisasi' => [
+                    'Monitor mencatat hasil proses, jumlah akun baru/diperbarui/tetap, dan kegagalan sinkronisasi.',
+                    'Sinkronisasi manual dilindungi lock agar proses bersamaan tidak menimpa hasil satu sama lain.',
+                    'Notifikasi email otomatis saat akun customer aktif belum termasuk pada rilis ini.',
+                ],
+            ],
+        ],
         [
             'version' => 'v2.5.2',
             'week' => '2026 - Minggu ke-47 (16 Nov - 22 Nov 2026)',
             'date' => '2026-11-16',
-            'is_current' => true,
+            'is_current' => false,
             'tag' => 'Sales Order PO Date Correction',
             'summary' => 'Tanggal PO dapat dikoreksi langsung dari detail SO oleh Manager, Administrator, atau Sales pemilik SO.',
             'highlights' => [

@@ -28,6 +28,11 @@ const FEATURE_LABELS = {
     'quotations_edit': 'Quotations - Edit',
     'quotations_delete': 'Quotations - Hapus',
     'quotations_delegate': 'Quotations - Delegasikan ke Sales',
+    'zoom_sub_accounts_access': 'Zoom - Akses Sub Account List',
+    'zoom_sub_accounts_sync': 'Zoom - Sinkronisasi Sub Account',
+    'zoom_sub_accounts_match': 'Zoom - Kaitkan Sub Account ke Customer',
+    'zoom_sub_accounts_details': 'Zoom - Lihat Detail & Plan Sub Account',
+    'zoom_sub_accounts_billing': 'Zoom - Lihat Informasi Billing Sub Account',
     'quotations_import_legacy': 'Quotations - Import Legacy',
     'sales_orders_view_bu': 'Sales Orders - Lihat data sendiri + BU',
     'sales_orders_view_all': 'Sales Orders - Lihat semua data',
@@ -61,6 +66,7 @@ const GROUPS = [
     { id: 'calendar', label: 'Kalender & Agenda', match: f => f.startsWith('calendar_') },
     { id: 'quotations', label: 'Quotations', match: f => f.startsWith('quotations_') },
     { id: 'sales_orders', label: 'Sales Orders', match: f => f.startsWith('sales_orders_') },
+    { id: 'zoom', label: 'Zoom', match: f => f.startsWith('zoom_') },
     { id: 'customers', label: 'Customers', match: f => f.startsWith('customers_') },
     { id: 'products', label: 'Produk & Brand', match: f => f.startsWith('products_') },
     { id: 'reports', label: 'Laporan', match: f => ['view_reports', 'achievements_view', 'manager_view'].includes(f) },
@@ -70,6 +76,11 @@ const SCOPED = ['dashboard_view', 'leads_view', 'leads_manage', 'leads_visits', 
 const isScope = f => f.endsWith('_bu') || f.endsWith('_all');
 const describe = f => {
     if (f === 'quotations_delegate') return 'Mendelegasikan quotation draft ke Sales dan membuat nomor quotation baru.';
+    if (f === 'zoom_sub_accounts_access') return 'Membuka menu Zoom dan melihat daftar sub-account.';
+    if (f === 'zoom_sub_accounts_sync') return 'Menjalankan sinkronisasi daftar sub-account dari Zoom Server-to-Server.';
+    if (f === 'zoom_sub_accounts_match') return 'Mencari customer, mengonfirmasi saran, mengubah, atau melepas kaitan sub-account.';
+    if (f === 'zoom_sub_accounts_details') return 'Membuka detail akun dan informasi paket dari Zoom.';
+    if (f === 'zoom_sub_accounts_billing') return 'Melihat informasi kontak billing dari Zoom; izin ini terpisah karena memuat data pelanggan.';
     if (f === 'leads_manage') return 'Mengelola (tambah, edit, pindah stage) lead sesuai cakupan data.';
     if (f === 'leads_visits') return 'Mengelola agenda kunjungan & follow-up sesuai cakupan data.';
     if (f === 'leads_view') return 'Melihat board dan detail lead sesuai cakupan data.';

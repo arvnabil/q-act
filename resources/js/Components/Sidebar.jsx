@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Link, usePage } from '@inertiajs/react';
-import { LayoutDashboard, FolderOpen, FileText, Users, Box, Settings, LogOut, ChevronRight, ChevronDown, BarChart2, ShieldCheck, UserCog, FileStack, TrendingUp, MapPin, Trophy, Calendar, Sparkles } from 'lucide-react';
+import { LayoutDashboard, FolderOpen, FileText, Users, Box, Settings, LogOut, ChevronRight, ChevronDown, BarChart2, ShieldCheck, UserCog, FileStack, TrendingUp, MapPin, Trophy, Calendar, Sparkles, Video } from 'lucide-react';
 
 export default function Sidebar({ mobileOpen, setMobileOpen }) {
     const { auth } = usePage().props;
@@ -28,6 +28,7 @@ export default function Sidebar({ mobileOpen, setMobileOpen }) {
             ].includes(perm);
         }
         if (['Manager', 'Sales Manager'].includes(effectiveRole)) {
+            if (perm.startsWith('zoom_sub_accounts_')) return false;
             return !['user_management', 'manage_roles'].includes(perm);
         }
         if (effectiveRole === 'Finance') {
@@ -76,6 +77,15 @@ export default function Sidebar({ mobileOpen, setMobileOpen }) {
         { path: '/team-calendar', label: 'Kalender', icon: Calendar, calendarAccess: true },
         { path: '/quotations', label: 'Quotations', icon: FileText, badge: quotationsCount, permission: 'quotations_view' },
         { path: '/sales-orders', label: 'Sales Orders', icon: FileStack, permission: 'sales_orders_view' },
+        {
+            path: '/zoom-group',
+            label: 'Zoom',
+            icon: Video,
+            permission: 'zoom_sub_accounts_access',
+            submenu: [
+                { path: '/zoom/sub-accounts', label: 'Sub Account List', permission: 'zoom_sub_accounts_access' },
+            ]
+        },
         { 
             path: '/documents-group', 
             label: 'Dokumen', 

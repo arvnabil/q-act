@@ -18,6 +18,7 @@ const PAGE_CONFIG = {
     '/dashboard': { title: 'Dashboard', subtitle: 'Ringkasan performa, quotation, dan PO sesuai cakupan akses' },
     '/quotations': { title: 'Quotations', subtitle: 'Kelola semua penawaran harga' },
     '/sales-orders': { title: 'Sales Orders', subtitle: 'Manajemen sales orders' },
+    '/zoom/sub-accounts': { title: 'Zoom Sub Account List', subtitle: 'Sinkronisasi sub-account Zoom dan tinjau saran customer' },
     '/customers': { title: 'Customers', subtitle: 'Manajemen data pelanggan' },
     '/products': { title: 'Products', subtitle: 'Katalog produk per brand' },
     '/brands': { title: 'Brands', subtitle: 'Manajemen brand produk' },

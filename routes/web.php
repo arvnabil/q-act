@@ -161,6 +161,15 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('/{document}/retry', [\App\Http\Controllers\DocumentCenterController::class, 'retrySync'])->name('retry')->middleware('permission:sharepoint_upload');
     });
 
+    // Zoom Server-to-Server sub-account synchronization
+    Route::middleware('permission:zoom_sub_accounts_access')->prefix('zoom')->name('zoom.')->group(function () {
+        Route::get('/sub-accounts', [\App\Http\Controllers\ZoomSubAccountController::class, 'index'])->name('sub-accounts.index');
+        Route::get('/sub-accounts/{zoomSubAccount:zoom_account_id}', [\App\Http\Controllers\ZoomSubAccountController::class, 'show'])->name('sub-accounts.show')->middleware('permission:zoom_sub_accounts_details');
+        Route::post('/sub-accounts/sync', [\App\Http\Controllers\ZoomSubAccountController::class, 'sync'])->name('sub-accounts.sync')->middleware('permission:zoom_sub_accounts_sync');
+        Route::get('/customers/search', [\App\Http\Controllers\ZoomSubAccountController::class, 'searchCustomers'])->name('customers.search')->middleware('permission:zoom_sub_accounts_match');
+        Route::put('/sub-accounts/{zoomSubAccount:zoom_account_id}/customer', [\App\Http\Controllers\ZoomSubAccountController::class, 'updateCustomerMatch'])->name('sub-accounts.customer.update')->middleware('permission:zoom_sub_accounts_match');
+    });
+
 
     // Lead Pipeline
     Route::prefix('leads')->name('leads.')->group(function () {
