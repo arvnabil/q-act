@@ -10,6 +10,7 @@ use App\Models\ZoomSubAccountSyncRun;
 use App\Services\ZoomService;
 use App\Services\ZoomSubAccountSyncService;
 use Barryvdh\DomPDF\Facade\Pdf;
+use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -23,6 +24,7 @@ use PhpOffice\PhpSpreadsheet\Style\Fill;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 use Inertia\Inertia;
 use Inertia\Response;
+use Throwable;
 
 class ZoomSubAccountController extends Controller
 {
@@ -277,14 +279,27 @@ class ZoomSubAccountController extends Controller
             'account_type' => $details['account_type'] ?? null,
             'owner_email' => $details['owner_email'] ?? null,
             'seats' => isset($details['seats']) ? (int) $details['seats'] : null,
-            'zoom_created_at' => $details['created_at'] ?? null,
-            'subscription_start_time' => $details['subscription_start_time'] ?? null,
-            'subscription_end_time' => $details['subscription_end_time'] ?? null,
+            'zoom_created_at' => $this->parseZoomDateTime($details['created_at'] ?? null),
+            'subscription_start_time' => $this->parseZoomDateTime($details['subscription_start_time'] ?? null),
+            'subscription_end_time' => $this->parseZoomDateTime($details['subscription_end_time'] ?? null),
         ];
 
         $subAccount->fill(array_filter($fields, fn ($value) => $value !== null));
         if ($subAccount->isDirty()) {
             $subAccount->save();
+        }
+    }
+
+    private function parseZoomDateTime(mixed $value): ?string
+    {
+        if (! is_string($value) || trim($value) === '') {
+            return null;
+        }
+
+        try {
+            return Carbon::parse($value)->toDateTimeString();
+        } catch (Throwable) {
+            return null;
         }
     }
 
