@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\ActivityLog;
 use App\Models\Customer;
+use App\Models\User;
 use App\Models\ZoomSubAccount;
 use App\Models\ZoomSubAccountDetail;
 use App\Models\ZoomSubAccountSyncRun;
@@ -35,7 +36,7 @@ class ZoomSubAccountController extends Controller
         $presenceFilter = $request->input('presence', 'present');
         $expiryFilter = $request->input('expiry', 'all');
 
-        $query = ZoomSubAccount::query()->with(['customer:id,name', 'matcher:id,name', 'salesPic:id,name,email']);
+        $query = ZoomSubAccount::query()->with(['customer:id,name,created_by', 'customer.createdBy:id,name', 'matcher:id,name', 'salesPic:id,name,email']);
 
         if ($search !== '') {
             $query->where(function ($builder) use ($search) {
@@ -102,13 +103,16 @@ class ZoomSubAccountController extends Controller
             'subscription_end_time' => $subAccount->subscription_end_time?->toDateString(),
             'is_present' => $subAccount->is_present,
             'last_seen_at' => $subAccount->last_seen_at,
-            'customer' => $subAccount->customer?->only(['id', 'name']),
+            'customer' => $subAccount->customer ? [
+                ...$subAccount->customer->only(['id', 'name', 'created_by']),
+                'owner_name' => $subAccount->customer->createdBy?->name,
+            ] : null,
             'sales_pic' => $subAccount->salesPic?->only(['id', 'name', 'email']),
             'matcher' => $subAccount->matcher?->only(['id', 'name']),
             'matched_at' => $subAccount->matched_at,
             'suggestions' => ! $canMatchCustomers || $subAccount->customer_id
                 ? []
-                : $this->suggestCustomers($subAccount->account_name),
+                : $this->suggestCustomers($subAccount->account_name, $request->user()),
         ]);
 
         $lastRun = ZoomSubAccountSyncRun::with('triggeredBy:id,name')->latest('started_at')->first();
@@ -139,6 +143,10 @@ class ZoomSubAccountController extends Controller
             'canSync' => $request->user()->can('zoom_sub_accounts_sync'),
             'canMatchCustomers' => $canMatchCustomers,
             'canCreateCustomer' => $request->user()->can('customers_create'),
+            'canAssignCustomerOwner' => $this->isAdminOrManager($request->user()),
+            'currentUserId' => $request->user()->id,
+            'isSalesLogin' => $request->user()->role === 'Sales'
+                || $request->user()->roles()->where('name', 'Sales')->exists(),
             'canViewDetails' => $request->user()->can('zoom_sub_accounts_details'),
             'salesUsers' => $canMatchCustomers ? \App\Models\User::query()
                 ->where('is_active', true)
@@ -188,7 +196,10 @@ class ZoomSubAccountController extends Controller
                 'zoom_created_at' => $zoomSubAccount->zoom_created_at,
                 'subscription_start_time' => $zoomSubAccount->subscription_start_time,
                 'subscription_end_time' => $zoomSubAccount->subscription_end_time,
-                'customer' => $zoomSubAccount->customer?->only(['id', 'name']),
+                'customer' => $zoomSubAccount->customer ? [
+                    ...$zoomSubAccount->customer->only(['id', 'name', 'created_by']),
+                    'owner_name' => $zoomSubAccount->customer->createdBy?->name,
+                ] : null,
                 'sales_pic' => $zoomSubAccount->salesPic?->only(['id', 'name', 'email']),
             ],
             'tab' => $tab,
@@ -560,11 +571,21 @@ class ZoomSubAccountController extends Controller
         $validated = $request->validate(['search' => ['required', 'string', 'min:2', 'max:100']]);
         $search = trim($validated['search']);
 
-        $customers = Customer::query()
+        $query = Customer::query();
+        \App\Services\DocumentVisibility::apply($query, $request->user(), 'customers');
+
+        $customers = $query
             ->where('name', 'like', "%{$search}%")
             ->orderBy('name')
             ->limit(25)
-            ->get(['id', 'name']);
+            ->with('createdBy:id,name')
+            ->get(['id', 'name', 'created_by'])
+            ->map(fn (Customer $customer) => [
+                'id' => $customer->id,
+                'name' => $customer->name,
+                'created_by' => $customer->created_by,
+                'owner_name' => $customer->createdBy?->name,
+            ]);
 
         return response()->json($customers);
     }
@@ -574,10 +595,30 @@ class ZoomSubAccountController extends Controller
         $data = $request->validate([
             'customer_id' => ['nullable', 'string', 'exists:customers,id'],
             'sales_pic_id' => ['nullable', 'uuid', 'exists:users,id'],
+            'customer_created_by' => ['nullable', 'uuid', 'exists:users,id'],
         ]);
+        $canAssignCustomerOwner = $this->isAdminOrManager($request->user());
+        if (! $canAssignCustomerOwner && array_key_exists('customer_created_by', $data)) {
+            abort(403, 'Hanya Administrator atau Manager yang dapat mengatur pemilik data customer.');
+        }
         $newCustomer = ! empty($data['customer_id']) ? Customer::find($data['customer_id']) : null;
+        if ($newCustomer) {
+            \App\Services\DocumentVisibility::authorize($request->user(), 'customers', $newCustomer);
+        }
+        $customerOwner = ! empty($data['customer_created_by'])
+            ? User::query()
+                ->where('is_active', true)
+                ->where(function ($query) {
+                    $query->whereIn('role', ['Sales', 'Presales'])
+                        ->orWhereHas('roles', fn ($roles) => $roles->whereIn('name', ['Sales', 'Presales']));
+                })
+                ->find($data['customer_created_by'])
+            : null;
+        if (! empty($data['customer_created_by']) && ! $customerOwner) {
+            return back()->withErrors(['customer_created_by' => 'Pilih Sales atau Presales yang aktif.']);
+        }
         $salesPic = ! empty($data['sales_pic_id'])
-            ? \App\Models\User::query()
+            ? User::query()
                 ->where('is_active', true)
                 ->where(function ($query) {
                     $query->whereIn('role', ['Sales', 'Presales'])
@@ -589,14 +630,19 @@ class ZoomSubAccountController extends Controller
             return back()->withErrors(['sales_pic_id' => 'Pilih Sales atau Presales yang aktif.']);
         }
 
-        DB::transaction(function () use ($request, $zoomSubAccount, $data, $newCustomer, $salesPic) {
+        DB::transaction(function () use ($request, $zoomSubAccount, $data, $newCustomer, $customerOwner, $salesPic, $canAssignCustomerOwner) {
             $zoomSubAccount = ZoomSubAccount::query()->lockForUpdate()->findOrFail($zoomSubAccount->id);
             $oldCustomerName = $zoomSubAccount->customer?->name;
             $oldSalesPicName = $zoomSubAccount->salesPic?->name;
+            if ($newCustomer && $customerOwner) {
+                Customer::query()->lockForUpdate()->findOrFail($newCustomer->id)->update(['created_by' => $customerOwner->id]);
+            }
             $zoomSubAccount->update([
                 'customer_id' => $data['customer_id'] ?? null,
                 'sales_pic_id' => $data['sales_pic_id'] ?? null,
-                'matched_by' => $newCustomer ? $request->user()->id : null,
+                'matched_by' => $newCustomer
+                    ? ($canAssignCustomerOwner ? ($customerOwner?->id ?? $newCustomer->created_by) : $request->user()->id)
+                    : null,
                 'matched_at' => $newCustomer ? now() : null,
             ]);
 
@@ -606,7 +652,7 @@ class ZoomSubAccountController extends Controller
                 'entity_type' => 'ZOOM_SUB_ACCOUNT',
                 'entity_id' => $zoomSubAccount->zoom_account_id,
                 'description' => $newCustomer
-                    ? "Zoom sub-account {$zoomSubAccount->account_name} dikaitkan dengan customer {$newCustomer->name}; Sales PIC renewal: ".($salesPic?->name ?? 'belum ditentukan')."."
+                    ? "Zoom sub-account {$zoomSubAccount->account_name} dikaitkan dengan customer {$newCustomer->name}; pemilik data customer: ".($customerOwner?->name ?? $newCustomer->createdBy?->name ?? 'tidak diubah')."; Sales PIC renewal: ".($salesPic?->name ?? 'belum ditentukan')."."
                     : "Kaitan customer {$oldCustomerName} dihapus dari Zoom sub-account {$zoomSubAccount->account_name}; Sales PIC sebelumnya: ".($oldSalesPicName ?? 'belum ditentukan').".",
             ]);
         });
@@ -616,7 +662,7 @@ class ZoomSubAccountController extends Controller
             : 'Kaitan customer berhasil dihapus.');
     }
 
-    private function suggestCustomers(?string $accountName): array
+    private function suggestCustomers(?string $accountName, User $user): array
     {
         $normalizedAccountName = $this->normalizeName($accountName ?? '');
         if ($normalizedAccountName === '') {
@@ -631,19 +677,25 @@ class ZoomSubAccountController extends Controller
             return [];
         }
 
-        $customers = Customer::query()
+        $query = Customer::query();
+        \App\Services\DocumentVisibility::apply($query, $user, 'customers');
+
+        $customers = $query
             ->where(function ($query) use ($tokens) {
                 foreach ($tokens as $token) {
                     $query->orWhere('name', 'like', "%{$token}%");
                 }
             })
             ->limit(100)
-            ->get(['id', 'name']);
+            ->with('createdBy:id,name')
+            ->get(['id', 'name', 'created_by']);
 
         return $customers
             ->map(fn (Customer $customer) => [
                 'id' => $customer->id,
                 'name' => $customer->name,
+                'created_by' => $customer->created_by,
+                'owner_name' => $customer->createdBy?->name,
                 'score' => $this->nameSimilarity($normalizedAccountName, $this->normalizeName($customer->name)),
             ])
             ->filter(fn (array $candidate) => $candidate['score'] >= 45)
@@ -661,6 +713,12 @@ class ZoomSubAccountController extends Controller
         $value = preg_replace('/[^\pL\pN]+/u', ' ', $value) ?? $value;
 
         return trim(preg_replace('/\s+/u', ' ', $value) ?? $value);
+    }
+
+    private function isAdminOrManager(User $user): bool
+    {
+        return in_array($user->role, ['Administrator', 'Manager'], true)
+            || $user->roles()->whereIn('name', ['Administrator', 'Manager'])->exists();
     }
 
     private function nameSimilarity(string $left, string $right): float

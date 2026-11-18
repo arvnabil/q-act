@@ -253,6 +253,7 @@ class CustomerController extends Controller
         $validated = $request->validate([
             'name' => 'required|string|max:255|unique:customers,name',
             'address' => 'nullable|string',
+            'created_by' => 'nullable|uuid|exists:users,id',
             'pics' => 'nullable|array',
             'pics.*.name' => 'required|string|max:255',
             'pics.*.email' => 'nullable|email',
@@ -260,11 +261,35 @@ class CustomerController extends Controller
             'pics.*.is_primary' => 'nullable|boolean',
         ]);
 
+        $customerOwnerId = $request->user()->id;
+        if (! empty($validated['created_by'])) {
+            $user = $request->user();
+            $canAssignCustomerOwner = in_array($user->role, ['Administrator', 'Manager'], true)
+                || $user->roles()->whereIn('name', ['Administrator', 'Manager'])->exists();
+            abort_unless($canAssignCustomerOwner, 403, 'Hanya Administrator atau Manager yang dapat memilih pemilik data customer.');
+
+            $customerOwner = \App\Models\User::query()
+                ->where('is_active', true)
+                ->where(function ($query) {
+                    $query->whereIn('role', ['Sales', 'Presales'])
+                        ->orWhereHas('roles', fn ($roles) => $roles->whereIn('name', ['Sales', 'Presales']));
+                })
+                ->find($validated['created_by']);
+
+            if (! $customerOwner) {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'created_by' => 'Pilih Sales atau Presales yang aktif.',
+                ]);
+            }
+
+            $customerOwnerId = $customerOwner->id;
+        }
+
         $customer = Customer::create([
             'id' => $this->generateCustomerId(),
             'name' => $validated['name'],
             'address' => $validated['address'] ?? null,
-            'created_by' => $request->user()->id,
+            'created_by' => $customerOwnerId,
         ]);
 
         if (!empty($validated['pics'])) {
@@ -287,7 +312,10 @@ class CustomerController extends Controller
         );
 
         if ($request->expectsJson()) {
-            return response()->json($customer->only(['id', 'name']), 201);
+            return response()->json([
+                ...$customer->only(['id', 'name', 'created_by']),
+                'owner_name' => $customer->createdBy?->name,
+            ], 201);
         }
 
         return back()->with('message', 'Customer berhasil ditambahkan.');
