@@ -25,7 +25,10 @@ class ZoomRenewalReminder extends Mailable
 
     public function envelope(): Envelope
     {
-        return new Envelope(subject: "[Q-Sales] Reminder renewal Zoom H-{$this->daysBefore}: {$this->account->account_name}");
+        return new Envelope(
+            cc: ['sales@activ.co.id'],
+            subject: "[Q-Sales] Reminder renewal Zoom H-{$this->daysBefore}: {$this->account->account_name}",
+        );
     }
 
     public function content(): Content
