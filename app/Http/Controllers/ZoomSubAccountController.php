@@ -138,6 +138,7 @@ class ZoomSubAccountController extends Controller
             'zoomConfigured' => app(ZoomService::class)->isConfigured(),
             'canSync' => $request->user()->can('zoom_sub_accounts_sync'),
             'canMatchCustomers' => $canMatchCustomers,
+            'canCreateCustomer' => $request->user()->can('customers_create'),
             'canViewDetails' => $request->user()->can('zoom_sub_accounts_details'),
             'salesUsers' => $canMatchCustomers ? \App\Models\User::query()
                 ->where('is_active', true)

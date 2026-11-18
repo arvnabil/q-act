@@ -2,17 +2,21 @@ import React, { useEffect, useState } from 'react';
 import { Head, Link, router } from '@inertiajs/react';
 import axios from 'axios';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
-import { AlertCircle, CheckCircle2, Clock3, Eye, FileSpreadsheet, FileText, Link2, Loader2, RefreshCw, Search, ShieldCheck, Unlink, Users, Video, X } from 'lucide-react';
+import { AlertCircle, CheckCircle2, Clock3, Eye, FileSpreadsheet, FileText, Link2, Loader2, Plus, RefreshCw, Search, ShieldCheck, Unlink, Users, Video, X } from 'lucide-react';
 
 const date = value => value ? new Date(value).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
 const timestamp = value => value ? new Date(value).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' }) : 'Belum pernah';
 
-function MatchModal({ account, salesUsers = [], onClose }) {
+function MatchModal({ account, salesUsers = [], canCreateCustomer = false, onClose }) {
   const [search, setSearch] = useState('');
   const [customers, setCustomers] = useState([]);
   const [selected, setSelected] = useState(account.initialSuggestion || account.customer || null);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [creatingCustomer, setCreatingCustomer] = useState(false);
+  const [createForm, setCreateForm] = useState({ name: '', address: '', picName: '', picEmail: '', picPhone: '' });
+  const [createError, setCreateError] = useState('');
+  const [createLoading, setCreateLoading] = useState(false);
   const [salesPicId, setSalesPicId] = useState(account.sales_pic?.id || '');
 
   useEffect(() => {
@@ -39,6 +43,40 @@ function MatchModal({ account, salesUsers = [], onClose }) {
     });
   };
 
+  const createCustomer = async event => {
+    event.preventDefault();
+    if ((createForm.picEmail.trim() || createForm.picPhone.trim()) && !createForm.picName.trim()) {
+      setCreateError('Isi nama PIC jika menambahkan email atau telepon PIC.');
+      return;
+    }
+    setCreateLoading(true);
+    setCreateError('');
+
+    const payload = {
+      name: createForm.name.trim(),
+      address: createForm.address.trim() || null,
+      pics: createForm.picName.trim() ? [{
+        name: createForm.picName.trim(),
+        email: createForm.picEmail.trim() || null,
+        phone: createForm.picPhone.trim() || null,
+        is_primary: true,
+      }] : [],
+    };
+
+    try {
+      const { data } = await axios.post(route('customers.store'), payload);
+      setSelected(data);
+      setCustomers(current => [data, ...current.filter(customer => customer.id !== data.id)]);
+      setSearch(data.name);
+      setCreatingCustomer(false);
+    } catch (error) {
+      const errors = error.response?.data?.errors;
+      setCreateError(errors?.name?.[0] || errors?.address?.[0] || errors?.['pics.0.name']?.[0] || error.response?.data?.message || 'Customer gagal dibuat. Coba lagi.');
+    } finally {
+      setCreateLoading(false);
+    }
+  };
+
   return <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4" role="dialog" aria-modal="true" aria-labelledby="match-title">
     <div className="w-full max-w-xl rounded-2xl bg-white shadow-2xl">
       <div className="flex items-start justify-between border-b border-slate-100 p-5">
@@ -51,6 +89,8 @@ function MatchModal({ account, salesUsers = [], onClose }) {
         <div><label htmlFor="customer-search" className="mb-2 block text-sm font-semibold text-slate-700">Cari customer lain</label><div className="relative"><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" /><input id="customer-search" value={search} onChange={event => setSearch(event.target.value)} placeholder="Ketik minimal 2 karakter nama customer" className="w-full rounded-xl border border-slate-200 py-2.5 pl-9 pr-3 text-sm outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-100" /></div>
           {loading && <div className="mt-2 text-xs text-slate-400">Mencari customer…</div>}
           {customers.length > 0 && <div className="mt-2 max-h-40 overflow-auto rounded-xl border border-slate-200">{customers.map(customer => <button type="button" key={customer.id} onClick={() => setSelected(customer)} className={`block w-full border-b border-slate-100 px-3 py-2 text-left text-sm last:border-0 ${selected?.id === customer.id ? 'bg-teal-50 text-teal-800' : 'hover:bg-slate-50'}`}>{customer.name}</button>)}</div>}
+          {!loading && search.trim().length >= 2 && customers.length === 0 && <div className="mt-2 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-dashed border-slate-300 px-3 py-2.5 text-sm"><span className="text-slate-500">Customer tidak ditemukan.</span>{canCreateCustomer && <button type="button" onClick={() => { setCreateForm(form => ({ ...form, name: search.trim() })); setCreateError(''); setCreatingCustomer(true); }} className="inline-flex items-center gap-1.5 font-semibold text-teal-700 hover:text-teal-800"><Plus className="h-4 w-4" /> Buat customer</button>}</div>}
+          {creatingCustomer && <form onSubmit={createCustomer} className="mt-3 space-y-3 rounded-xl border border-teal-200 bg-teal-50/60 p-3"><div className="text-sm font-semibold text-slate-800">Customer baru</div><div><label htmlFor="zoom-new-customer-name" className="mb-1 block text-xs font-medium text-slate-600">Nama perusahaan <span className="text-rose-600">*</span></label><input id="zoom-new-customer-name" required maxLength={255} value={createForm.name} onChange={event => setCreateForm(form => ({ ...form, name: event.target.value }))} className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-teal-500" /></div><div><label htmlFor="zoom-new-customer-address" className="mb-1 block text-xs font-medium text-slate-600">Alamat <span className="font-normal text-slate-400">(opsional)</span></label><input id="zoom-new-customer-address" value={createForm.address} onChange={event => setCreateForm(form => ({ ...form, address: event.target.value }))} className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-teal-500" /></div><div className="grid gap-3 sm:grid-cols-3"><div><label htmlFor="zoom-new-customer-pic" className="mb-1 block text-xs font-medium text-slate-600">Nama PIC (opsional)</label><input id="zoom-new-customer-pic" value={createForm.picName} onChange={event => setCreateForm(form => ({ ...form, picName: event.target.value }))} className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-teal-500" /></div><div><label htmlFor="zoom-new-customer-email" className="mb-1 block text-xs font-medium text-slate-600">Email PIC</label><input id="zoom-new-customer-email" type="email" value={createForm.picEmail} onChange={event => setCreateForm(form => ({ ...form, picEmail: event.target.value }))} className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-teal-500" /></div><div><label htmlFor="zoom-new-customer-phone" className="mb-1 block text-xs font-medium text-slate-600">Telepon PIC</label><input id="zoom-new-customer-phone" value={createForm.picPhone} onChange={event => setCreateForm(form => ({ ...form, picPhone: event.target.value }))} className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-teal-500" /></div></div>{createError && <div className="text-xs font-medium text-rose-700">{createError}</div>}<div className="flex justify-end gap-2"><button type="button" disabled={createLoading} onClick={() => setCreatingCustomer(false)} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-600 disabled:opacity-50">Batal</button><button type="submit" disabled={createLoading || !createForm.name.trim()} className="inline-flex items-center gap-1.5 rounded-lg bg-teal-600 px-3 py-2 text-xs font-semibold text-white hover:bg-teal-700 disabled:opacity-50">{createLoading && <Loader2 className="h-3.5 w-3.5 animate-spin" />} Buat dan pilih</button></div></form>}
         </div>
         <div><label htmlFor="zoom-sales-pic" className="mb-2 block text-sm font-semibold text-slate-700">Sales PIC renewal <span className="font-normal text-slate-400">(opsional)</span></label><select id="zoom-sales-pic" value={salesPicId} onChange={event => setSalesPicId(event.target.value)} className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-teal-500"><option value="">Belum ditentukan — reminder tidak dikirim</option>{salesUsers.map(user => <option key={user.id} value={user.id}>{user.name}{user.email ? ` · ${user.email}` : ''}</option>)}</select><p className="mt-1 text-xs text-slate-500">PIC ini akan menjadi penerima reminder renewal Zoom.</p></div>
         {selected && <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900"><strong>Konfirmasi:</strong> kaitkan sub-account ini dengan customer <strong>{selected.name}</strong>?</div>}
@@ -63,7 +103,7 @@ function MatchModal({ account, salesUsers = [], onClose }) {
   </div>;
 }
 
-export default function SubAccountList({ subAccounts, syncRuns = [], summary = {}, filters = {}, zoomConfigured = false, canSync = false, canMatchCustomers = false, canViewDetails = false, salesUsers = [] }) {
+export default function SubAccountList({ subAccounts, syncRuns = [], summary = {}, filters = {}, zoomConfigured = false, canSync = false, canMatchCustomers = false, canCreateCustomer = false, canViewDetails = false, salesUsers = [] }) {
   const [search, setSearch] = useState(filters.search || '');
   const [match, setMatch] = useState(filters.match || 'all');
   const [presence, setPresence] = useState(filters.presence || 'present');
@@ -204,6 +244,6 @@ export default function SubAccountList({ subAccounts, syncRuns = [], summary = {
         <div className="mt-4 overflow-x-auto"><table className="w-full min-w-[700px] text-left text-sm"><thead className="border-b border-slate-100 text-xs uppercase text-slate-400"><tr><th className="py-2">Waktu</th><th className="py-2">Pemicu</th><th className="py-2">Status</th><th className="py-2">Hasil</th><th className="py-2">Keterangan</th></tr></thead><tbody className="divide-y divide-slate-100">{syncRuns.length ? syncRuns.map(run => <tr key={run.id}><td className="py-3 text-slate-600">{timestamp(run.started_at)}</td><td className="py-3 text-slate-600">{run.triggered_by?.name || 'Sistem'}</td><td className="py-3"><span className={`rounded-full px-2 py-1 text-xs font-semibold ${run.status === 'completed' ? 'bg-emerald-50 text-emerald-700' : run.status === 'failed' ? 'bg-rose-50 text-rose-700' : 'bg-amber-50 text-amber-700'}`}>{run.status}</span></td><td className="py-3 text-xs text-slate-600">{run.status === 'completed' ? `${run.accounts_seen} dilihat · ${run.accounts_added} baru · ${run.accounts_updated} diperbarui · ${run.accounts_unchanged} tetap` : '—'}</td><td className="max-w-xs py-3 text-xs text-slate-500">{run.error_message || `${run.pages_fetched} halaman Zoom`}</td></tr>) : <tr><td colSpan={5} className="py-8 text-center text-sm text-slate-400">Belum ada riwayat sinkronisasi.</td></tr>}</tbody></table></div>
       </section>
     </div>
-    {selectedAccount && <MatchModal account={selectedAccount} salesUsers={salesUsers} onClose={() => setSelectedAccount(null)} />}
+    {selectedAccount && <MatchModal account={selectedAccount} salesUsers={salesUsers} canCreateCustomer={canCreateCustomer} onClose={() => setSelectedAccount(null)} />}
   </AuthenticatedLayout>;
 }

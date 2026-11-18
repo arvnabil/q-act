@@ -286,6 +286,10 @@ class CustomerController extends Controller
             '/customers'
         );
 
+        if ($request->expectsJson()) {
+            return response()->json($customer->only(['id', 'name']), 201);
+        }
+
         return back()->with('message', 'Customer berhasil ditambahkan.');
     }
 

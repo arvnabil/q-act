@@ -37,7 +37,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     // Customers
     Route::get('/customers', [CustomerController::class, 'index'])->name('customers.index');
-    Route::post('/customers', [CustomerController::class, 'store'])->name('customers.store');
+    Route::post('/customers', [CustomerController::class, 'store'])->middleware('permission:customers_create')->name('customers.store');
     Route::delete('/customers', [CustomerController::class, 'bulkDestroy'])->name('customers.bulk-destroy');
     // Admin-only: merge duplicate customers (must be BEFORE /{customer} routes)
     Route::get('/customers/duplicates/scan', [CustomerController::class, 'duplicates'])->name('customers.duplicates');
