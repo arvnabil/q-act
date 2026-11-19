@@ -7,7 +7,7 @@ import {
     ArrowLeft, Plus, Trash2, Save, Loader2, Info, ChevronDown,
     Check, Search, X, FileText, BookmarkPlus, AlertTriangle, Edit3,
     Box, UploadCloud, GripVertical, CircleHelp, Layers, ArrowRightLeft,
-    TrendingUp,
+    TrendingUp, Bold, Italic, List,
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { formatMoney, roundMoney } from '@/utils/money';
@@ -33,6 +33,39 @@ const formatBrandName = (brand) => {
     if (!brand) return '';
     if (typeof brand === 'object') return brand.name || '';
     return String(brand);
+};
+
+const EmailNoteEditor = ({ initialValue, onChange }) => {
+    const editorRef = useRef(null);
+
+    useEffect(() => {
+        if (editorRef.current) editorRef.current.innerHTML = initialValue || '';
+    }, []);
+
+    const applyFormat = (command) => {
+        editorRef.current?.focus();
+        document.execCommand(command, false);
+        onChange(editorRef.current?.innerHTML || '');
+    };
+
+    return (
+        <div className="mt-3">
+            <div className="mb-1.5 flex items-center justify-between gap-3">
+                <label className="text-xs font-semibold text-surface-700">Catatan tambahan email <span className="font-normal text-surface-400">(opsional)</span></label>
+                <span className="text-[10px] font-normal text-surface-400">Kosongkan jika tidak ada catatan</span>
+            </div>
+            <div className="overflow-hidden rounded-lg border border-surface-200 bg-white">
+                <div className="flex gap-1 border-b border-surface-100 bg-surface-50 p-1.5">
+                    {[[Bold, 'bold', 'Tebal'], [Italic, 'italic', 'Miring'], [List, 'insertUnorderedList', 'Daftar berpoin']].map(([Icon, command, label]) => (
+                        <button key={command} type="button" title={label} aria-label={label} onMouseDown={(event) => event.preventDefault()} onClick={() => applyFormat(command)} className="inline-flex h-7 w-8 items-center justify-center rounded text-surface-600 hover:bg-white hover:text-brand-700">
+                            <Icon className="h-4 w-4" />
+                        </button>
+                    ))}
+                </div>
+                <div ref={editorRef} contentEditable suppressContentEditableWarning onInput={(event) => onChange(event.currentTarget.innerHTML)} className="min-h-20 max-h-40 overflow-y-auto px-3 py-2 text-sm text-surface-800 outline-none empty:before:pointer-events-none empty:before:text-surface-400 empty:before:content-['Tulis_catatan_opsional_untuk_email...']" />
+            </div>
+        </div>
+    );
 };
 
 const DEFAULT_TERMS = [
@@ -459,11 +492,11 @@ export default function QuotationEdit({ quotation, customers, leads = [], produc
 
     const openBulkPoModal = () => {
         const fallbackUnits = [
-            { id: quotation.id, label: 'Quotation Utama', relation_type: 'main', po_status: quotation.po_status, po_number: quotation.po_number, po_date: quotation.po_date, po_document_path: quotation.po_document_path, items_count: quotation.items?.length || 0, grand_total: quotation.grand_total },
+            { id: quotation.id, label: 'Quotation Utama', relation_type: 'main', po_status: quotation.po_status, po_number: quotation.po_number, po_date: quotation.po_date, po_document_path: quotation.po_document_path, email_note: quotation.email_note, items_count: quotation.items?.length || 0, grand_total: quotation.grand_total },
             ...(quotation.revisions || []).filter((revision) => revision.relation_type === 'split').map((revision) => ({ ...revision, label: 'Sub Quotation', items_count: 0 })),
         ];
         const units = quotation.po_units?.length ? quotation.po_units : fallbackUnits;
-        setBulkPoRows(units.map((unit) => ({ ...unit, status: unit.po_status || 'Diterima', po_number: unit.po_number || '', po_date: unit.po_date || '', po_document: null })));
+        setBulkPoRows(units.map((unit) => ({ ...unit, status: unit.po_status || 'Diterima', po_number: unit.po_number || '', po_date: unit.po_date || '', email_note: unit.email_note || '', po_document: null })));
         setBulkPoErrors({});
         setShowBulkPoModal(true);
     };
@@ -479,6 +512,7 @@ export default function QuotationEdit({ quotation, customers, leads = [], produc
             formData.append(`entries[${index}][status]`, row.status);
             formData.append(`entries[${index}][po_number]`, row.po_number);
             formData.append(`entries[${index}][po_date]`, row.po_date);
+            formData.append(`entries[${index}][email_note]`, row.email_note || '');
             if (row.po_document) formData.append(`entries[${index}][po_document]`, row.po_document);
         });
         setIsSavingBulkPo(true);
@@ -1759,6 +1793,8 @@ const getProductDisplayName = (prod) => {
                                         <label className="text-xs font-semibold text-surface-700">Tanggal PO <span className="text-red-500">*</span><input type="date" value={row.po_date} onChange={(e) => updateBulkPoRow(row.id, 'po_date', e.target.value)} className="mt-1.5 w-full rounded-lg border border-surface-200 bg-white px-3 py-2 text-sm font-normal" required /></label>
                                         <label className="text-xs font-semibold text-surface-700">Dokumen PO <span className="text-red-500">*</span><input type="file" accept=".pdf,.jpg,.jpeg,.png" onChange={(e) => updateBulkPoRow(row.id, 'po_document', e.target.files?.[0] || null)} className="mt-1.5 block w-full rounded-lg border border-surface-200 bg-white px-2 py-1.5 text-xs font-normal" required={!row.po_document_path} />{documentUrl && !row.po_document && <a href={documentUrl} target="_blank" rel="noreferrer" className="mt-1 block text-[11px] font-semibold text-brand-700 hover:underline">Lihat dokumen tersimpan</a>}</label>
                                     </div>
+                                    <EmailNoteEditor initialValue={row.email_note} onChange={(value) => updateBulkPoRow(row.id, 'email_note', value)} />
+                                    {bulkPoErrors[`entries.${index}.email_note`] && <div className="mt-1 text-xs text-red-600">{bulkPoErrors[`entries.${index}.email_note`]}</div>}
                                     {bulkPoErrors[`entries.${index}.po_document`] && <div className="mt-2 text-xs text-red-600">{bulkPoErrors[`entries.${index}.po_document`]}</div>}
                                 </div>;
                             })}

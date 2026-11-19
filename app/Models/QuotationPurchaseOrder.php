@@ -14,7 +14,7 @@ class QuotationPurchaseOrder extends Model
     protected $keyType = 'string';
 
     protected $fillable = [
-        'id', 'quotation_id', 'status', 'po_number', 'po_date', 'document_path',
+        'id', 'quotation_id', 'status', 'po_number', 'po_date', 'document_path', 'email_note',
         'quotation_item_ids', 'created_by',
     ];
 

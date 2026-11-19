@@ -100,6 +100,7 @@ class SalesOrderController extends Controller
         $salesOrder->quotation?->load([
             'parentQuotation' => fn ($q) => \App\Services\DocumentVisibility::apply($q, $user, 'quotations'),
             'revisions' => fn ($q) => \App\Services\DocumentVisibility::apply($q, $user, 'quotations'),
+            'purchaseOrders.sharePointDocuments',
         ]);
         // Finance action must only be available to the Finance role.
         $isFinance = $user->role === 'Finance';
@@ -112,6 +113,11 @@ class SalesOrderController extends Controller
         $totalCogs = (float) $salesOrder->items->sum(fn ($i) => ($i->qty * $i->hpp));
         $totalCost = (float) $salesOrder->costs->sum('amount');
         $grandTotal = (float) ($salesOrder->grand_total ?: $totalItemValue);
+        $relatedPurchaseOrders = $salesOrder->quotation?->purchaseOrders ?? collect();
+        $relatedPurchaseOrder = $relatedPurchaseOrders->firstWhere('po_number', $salesOrder->po_number);
+        if (! $relatedPurchaseOrder && $relatedPurchaseOrders->count() === 1) {
+            $relatedPurchaseOrder = $relatedPurchaseOrders->first();
+        }
 
         return Inertia::render('SalesOrderDetail', [
             'so' => [
@@ -124,6 +130,7 @@ class SalesOrderController extends Controller
                 'po_document_path' => $salesOrder->po_document_path
                     ?: $salesOrder->quotation?->po_document_path
                     ?: $salesOrder->quotation?->purchaseOrders()->latest()->first()?->document_path,
+                'po_email_note' => $relatedPurchaseOrder?->email_note,
                 'sharepoint_document' => (\App\Models\SharePointDocument::where('quotation_id', $salesOrder->quotation_id)
                     ->where('status', 'synced')
                     ->where(function ($q) {

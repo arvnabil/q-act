@@ -598,6 +598,10 @@ export default function SalesOrderDetail({ so, costCategories = [], isFinance, c
                                 )}
                             </div>
                         </div>
+                        {so.po_email_note && <div className="mt-4 rounded-xl border border-teal-100 bg-teal-50/60 p-4">
+                            <div className="mb-2 text-xs font-semibold text-teal-800">Catatan tambahan email PO</div>
+                            <div className="prose prose-sm max-w-none text-surface-700" dangerouslySetInnerHTML={{ __html: so.po_email_note }} />
+                        </div>}
                     </div>
                 )}
 

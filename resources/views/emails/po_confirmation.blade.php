@@ -34,6 +34,12 @@
             <p>Halo Tim Finance & Manajemen,</p>
             <p>Purchase Order (PO) pelanggan baru telah berhasil dicatat ke dalam sistem QSales:</p>
 
+            @if(!empty($emailNote))
+            <div style="margin: 18px 0; padding: 14px 16px; border-left: 4px solid #0f766e; border-radius: 6px; background: #f0fdfa; color: #334155; font-size: 13px; line-height: 1.6;">
+                {!! $emailNote !!}
+            </div>
+            @endif
+
             <table class="table">
                 <tr>
                     <td class="label">Pelanggan</td>

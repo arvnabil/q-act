@@ -26,6 +26,7 @@ use App\Services\NotificationService;
 use App\Services\PrimaryQuotationSync;
 use App\Services\QuotationCalculator;
 use App\Services\WorkflowAccess;
+use App\Support\EmailNoteSanitizer;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Database\QueryException;
 use Illuminate\Database\UniqueConstraintViolationException;
@@ -85,6 +86,7 @@ class QuotationController extends Controller
     // ─── Helper: serialize full Quotation for edit/detail/show ───────────────
     private function serializeFull(Quotation $q, bool $forPrint = false): array
     {
+        $q->loadMissing(['purchaseOrders', 'revisions.purchaseOrders']);
         $effectiveSales = $q->sales;
         if (! $effectiveSales || $effectiveSales->role === 'Presales') {
             $bu = $q->businessUnit ?: $q->creator?->businessUnit;
@@ -178,6 +180,7 @@ class QuotationController extends Controller
                     'po_number' => $q->po_number,
                     'po_date' => $q->po_date?->toDateString(),
                     'po_document_path' => $q->po_document_path,
+                    'email_note' => $q->purchaseOrders->sortByDesc('created_at')->first()?->email_note,
                     'items_count' => $remainingRootItemIds->count(),
                     'grand_total' => app(QuotationCalculator::class)->calculateTotals($q, $q->items->whereIn('id', $remainingRootItemIds))['grand_total'],
                 ]])->merge($splitChildren->map(fn ($child) => [
@@ -189,6 +192,7 @@ class QuotationController extends Controller
                     'po_number' => $child->po_number,
                     'po_date' => $child->po_date?->toDateString(),
                     'po_document_path' => $child->po_document_path,
+                    'email_note' => $child->purchaseOrders->sortByDesc('created_at')->first()?->email_note,
                     'items_count' => $child->items->count(),
                     'grand_total' => $child->grand_total,
                 ]))->values()->toArray()
@@ -1162,6 +1166,7 @@ class QuotationController extends Controller
             'entries.*.po_number' => 'required|string|max:100',
             'entries.*.po_date' => 'required|date',
             'entries.*.po_document' => 'nullable|file|mimes:pdf,jpg,jpeg,png|max:10240',
+            'entries.*.email_note' => 'nullable|string|max:20000',
         ]);
 
         $quotation->load(['items.product', 'revisions.items.product', 'purchaseOrders']);
@@ -1196,6 +1201,7 @@ class QuotationController extends Controller
                     : $this->remainingMainQuotationItems($quotation);
                 $status = $entry['status'] === 'Diterima' ? 'approved' : 'cancelled';
                 $previousStatus = $target->status;
+                $emailNote = EmailNoteSanitizer::sanitize($entry['email_note'] ?? null);
 
                 $target->update([
                     'status' => $status,
@@ -1213,6 +1219,7 @@ class QuotationController extends Controller
                         'po_number' => $entry['po_number'],
                         'po_date' => $entry['po_date'],
                         'document_path' => $documentPath,
+                        'email_note' => $emailNote,
                         'quotation_item_ids' => $items->pluck('id')->values()->all(),
                     ]);
                     $poId = $po->id;
@@ -1225,6 +1232,7 @@ class QuotationController extends Controller
                         'po_number' => $entry['po_number'],
                         'po_date' => $entry['po_date'],
                         'document_path' => $documentPath,
+                        'email_note' => $emailNote,
                         'quotation_item_ids' => $items->pluck('id')->values()->all(),
                         'created_by' => $request->user()->id,
                     ]);

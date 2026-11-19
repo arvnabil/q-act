@@ -124,6 +124,7 @@ class SendPoNotificationEmail implements ShouldQueue
             'grandTotal'     => (float) $quotation->grand_total,
             'sharePointUrl'  => $sharePointUrl,
             'qsalesUrl'      => "{$baseUrl}/quotations/{$quotation->id}",
+            'emailNote'      => $po->email_note,
         ];
 
         $subject = "[QSales][PO Masuk] {$data['customerName']} - {$data['poNumber']} ({$data['quotationId']})";
