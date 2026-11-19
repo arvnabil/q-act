@@ -21,7 +21,7 @@ class SendZoomRenewalRemindersCommand extends Command
     public function handle(EmailNotificationService $emailService, ZoomService $zoomService): int
     {
         $config = $emailService->getSettings()['zoom_renewal_reminder'] ?? [];
-        $daysBefore = array_values(array_unique(array_intersect([7, 30, 90], array_map('intval', (array) ($config['days_before'] ?? [])))));
+        $daysBefore = array_values(array_unique(array_intersect([7, 30, 60, 90], array_map('intval', (array) ($config['days_before'] ?? [])))));
 
         if (empty($config['enabled']) || $daysBefore === []) {
             $this->info('Reminder renewal Zoom nonaktif atau belum ada jarak hari yang dipilih.');
@@ -38,12 +38,15 @@ class SendZoomRenewalRemindersCommand extends Command
         $sent = 0;
         foreach ($accounts as $account) {
             $salesPic = $account->salesPic;
-            // Renewal reminders are never sent without an active, assigned PIC email.
             $isSalesPic = $salesPic && (in_array($salesPic->role, ['Sales', 'Presales'], true)
                 || $salesPic->hasAnyRole(['Sales', 'Presales']));
-            if (! $salesPic || ! $salesPic->is_active || ! $isSalesPic || ! filter_var($salesPic->email, FILTER_VALIDATE_EMAIL)) {
-                continue;
-            }
+            $hasValidSalesPic = $salesPic
+                && $salesPic->is_active
+                && $isSalesPic
+                && filter_var($salesPic->email, FILTER_VALIDATE_EMAIL);
+            $hasCustomer = $account->customer !== null;
+            $fallbackToSalesInbox = ! $hasCustomer || ! $hasValidSalesPic;
+            $recipientEmail = $fallbackToSalesInbox ? 'sales@activ.co.id' : $salesPic->email;
 
             $renewalDate = $account->subscription_end_time->copy()->startOfDay();
             $days = $dateToDays[$renewalDate->toDateString()] ?? null;
@@ -102,12 +105,31 @@ class SendZoomRenewalRemindersCommand extends Command
                     'auto_renew' => is_bool($options['billing_auto_renew'] ?? null)
                         ? ($options['billing_auto_renew'] ? 'Ya' : 'Tidak')
                         : 'Tidak tersedia',
-                    'customer_name' => $account->customer?->name ?? '—',
+                    'customer_name' => $account->customer?->name ?? 'Belum ditautkan',
+                    'sales_pic_name' => $hasValidSalesPic ? $salesPic->name : 'Belum tersedia',
+                    'sales_pic_email' => $hasValidSalesPic ? $salesPic->email : '—',
+                    'follow_up_notes' => array_values(array_filter([
+                        $hasCustomer ? null : 'Customer QSales belum ditautkan.',
+                        $hasValidSalesPic ? null : match (true) {
+                            ! $salesPic => 'Sales PIC renewal belum ditentukan.',
+                            ! $salesPic->is_active => 'Sales PIC renewal tidak aktif.',
+                            ! $isSalesPic => 'Pengguna terpilih bukan role Sales atau Presales.',
+                            ! filter_var($salesPic->email, FILTER_VALIDATE_EMAIL) => 'Email Sales PIC renewal tidak tersedia atau tidak valid.',
+                            default => null,
+                        },
+                    ])),
                 ];
 
-                Mail::to($salesPic->email)->send(new ZoomRenewalReminder($account, $salesPic, $days, $renewalDate, $accountDetails));
+                Mail::to($recipientEmail)->send(new ZoomRenewalReminder(
+                    $account,
+                    $hasValidSalesPic ? $salesPic : null,
+                    $days,
+                    $renewalDate,
+                    $accountDetails,
+                    $fallbackToSalesInbox,
+                ));
                 $sent++;
-                $this->info("Reminder H-{$days} terkirim ke Sales PIC {$salesPic->email} untuk Zoom Account {$account->zoom_account_id}.");
+                $this->info("Reminder H-{$days} terkirim ke {$recipientEmail} untuk Zoom Account {$account->zoom_account_id}.");
             } catch (\Throwable $exception) {
                 DB::table('zoom_renewal_reminder_logs')
                     ->where('zoom_account_id', $account->zoom_account_id)
@@ -116,13 +138,13 @@ class SendZoomRenewalRemindersCommand extends Command
                     ->delete();
                 Log::error('[Zoom Renewal Reminder] Email gagal dikirim', [
                     'zoom_account_id' => $account->zoom_account_id,
-                    'sales_pic_id' => $salesPic->id,
+                    'sales_pic_id' => $salesPic?->id,
                     'message' => $exception->getMessage(),
                 ]);
             }
         }
 
-        $this->info("Selesai. Total reminder terkirim: {$sent}; akun tanpa Sales PIC dilewati.");
+        $this->info("Selesai. Total reminder terkirim: {$sent}; akun dengan data customer atau PIC belum lengkap diarahkan ke sales@activ.co.id.");
         return self::SUCCESS;
     }
 

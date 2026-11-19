@@ -21,12 +21,13 @@ class ZoomRenewalReminder extends Mailable
         public int $daysBefore,
         public CarbonInterface $renewalDate,
         public array $accountDetails,
+        public bool $fallbackToSalesInbox = false,
     ) {}
 
     public function envelope(): Envelope
     {
         return new Envelope(
-            cc: ['sales@activ.co.id'],
+            cc: $this->fallbackToSalesInbox ? [] : ['sales@activ.co.id'],
             subject: "[Q-Sales] Reminder renewal Zoom H-{$this->daysBefore}: {$this->account->account_name}",
         );
     }

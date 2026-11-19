@@ -111,7 +111,7 @@ export default function EmailNotificationSettingsTab({
     {
       key: 'zoom_renewal_reminder',
       title: 'Reminder Renewal Lisensi Zoom',
-      description: 'Pengingat perpanjangan lisensi dikirim ke Sales PIC akun Zoom pada H-7, H-30, dan/atau H-90 sesuai pilihan. Jika Sales PIC belum ditentukan, email tidak dikirim.',
+      description: 'Pengingat perpanjangan lisensi dikirim pada H-7, H-30, H-60, dan/atau H-90 sesuai pilihan. Jika customer dan Sales PIC tersedia, email dikirim ke PIC dengan sales@activ.co.id di-CC; jika datanya belum lengkap, email dikirim ke sales@activ.co.id.',
       icon: RefreshCw,
       color: 'blue',
       hasReminderDays: true,
@@ -339,14 +339,14 @@ export default function EmailNotificationSettingsTab({
                         <div className="rounded-xl border border-blue-100 bg-blue-50/60 p-3">
                           <div className="mb-2 text-xs font-bold text-blue-900">Jadwal pengingat sebelum masa lisensi berakhir</div>
                           <div className="flex flex-wrap gap-2">
-                            {[7, 30, 90].map(day => {
+                            {[7, 30, 60, 90].map(day => {
                               const selected = (config.days_before || []).map(Number).includes(day);
                               return <button type="button" key={day} onClick={() => handleToggleReminderDay(evt.key, day)} className={`rounded-lg border px-3 py-1.5 text-xs font-semibold ${selected ? 'border-blue-300 bg-white text-blue-700' : 'border-gray-200 bg-white text-gray-600'}`}>{selected ? '✓ ' : ''}H-{day}</button>;
                             })}
-                            <button type="button" onClick={() => setEmailForm(prev => ({ ...prev, [evt.key]: { ...(prev[evt.key] || {}), days_before: [7, 30, 90] } }))} className="rounded-lg border border-dashed border-blue-300 px-3 py-1.5 text-xs font-semibold text-blue-700">Pilih semua</button>
+                            <button type="button" onClick={() => setEmailForm(prev => ({ ...prev, [evt.key]: { ...(prev[evt.key] || {}), days_before: [7, 30, 60, 90] } }))} className="rounded-lg border border-dashed border-blue-300 px-3 py-1.5 text-xs font-semibold text-blue-700">Pilih semua</button>
                             <button type="button" onClick={() => setEmailForm(prev => ({ ...prev, [evt.key]: { ...(prev[evt.key] || {}), days_before: [] } }))} className="rounded-lg border border-dashed border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-600">Hapus pilihan</button>
                           </div>
-                          <p className="mt-2 text-[11px] text-blue-800">Penerima hanya Sales PIC yang tersimpan pada sub-account Zoom. Tidak ada PIC aktif atau tidak ada email: reminder dilewati.</p>
+                          <p className="mt-2 text-[11px] text-blue-800">Jika customer dan Sales PIC valid, email dikirim ke PIC dengan sales@activ.co.id di-CC. Jika customer atau PIC belum tersedia, sales@activ.co.id menjadi penerima utama agar akun tetap bisa ditindaklanjuti.</p>
                         </div>
                       )}
                       {/* Context Checkboxes */}

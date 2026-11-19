@@ -15,7 +15,7 @@ return [
                 'Tab Account Details, Current Plans, Pending Plans, dan Billing Information menampilkan data dari endpoint Zoom terkait.',
                 'Detail akun, plan, lisensi pending, dan billing disimpan dalam cache SQL terenkripsi berdasarkan Zoom Account ID dan jenis detail; tombol Perbarui dari Zoom meminta data terbaru.',
                 'Jika endpoint daftar dan detail Zoom berbeda untuk Account Type, nilai dari endpoint detail digunakan sebagai acuan setelah detail tersedia.',
-                'Pengaturan notifikasi menyediakan reminder H-7, H-30, dan H-90. Email hanya dikirim ke Sales PIC aktif; tanpa PIC aktif atau email, reminder dilewati.',
+                'Pengaturan notifikasi menyediakan reminder H-7, H-30, H-60, dan H-90. Jika customer dan Sales PIC valid, email dikirim ke PIC dengan sales@activ.co.id di-CC; jika data customer atau PIC belum lengkap, email dialihkan ke sales@activ.co.id.',
                 'Kartu filter renewal menunjukkan akun yang berakhir dalam 1 bulan (0–30 hari), 2 bulan (31–60 hari), dan 3 bulan (61–90 hari); Semua Data menghapus filter dan mengembalikan urutan default.',
                 'Laporan Excel dan PDF memuat seluruh akun sesuai filter, bukan hanya halaman yang sedang dibuka, dengan ringkasan jumlah akun/lisensi dan tanggal pembuatan laporan.',
                 'Sebelum ekspor, QSales memeriksa detail akun yang diperlukan; detail yang belum tercache diminta dari Zoom per batch dan disimpan terenkripsi. Kegagalan pengambilan ditampilkan sebelum laporan dibuat.',
@@ -28,7 +28,7 @@ return [
                     'Informasi plan dan billing yang tersedia dibaca dari endpoint Zoom terkait dan disimpan sebagai cache terenkripsi di database QSales.',
                 ],
                 'Renewal & Laporan' => [
-                    'Jadwal reminder H-7/H-30/H-90 dapat dipilih di Settings → Notifikasi Email; H-120 tidak digunakan.',
+                    'Jadwal reminder H-7/H-30/H-60/H-90 dapat dipilih di Settings → Notifikasi Email; H-120 tidak digunakan. Inbox sales@activ.co.id menjadi penerima fallback jika customer atau PIC renewal belum lengkap.',
                     'Filter renewal dan laporan menghormati pencarian, status kaitan customer, kehadiran sinkronisasi, serta rentang renewal yang dipilih.',
                     'Detail pembayaran dan Auto Renew yang belum ada di cache diperiksa ke API Zoom sebelum ekspor dan responsnya disimpan untuk kunjungan berikutnya.',
                 ],

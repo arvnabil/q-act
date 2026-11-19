@@ -165,7 +165,7 @@ class EmailNotificationService
 
             if (array_key_exists('days_before', $defaultConfig) && is_array($defaultConfig['days_before'])) {
                 $cleanEvent['days_before'] = array_values(array_unique(array_intersect(
-                    [7, 30, 90],
+                    [7, 30, 60, 90],
                     array_map('intval', (array) ($input['days_before'] ?? $defaultConfig['days_before']))
                 )));
             } elseif (array_key_exists('days_before', $defaultConfig)) {
