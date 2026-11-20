@@ -366,6 +366,7 @@ class LeadController extends Controller
         $data['updated_by'] = Auth::id();
         $data['sales_id']   = $data['sales_id'] ?? Auth::id();
         $data['stage']      = $data['stage'] ?? 'lead_masuk';
+        $data['estimated_value'] = $data['estimated_value'] ?? 0;
         $data['lead_code']  = $this->generateLeadCode();
 
         $createdLead = null;
@@ -491,6 +492,9 @@ class LeadController extends Controller
 
         $oldSalesId = $lead->sales_id;
         $data['updated_by'] = Auth::id();
+        if (array_key_exists('estimated_value', $data)) {
+            $data['estimated_value'] = $data['estimated_value'] ?? 0;
+        }
 
         $lead->update($data);
 
