@@ -1,4 +1,5 @@
 import QuotationWorkflowShortcut from '@/Components/QuotationWorkflowShortcut';
+import SearchableSelect from '@/Components/SearchableSelect';
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import ReactDOM from 'react-dom';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
@@ -1500,13 +1501,14 @@ const getProductDisplayName = (prod) => {
                                                 {item.brand ? (
                                                     <span className={`inline-flex px-2.5 py-0.5 rounded-full text-xs font-semibold ${brandClasses(item.brand)}`}>{item.brand}</span>
                                                 ) : (
-                                                    <input
-                                                        type="text"
-                                                        value={item.brand}
-                                                        onChange={e => handleItemChange(idx, 'brand', e.target.value)}
+                                                    <SearchableSelect
+                                                        value={item.brand || ''}
+                                                        onChange={value => handleItemChange(idx, 'brand', value)}
+                                                        options={allBrandNames}
                                                         disabled={isQuotationLocked}
-                                                        placeholder="Brand"
-                                                        className="w-full text-xs border border-surface-200 rounded-lg px-2 py-1.5 outline-none focus:border-brand-500 bg-surface-50"
+                                                        placeholder="Cari brand..."
+                                                        aria-label="Cari brand item quotation"
+                                                        inputClassName="rounded-lg bg-surface-50 py-1.5 text-xs"
                                                     />
                                                 )}
                                             </td>
@@ -2164,12 +2166,13 @@ const getProductDisplayName = (prod) => {
                                 </div>
                                 <div>
                                     <label className="text-xs font-semibold text-surface-600 block mb-1">Brand</label>
-                                    <input
-                                        type="text"
-                                        value={editingItemData.brand}
-                                        onChange={e => setEditingItemData(prev => ({ ...prev, brand: e.target.value }))}
-                                        placeholder="Yealink"
-                                        className="w-full bg-surface-50 border border-surface-200 rounded-lg px-3 py-2 text-xs text-surface-800 outline-none focus:border-brand-500 font-medium"
+                                    <SearchableSelect
+                                        value={editingItemData.brand || ''}
+                                        onChange={value => setEditingItemData(prev => ({ ...prev, brand: value }))}
+                                        options={Array.from(new Set([...allBrandNames, editingItemData.brand].filter(Boolean)))}
+                                        placeholder="Ketik nama brand untuk mencari..."
+                                        aria-label="Cari brand master produk katalog"
+                                        inputClassName="rounded-lg bg-surface-50 py-2 text-xs focus:border-brand-500"
                                     />
                                 </div>
                             </div>
@@ -2420,16 +2423,14 @@ const getProductDisplayName = (prod) => {
                                             + Tambah Brand
                                         </button>
                                     </div>
-                                    <select
+                                    <SearchableSelect
                                         value={newProductData.brand}
-                                        onChange={e => setNewProductData(prev => ({ ...prev, brand: e.target.value }))}
-                                        className="w-full bg-surface-50 border border-surface-200 rounded-xl px-3.5 py-2.5 text-xs text-surface-800 outline-none focus:border-emerald-500 focus:bg-white transition-all cursor-pointer font-medium"
-                                    >
-                                        <option value="">-- Pilih Brand --</option>
-                                        {allBrandNames.map((b, i) => (
-                                            <option key={i} value={b}>{b}</option>
-                                        ))}
-                                    </select>
+                                        onChange={value => setNewProductData(prev => ({ ...prev, brand: value }))}
+                                        options={allBrandNames}
+                                        placeholder="Ketik nama brand untuk mencari..."
+                                        inputClassName="rounded-xl bg-surface-50 py-2.5 text-xs focus:bg-white focus:border-emerald-500"
+                                        aria-label="Cari brand produk quotation"
+                                    />
                                 </div>
                             </div>
 

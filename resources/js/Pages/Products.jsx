@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import ReactDOM from 'react-dom';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import Pagination from '@/Components/Pagination';
+import SearchableSelect from '@/Components/SearchableSelect';
 import { Head, router } from '@inertiajs/react';
 import {
     Search, Plus, Filter, Image as ImageIcon, Edit, Trash2, Box, X, Loader2,
@@ -561,16 +562,17 @@ export default function Products({ products = [], brands = [] }) {
                         </div>
 
                         <div className="flex flex-wrap items-center gap-2">
-                            <select
+                            <SearchableSelect
                                 value={brandFilter}
-                                onChange={(e) => setBrandFilter(e.target.value)}
-                                className="bg-surface-50 border border-surface-200 text-surface-600 text-sm font-medium px-3 py-2 rounded-lg outline-none focus:border-brand-500 cursor-pointer"
-                            >
-                                <option value="all">Semua Brand</option>
-                                {(brands || []).map(b => (
-                                    <option key={b.id} value={b.id}>{b.name}</option>
-                                ))}
-                            </select>
+                                onChange={setBrandFilter}
+                                options={[
+                                    { value: 'all', label: 'Semua Brand' },
+                                    ...(brands || []).map(brand => ({ value: brand.id, label: brand.name })),
+                                ]}
+                                placeholder="Cari brand..."
+                                aria-label="Cari filter brand produk"
+                                inputClassName="rounded-lg bg-surface-50 px-3 py-2 pl-9 text-sm font-medium text-surface-600"
+                            />
 
                             <div className="flex items-center bg-surface-100 p-1 rounded-lg border border-surface-200">
                                 <button
@@ -863,24 +865,14 @@ export default function Products({ products = [], brands = [] }) {
                                                 <Plus className="w-3 h-3" /> Tambah Brand
                                             </button>
                                         </div>
-                                        <select
+                                        <SearchableSelect
                                             required
                                             value={newProduct.brand_id}
-                                            onChange={e => {
-                                                if (e.target.value === '__add_new__') {
-                                                    setShowAddBrandModal(true);
-                                                } else {
-                                                    setNewProduct({ ...newProduct, brand_id: e.target.value });
-                                                }
-                                            }}
-                                            className="w-full border border-surface-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-50 transition-all bg-white cursor-pointer"
-                                        >
-                                            <option value="" disabled>-- Pilih Brand --</option>
-                                            {(brands || []).map(b => (
-                                                <option key={b.id} value={b.id}>{b.name}</option>
-                                            ))}
-                                            <option value="__add_new__" className="font-semibold text-brand-600">+ Tambah Brand Baru...</option>
-                                        </select>
+                                            onChange={value => setNewProduct({ ...newProduct, brand_id: value })}
+                                            options={(brands || []).map(brand => ({ value: brand.id, label: brand.name }))}
+                                            placeholder="Ketik nama brand untuk mencari..."
+                                            aria-label="Cari brand produk"
+                                        />
                                     </div>
                                 </div>
 

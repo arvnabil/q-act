@@ -1,14 +1,32 @@
 <?php
 
 return [
-    'current_version' => 'v2.5.4',
-    'last_updated' => '2026-11-18',
+    'current_version' => 'v2.5.5',
+    'last_updated' => '2026-11-25',
     'releases' => [
+        [
+            'version' => 'v2.5.5',
+            'week' => '2026 - Minggu ke-48 (23 Nov - 29 Nov 2026)',
+            'date' => '2026-11-25',
+            'is_current' => true,
+            'tag' => 'Searchable Brand Selects',
+            'summary' => 'Kolom pilihan Brand kini dapat dicari di form produk dan quotation.',
+            'highlights' => [
+                'Pencarian Brand tersedia pada filter dan form tambah produk, serta input Brand di quotation dan katalog master produk.',
+                'Dropdown hasil pencarian tampil di atas modal agar opsi Brand dapat dipilih dengan benar.',
+            ],
+            'categories' => [
+                'Produk & Quotation' => [
+                    'Select Brand mendukung pencarian agar lebih mudah digunakan saat daftar Brand panjang.',
+                    'Perbaikan lapisan dropdown memastikan daftar pilihan tidak tertutup oleh modal.',
+                ],
+            ],
+        ],
         [
             'version' => 'v2.5.4',
             'week' => '2026 - Minggu ke-47 (16 Nov - 22 Nov 2026)',
             'date' => '2026-11-18',
-            'is_current' => true,
+            'is_current' => false,
             'tag' => 'Zoom Sub Account Details & Renewal Reports',
             'summary' => 'Penyempurnaan detail dan billing sub-account Zoom, PIC renewal, pengingat, filter masa berlaku, serta laporan Excel/PDF.',
             'highlights' => [
