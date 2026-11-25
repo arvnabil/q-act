@@ -2,10 +2,11 @@ import React, { useEffect, useState } from 'react';
 import { Head, Link, router } from '@inertiajs/react';
 import axios from 'axios';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
-import { AlertCircle, CheckCircle2, Clock3, Eye, FileSpreadsheet, FileText, Link2, Loader2, Plus, RefreshCw, Search, ShieldCheck, Unlink, Users, Video, X } from 'lucide-react';
+import { AlertCircle, CheckCircle2, ChevronDown, ChevronUp, Clock3, Eye, FileSpreadsheet, FileText, Link2, Loader2, Plus, RefreshCw, Search, ShieldCheck, Unlink, Users, Video, X } from 'lucide-react';
 
 const date = value => value ? new Date(value).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
 const timestamp = value => value ? new Date(value).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' }) : 'Belum pernah';
+const changeValue = value => value === null || value === undefined || value === '' ? '—' : typeof value === 'boolean' ? (value ? 'Ya' : 'Tidak') : String(value);
 
 function MatchModal({ account, salesUsers = [], canCreateCustomer = false, canAssignCustomerOwner = false, isSalesLogin = false, currentUserId = '', onClose }) {
   const [search, setSearch] = useState('');
@@ -123,6 +124,7 @@ export default function SubAccountList({ subAccounts, syncRuns = [], summary = {
   const [selectedAccount, setSelectedAccount] = useState(null);
   const [exporting, setExporting] = useState(null);
   const [exportProgress, setExportProgress] = useState(null);
+  const [expandedSyncRuns, setExpandedSyncRuns] = useState({});
 
   const applyFilters = event => {
     event.preventDefault();
@@ -197,6 +199,7 @@ export default function SubAccountList({ subAccounts, syncRuns = [], summary = {
       setRefreshingAccountId(null);
     }
   };
+  const toggleSyncRunDetails = runId => setExpandedSyncRuns(current => ({ ...current, [runId]: !current[runId] }));
 
   return <AuthenticatedLayout>
     <Head title="Zoom Sub Account List" />
@@ -266,8 +269,28 @@ export default function SubAccountList({ subAccounts, syncRuns = [], summary = {
       </section>
 
       <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-        <div className="flex items-center gap-2"><Clock3 className="h-5 w-5 text-slate-500" /><h2 className="font-bold text-slate-900">Monitor Sinkronisasi</h2></div><p className="mt-1 text-sm text-slate-500">Riwayat proses sinkronisasi manual dan hasil pembaruan data.</p>
-        <div className="mt-4 overflow-x-auto"><table className="w-full min-w-[700px] text-left text-sm"><thead className="border-b border-slate-100 text-xs uppercase text-slate-400"><tr><th className="py-2">Waktu</th><th className="py-2">Pemicu</th><th className="py-2">Status</th><th className="py-2">Hasil</th><th className="py-2">Keterangan</th></tr></thead><tbody className="divide-y divide-slate-100">{syncRuns.length ? syncRuns.map(run => <tr key={run.id}><td className="py-3 text-slate-600">{timestamp(run.started_at)}</td><td className="py-3 text-slate-600">{run.triggered_by?.name || 'Sistem'}</td><td className="py-3"><span className={`rounded-full px-2 py-1 text-xs font-semibold ${run.status === 'completed' ? 'bg-emerald-50 text-emerald-700' : run.status === 'failed' ? 'bg-rose-50 text-rose-700' : 'bg-amber-50 text-amber-700'}`}>{run.status}</span></td><td className="py-3 text-xs text-slate-600">{run.status === 'completed' ? `${run.accounts_seen} dilihat · ${run.accounts_added} baru · ${run.accounts_updated} diperbarui · ${run.accounts_unchanged} tetap` : '—'}</td><td className="max-w-xs py-3 text-xs text-slate-500">{run.error_message || `${run.pages_fetched} halaman Zoom`}</td></tr>) : <tr><td colSpan={5} className="py-8 text-center text-sm text-slate-400">Belum ada riwayat sinkronisasi.</td></tr>}</tbody></table></div>
+        <div className="flex items-center gap-2"><Clock3 className="h-5 w-5 text-slate-500" /><h2 className="font-bold text-slate-900">Monitor Sinkronisasi</h2></div>
+        <p className="mt-1 text-sm text-slate-500">Riwayat proses sinkronisasi manual dan nilai data yang berubah dari Zoom.</p>
+        <div className="mt-4 overflow-x-auto"><table className="w-full min-w-[800px] text-left text-sm"><thead className="border-b border-slate-100 text-xs uppercase text-slate-400"><tr><th className="py-2">Waktu</th><th className="py-2">Pemicu</th><th className="py-2">Status</th><th className="py-2">Hasil</th><th className="py-2">Keterangan</th><th className="py-2 text-right">Rincian</th></tr></thead><tbody className="divide-y divide-slate-100">{syncRuns.length ? syncRuns.map(run => {
+          const changes = Array.isArray(run.change_details) ? run.change_details : [];
+          const expanded = !!expandedSyncRuns[run.id];
+          return <React.Fragment key={run.id}>
+            <tr>
+              <td className="py-3 text-slate-600">{timestamp(run.started_at)}</td>
+              <td className="py-3 text-slate-600">{run.triggered_by?.name || 'Sistem'}</td>
+              <td className="py-3"><span className={`rounded-full px-2 py-1 text-xs font-semibold ${run.status === 'completed' ? 'bg-emerald-50 text-emerald-700' : run.status === 'failed' ? 'bg-rose-50 text-rose-700' : 'bg-amber-50 text-amber-700'}`}>{run.status}</span></td>
+              <td className="py-3 text-xs text-slate-600">{run.status === 'completed' ? `${run.accounts_seen} dilihat · ${run.accounts_added} baru · ${run.accounts_updated} diperbarui · ${run.accounts_unchanged} tetap` : '—'}</td>
+              <td className="max-w-xs py-3 text-xs text-slate-500">{run.error_message || `${run.pages_fetched} halaman Zoom`}</td>
+              <td className="py-3 text-right">{run.status === 'completed' && <button type="button" onClick={() => toggleSyncRunDetails(run.id)} className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-semibold text-slate-600 hover:border-teal-300 hover:text-teal-700">{expanded ? 'Tutup' : `Lihat (${changes.length || run.accounts_added + run.accounts_updated})`}{expanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}</button>}</td>
+            </tr>
+            {expanded && <tr><td colSpan={6} className="bg-slate-50/80 p-4">
+              {changes.length ? <div className="space-y-3">{changes.map((change, changeIndex) => <div key={`${change.zoom_account_id}-${changeIndex}`} className="rounded-xl border border-slate-200 bg-white p-3">
+                <div className="mb-2 flex flex-wrap items-baseline gap-x-2 gap-y-1"><span className="font-semibold text-slate-800">{change.account_name || 'Tanpa nama'}</span><span className="text-xs text-slate-500">ZAN: {change.account_number || '—'}</span><span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${change.action === 'added' ? 'bg-blue-50 text-blue-700' : 'bg-amber-50 text-amber-700'}`}>{change.action === 'added' ? 'Akun baru' : 'Data diperbarui'}</span></div>
+                {change.fields?.length ? <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">{change.fields.map((field, fieldIndex) => <div key={`${field.field}-${fieldIndex}`} className="rounded-lg bg-slate-50 px-3 py-2 text-xs"><div className="font-semibold text-slate-600">{field.field}</div><div className="mt-1 break-words text-slate-500"><span className="line-through decoration-slate-300">{changeValue(field.from)}</span><span className="mx-1.5 text-slate-400">→</span><span className="font-semibold text-slate-800">{changeValue(field.to)}</span></div></div>)}</div> : <p className="text-xs text-slate-500">Detail nilai akun baru tidak tersedia.</p>}
+              </div>)}</div> : run.accounts_added + run.accounts_updated > 0 ? <p className="text-sm text-slate-500">Rincian nilai belum tersimpan untuk proses lama. Detail akan tersedia untuk sinkronisasi setelah fitur ini diterapkan.</p> : <p className="text-sm text-slate-500">Tidak ada perubahan data akun pada proses ini.</p>}
+            </td></tr>}
+          </React.Fragment>;
+        }) : <tr><td colSpan={6} className="py-8 text-center text-sm text-slate-400">Belum ada riwayat sinkronisasi.</td></tr>}</tbody></table></div>
       </section>
     </div>
     {selectedAccount && <MatchModal account={selectedAccount} salesUsers={salesUsers} canCreateCustomer={canCreateCustomer} canAssignCustomerOwner={canAssignCustomerOwner} isSalesLogin={isSalesLogin} currentUserId={currentUserId} onClose={() => setSelectedAccount(null)} />}

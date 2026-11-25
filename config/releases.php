@@ -1,14 +1,34 @@
 <?php
 
 return [
-    'current_version' => 'v2.5.6',
+    'current_version' => 'v2.5.7',
     'last_updated' => '2026-11-25',
     'releases' => [
+        [
+            'version' => 'v2.5.7',
+            'week' => '2026 - Minggu ke-48 (23 Nov - 29 Nov 2026)',
+            'date' => '2026-11-25',
+            'is_current' => true,
+            'tag' => 'Zoom Sync Change Details',
+            'summary' => 'Monitor sinkronisasi menampilkan akun dan nilai field yang berubah dari Zoom.',
+            'highlights' => [
+                'Setiap proses sinkronisasi menyimpan rincian akun baru dan akun yang diperbarui, termasuk nilai sebelum dan sesudah perubahan.',
+                'Rincian meliputi nama akun, ZAN, Account Type, email owner, Seats, status lisensi/reseller, Creation Time, Service Effective Date, dan Subscription End.',
+                'Monitor Sinkronisasi menyediakan panel rincian per proses; riwayat lama yang hanya menyimpan jumlah tidak dapat direkonstruksi.',
+                'Account Type dari cache Account Details yang lebih baru dipertahankan jika endpoint daftar Zoom mengirim nilai berbeda.',
+            ],
+            'categories' => [
+                'Zoom & Monitor Sinkronisasi' => [
+                    'Perubahan direkam saat sinkronisasi berjalan dan dapat dibuka dari kolom Rincian di Monitor Sinkronisasi.',
+                    'Kolom change_details ditambahkan ke tabel riwayat sinkronisasi; jalankan migrasi database sebelum menggunakan fitur.',
+                ],
+            ],
+        ],
         [
             'version' => 'v2.5.6',
             'week' => '2026 - Minggu ke-48 (23 Nov - 29 Nov 2026)',
             'date' => '2026-11-25',
-            'is_current' => true,
+            'is_current' => false,
             'tag' => 'Zoom Account Detail Refresh',
             'summary' => 'Detail sub-account Zoom dapat diperbarui langsung dari daftar akun.',
             'highlights' => [

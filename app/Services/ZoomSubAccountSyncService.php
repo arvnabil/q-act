@@ -4,7 +4,6 @@ namespace App\Services;
 
 use App\Models\User;
 use App\Models\ZoomSubAccount;
-use App\Models\ZoomSubAccountDetail;
 use App\Models\ZoomSubAccountSyncRun;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -34,11 +33,19 @@ class ZoomSubAccountSyncService
                 $added = 0;
                 $updated = 0;
                 $unchanged = 0;
-                $accountDetails = ZoomSubAccountDetail::query()
-                    ->where('detail_type', 'account')
-                    ->get()
-                    ->keyBy('zoom_account_id');
-
+                $changeDetails = [];
+                $trackedFields = [
+                    'account_name' => 'Nama akun',
+                    'account_number' => 'ZAN (Zoom Account Number)',
+                    'account_type' => 'Account Type',
+                    'owner_email' => 'Email owner',
+                    'seats' => 'Seats (License)',
+                    'bulk_license' => 'Bulk license',
+                    'is_sub_reseller' => 'Sub-reseller',
+                    'zoom_created_at' => 'Creation Time',
+                    'subscription_start_time' => 'Service Effective Date',
+                    'subscription_end_time' => 'Subscription End',
+                ];
                 foreach ($result['accounts'] as $account) {
                     $zoomAccountId = trim((string) ($account['id'] ?? ''));
                     if ($zoomAccountId === '') {
@@ -60,17 +67,23 @@ class ZoomSubAccountSyncService
                         'subscription_end_time' => $this->parseZoomDate($account['subscription_end_time'] ?? null),
                     ];
 
-                    // Zoom can return different account_type values from /accounts
-                    // and /accounts/{accountId}. Once the detail endpoint has supplied
-                    // this field, keep it as the canonical source during list syncs.
-                    $detailAccountType = $accountDetails->get($zoomAccountId)?->payload['account_type'] ?? null;
-                    if (is_string($detailAccountType) && $detailAccountType !== '') {
-                        $apiAttributes['account_type'] = $detailAccountType;
+                    $beforeValues = [];
+                    foreach (array_keys($trackedFields) as $field) {
+                        $beforeValues[$field] = $this->normalizeChangeValue($subAccount->getAttribute($field));
                     }
-
-                    $changed = $subAccount->isDirty();
                     $subAccount->fill($apiAttributes);
-                    $changed = $changed || $subAccount->isDirty(array_keys($apiAttributes));
+                    $fieldChanges = [];
+                    foreach ($trackedFields as $field => $label) {
+                        $afterValue = $this->normalizeChangeValue($subAccount->getAttribute($field));
+                        if ($beforeValues[$field] !== $afterValue) {
+                            $fieldChanges[] = [
+                                'field' => $label,
+                                'from' => $beforeValues[$field],
+                                'to' => $afterValue,
+                            ];
+                        }
+                    }
+                    $changed = $fieldChanges !== [];
                     $subAccount->fill([
                         'is_present' => true,
                         'last_seen_at' => $now,
@@ -80,8 +93,22 @@ class ZoomSubAccountSyncService
 
                     if ($isNew) {
                         $added++;
+                        $changeDetails[] = [
+                            'action' => 'added',
+                            'zoom_account_id' => $zoomAccountId,
+                            'account_name' => $subAccount->account_name,
+                            'account_number' => $subAccount->account_number,
+                            'fields' => array_map(fn ($field) => ['field' => $field['field'], 'from' => null, 'to' => $field['to']], $fieldChanges),
+                        ];
                     } elseif ($changed) {
                         $updated++;
+                        $changeDetails[] = [
+                            'action' => 'updated',
+                            'zoom_account_id' => $zoomAccountId,
+                            'account_name' => $subAccount->account_name,
+                            'account_number' => $subAccount->account_number,
+                            'fields' => $fieldChanges,
+                        ];
                     } else {
                         $unchanged++;
                     }
@@ -102,6 +129,7 @@ class ZoomSubAccountSyncService
                     'accounts_added' => $added,
                     'accounts_updated' => $updated,
                     'accounts_unchanged' => $unchanged,
+                    'change_details' => $changeDetails,
                     'pages_fetched' => $result['pages'],
                     'finished_at' => now(),
                 ]);
@@ -138,5 +166,18 @@ class ZoomSubAccountSyncService
         } catch (Throwable) {
             return null;
         }
+    }
+
+    private function normalizeChangeValue(mixed $value): mixed
+    {
+        if ($value instanceof \DateTimeInterface) {
+            return $value->format('Y-m-d H:i:s');
+        }
+
+        if (is_bool($value) || is_int($value) || is_float($value) || $value === null) {
+            return $value;
+        }
+
+        return (string) $value;
     }
 }
