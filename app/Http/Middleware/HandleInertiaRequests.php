@@ -33,6 +33,7 @@ class HandleInertiaRequests extends Middleware
 
         return [
             ...parent::share($request),
+            'appVersion' => fn () => config('releases.current_version', 'v2.4.0'),
             'auth' => [
                 'user' => $user ? [
                     ...$user->toArray(),

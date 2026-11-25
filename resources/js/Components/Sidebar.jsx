@@ -3,7 +3,7 @@ import { Link, usePage } from '@inertiajs/react';
 import { LayoutDashboard, FolderOpen, FileText, Users, Box, Settings, LogOut, ChevronRight, ChevronDown, BarChart2, ShieldCheck, UserCog, FileStack, TrendingUp, MapPin, Trophy, Calendar, Sparkles, Video } from 'lucide-react';
 
 export default function Sidebar({ mobileOpen, setMobileOpen }) {
-    const { auth } = usePage().props;
+    const { auth, appVersion } = usePage().props;
     const { user, permissions } = auth;
 
     const effectiveRole = user?.spatie_role ?? user?.role;
@@ -336,7 +336,7 @@ export default function Sidebar({ mobileOpen, setMobileOpen }) {
                             <span>Info Versi & Rilis</span>
                         </div>
                         <span className="font-mono text-[10px] font-bold px-1.5 py-0.5 rounded bg-brand-50 text-brand-700 border border-brand-200">
-                            v2.4.0
+                            {appVersion || 'v2.4.0'}
                         </span>
                     </Link>
                 </div>
