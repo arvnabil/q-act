@@ -6,6 +6,7 @@ import SecondaryButton from '@/Components/SecondaryButton';
 import TextInput from '@/Components/TextInput';
 import { useForm } from '@inertiajs/react';
 import { useRef, useState } from 'react';
+import { AlertTriangle } from 'lucide-react';
 
 export default function DeleteUserForm({ className = '' }) {
     const [confirmingUserDeletion, setConfirmingUserDeletion] = useState(false);
@@ -46,41 +47,33 @@ export default function DeleteUserForm({ className = '' }) {
     };
 
     return (
-        <section className={`space-y-6 ${className}`}>
-            <header>
-                <h2 className="text-lg font-medium text-gray-900">
-                    Delete Account
-                </h2>
+        <section className={`flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between ${className}`}>
+            <div className="flex items-start gap-3">
+                <div className="rounded-xl bg-rose-50 p-2.5 text-rose-600"><AlertTriangle className="h-5 w-5" /></div>
+                <div>
+                    <h2 className="text-sm font-bold text-rose-900">Hapus Akun</h2>
+                    <p className="mt-1 max-w-2xl text-xs leading-relaxed text-surface-500">Tindakan ini menghapus akun dan data terkait secara permanen. Anda akan diminta memasukkan kata sandi untuk mengonfirmasi.</p>
+                </div>
+            </div>
 
-                <p className="mt-1 text-sm text-gray-600">
-                    Once your account is deleted, all of its resources and data
-                    will be permanently deleted. Before deleting your account,
-                    please download any data or information that you wish to
-                    retain.
-                </p>
-            </header>
-
-            <DangerButton onClick={confirmUserDeletion}>
-                Delete Account
+            <DangerButton onClick={confirmUserDeletion} className="shrink-0 rounded-lg px-4 py-2.5 text-[11px]">
+                Hapus Akun
             </DangerButton>
 
             <Modal show={confirmingUserDeletion} onClose={closeModal}>
                 <form onSubmit={deleteUser} className="p-6">
-                    <h2 className="text-lg font-medium text-gray-900">
-                        Are you sure you want to delete your account?
+                    <h2 className="text-lg font-semibold text-surface-900">
+                        Yakin ingin menghapus akun?
                     </h2>
 
-                    <p className="mt-1 text-sm text-gray-600">
-                        Once your account is deleted, all of its resources and
-                        data will be permanently deleted. Please enter your
-                        password to confirm you would like to permanently delete
-                        your account.
+                    <p className="mt-1 text-sm text-surface-600">
+                        Semua sumber daya dan data terkait akan dihapus permanen. Masukkan kata sandi untuk melanjutkan.
                     </p>
 
                     <div className="mt-6">
                         <InputLabel
                             htmlFor="password"
-                            value="Password"
+                            value="Kata Sandi"
                             className="sr-only"
                         />
 
@@ -93,9 +86,9 @@ export default function DeleteUserForm({ className = '' }) {
                             onChange={(e) =>
                                 setData('password', e.target.value)
                             }
-                            className="mt-1 block w-3/4"
+                            className="mt-1.5 block w-full rounded-xl border-surface-200 focus:border-brand-500 focus:ring-brand-500/20"
                             isFocused
-                            placeholder="Password"
+                            placeholder="Kata sandi saat ini"
                         />
 
                         <InputError
@@ -105,12 +98,12 @@ export default function DeleteUserForm({ className = '' }) {
                     </div>
 
                     <div className="mt-6 flex justify-end">
-                        <SecondaryButton onClick={closeModal}>
-                            Cancel
+                        <SecondaryButton onClick={closeModal} className="rounded-lg">
+                            Batal
                         </SecondaryButton>
 
                         <DangerButton className="ms-3" disabled={processing}>
-                            Delete Account
+                            Hapus Permanen
                         </DangerButton>
                     </div>
                 </form>

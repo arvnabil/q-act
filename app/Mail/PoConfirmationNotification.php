@@ -21,9 +21,10 @@ class PoConfirmationNotification extends Mailable
         $customer = $this->data['customerName'] ?? 'Customer';
         $poNum = $this->data['poNumber'] ?? 'PO';
         $quotId = $this->data['quotationId'] ?? '';
+        $prefix = ! empty($this->data['isTest']) ? '[TEST] ' : '';
 
         return new Envelope(
-            subject: "[QSales][PO Masuk] {$customer} - {$poNum} ({$quotId})"
+            subject: "{$prefix}[QSales][PO Masuk] {$customer} - {$poNum} ({$quotId})"
         );
     }
 

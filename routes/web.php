@@ -246,6 +246,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('/settings/integrations/sharepoint', [SettingController::class, 'updateSharePoint'])->name('settings.sharepoint');
         Route::post('/settings/integrations/sharepoint/test', [SettingController::class, 'testSharePointConnection'])->name('settings.sharepoint.test');
         Route::post('/settings/email-notifications', [SettingController::class, 'updateEmailNotifications'])->name('settings.email-notifications');
+        Route::post('/settings/email-notifications/test-po', [SettingController::class, 'sendPoNotificationTestEmail'])->name('settings.email-notifications.test-po')->middleware('throttle:5,1');
     });
 });
 

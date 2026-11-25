@@ -27,6 +27,21 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
+        $exceptions->render(function (\Symfony\Component\HttpKernel\Exception\HttpExceptionInterface $exception, Request $request) {
+            if ($request->is('api/*') || $request->expectsJson()) {
+                return null;
+            }
+
+            $status = $exception->getStatusCode();
+            if ($status < 400 || $status >= 600) {
+                return null;
+            }
+
+            $view = $status >= 500 ? 'errors.5xx' : 'errors.4xx';
+
+            return response()->view($view, ['exception' => $exception], $status, $exception->getHeaders());
+        });
+
         $exceptions->shouldRenderJsonWhen(
             fn (Request $request) => $request->is('api/*') || $request->expectsJson(),
         );

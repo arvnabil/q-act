@@ -471,4 +471,50 @@ class SettingController extends Controller
 
         return back()->with('message', 'Pengaturan Notifikasi Email berhasil disimpan!');
     }
+
+    public function sendPoNotificationTestEmail(Request $request)
+    {
+        $validated = $request->validate([
+            'email' => ['required', 'email', 'max:255'],
+        ]);
+
+        $mailer = config('mail.default');
+        $transport = config("mail.mailers.{$mailer}.transport", $mailer);
+        if (in_array($transport, ['log', 'array'], true)) {
+            return back()->withErrors([
+                'po_test_email' => 'Mailer saat ini hanya mencatat email secara lokal dan tidak mengirim email keluar.',
+            ]);
+        }
+
+        $now = now();
+        $data = [
+            'isTest' => true,
+            'customerName' => 'Contoh Customer (Email Uji)',
+            'poNumber' => 'TEST-PO-'.$now->format('Ymd-His'),
+            'poDate' => $now->format('d/m/Y'),
+            'quotationId' => 'TEST-QUOTATION',
+            'salesName' => 'Contoh Sales',
+            'leadCode' => null,
+            'grandTotal' => 12345678,
+            'sharePointUrl' => null,
+            'qsalesUrl' => null,
+            'emailNote' => '<p>Catatan tambahan dummy untuk menguji bagian catatan email.</p>',
+        ];
+
+        try {
+            \Illuminate\Support\Facades\Mail::to(strtolower($validated['email']))
+                ->send(new \App\Mail\PoConfirmationNotification($data));
+        } catch (\Throwable $exception) {
+            \Illuminate\Support\Facades\Log::error('[PO Email Test] Failed to send test email.', [
+                'recipient' => strtolower($validated['email']),
+                'exception' => get_class($exception),
+            ]);
+
+            return back()->withErrors([
+                'po_test_email' => 'Email uji gagal dikirim. Periksa konfigurasi mail dan log aplikasi.',
+            ]);
+        }
+
+        return back()->with('message', 'Email uji PO berhasil diteruskan oleh mail transport ke '.$validated['email'].'. Periksa inbox dan folder spam.');
+    }
 }

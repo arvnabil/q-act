@@ -9,131 +9,57 @@ import { useRef } from 'react';
 export default function UpdatePasswordForm({ className = '' }) {
     const passwordInput = useRef();
     const currentPasswordInput = useRef();
-
-    const {
-        data,
-        setData,
-        errors,
-        put,
-        reset,
-        processing,
-        recentlySuccessful,
-    } = useForm({
+    const { data, setData, errors, put, reset, processing, recentlySuccessful } = useForm({
         current_password: '',
         password: '',
         password_confirmation: '',
     });
 
-    const updatePassword = (e) => {
-        e.preventDefault();
-
+    const updatePassword = (event) => {
+        event.preventDefault();
         put(route('password.update'), {
             preserveScroll: true,
             onSuccess: () => reset(),
-            onError: (errors) => {
-                if (errors.password) {
+            onError: (formErrors) => {
+                if (formErrors.password) {
                     reset('password', 'password_confirmation');
-                    passwordInput.current.focus();
+                    passwordInput.current?.focus();
                 }
-
-                if (errors.current_password) {
+                if (formErrors.current_password) {
                     reset('current_password');
-                    currentPasswordInput.current.focus();
+                    currentPasswordInput.current?.focus();
                 }
             },
         });
     };
 
+    const inputClass = 'mt-1.5 block w-full rounded-xl border-surface-200 bg-surface-50/50 px-3.5 py-2.5 text-sm text-surface-800 shadow-none focus:border-brand-500 focus:ring-brand-500/20';
+    const labelClass = 'text-xs font-semibold text-surface-600';
+
     return (
         <section className={className}>
-            <header>
-                <h2 className="text-lg font-medium text-gray-900">
-                    Update Password
-                </h2>
-
-                <p className="mt-1 text-sm text-gray-600">
-                    Ensure your account is using a long, random password to stay
-                    secure.
-                </p>
-            </header>
-
-            <form onSubmit={updatePassword} className="mt-6 space-y-6">
+            <form onSubmit={updatePassword} className="space-y-4">
                 <div>
-                    <InputLabel
-                        htmlFor="current_password"
-                        value="Current Password"
-                    />
-
-                    <TextInput
-                        id="current_password"
-                        ref={currentPasswordInput}
-                        value={data.current_password}
-                        onChange={(e) =>
-                            setData('current_password', e.target.value)
-                        }
-                        type="password"
-                        className="mt-1 block w-full"
-                        autoComplete="current-password"
-                    />
-
-                    <InputError
-                        message={errors.current_password}
-                        className="mt-2"
-                    />
+                    <InputLabel htmlFor="current_password" value="Kata Sandi Saat Ini" className={labelClass} />
+                    <TextInput id="current_password" ref={currentPasswordInput} value={data.current_password} onChange={(event) => setData('current_password', event.target.value)} type="password" className={inputClass} autoComplete="current-password" />
+                    <InputError message={errors.current_password} className="mt-1.5" />
                 </div>
-
                 <div>
-                    <InputLabel htmlFor="password" value="New Password" />
-
-                    <TextInput
-                        id="password"
-                        ref={passwordInput}
-                        value={data.password}
-                        onChange={(e) => setData('password', e.target.value)}
-                        type="password"
-                        className="mt-1 block w-full"
-                        autoComplete="new-password"
-                    />
-
-                    <InputError message={errors.password} className="mt-2" />
+                    <InputLabel htmlFor="password" value="Kata Sandi Baru" className={labelClass} />
+                    <TextInput id="password" ref={passwordInput} value={data.password} onChange={(event) => setData('password', event.target.value)} type="password" className={inputClass} autoComplete="new-password" />
+                    <InputError message={errors.password} className="mt-1.5" />
                 </div>
-
                 <div>
-                    <InputLabel
-                        htmlFor="password_confirmation"
-                        value="Confirm Password"
-                    />
-
-                    <TextInput
-                        id="password_confirmation"
-                        value={data.password_confirmation}
-                        onChange={(e) =>
-                            setData('password_confirmation', e.target.value)
-                        }
-                        type="password"
-                        className="mt-1 block w-full"
-                        autoComplete="new-password"
-                    />
-
-                    <InputError
-                        message={errors.password_confirmation}
-                        className="mt-2"
-                    />
+                    <InputLabel htmlFor="password_confirmation" value="Konfirmasi Kata Sandi Baru" className={labelClass} />
+                    <TextInput id="password_confirmation" value={data.password_confirmation} onChange={(event) => setData('password_confirmation', event.target.value)} type="password" className={inputClass} autoComplete="new-password" />
+                    <InputError message={errors.password_confirmation} className="mt-1.5" />
                 </div>
-
-                <div className="flex items-center gap-4">
-                    <PrimaryButton disabled={processing}>Save</PrimaryButton>
-
-                    <Transition
-                        show={recentlySuccessful}
-                        enter="transition ease-in-out"
-                        enterFrom="opacity-0"
-                        leave="transition ease-in-out"
-                        leaveTo="opacity-0"
-                    >
-                        <p className="text-sm text-gray-600">
-                            Saved.
-                        </p>
+                <div className="flex flex-wrap items-center gap-3 pt-1">
+                    <PrimaryButton disabled={processing} className="rounded-lg bg-brand-600 px-4 py-2.5 text-[11px] tracking-wide hover:bg-brand-700 focus:bg-brand-700 focus:ring-brand-500 active:bg-brand-800">
+                        {processing ? 'Memperbarui…' : 'Perbarui Kata Sandi'}
+                    </PrimaryButton>
+                    <Transition show={recentlySuccessful} enter="transition ease-out duration-200" enterFrom="opacity-0 translate-y-1" enterTo="opacity-100 translate-y-0" leave="transition ease-in duration-150" leaveFrom="opacity-100" leaveTo="opacity-0">
+                        <p className="text-xs font-medium text-emerald-700">Kata sandi berhasil diperbarui.</p>
                     </Transition>
                 </div>
             </form>

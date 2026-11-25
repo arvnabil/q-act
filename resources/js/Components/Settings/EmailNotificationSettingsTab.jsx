@@ -25,6 +25,10 @@ export default function EmailNotificationSettingsTab({
   availableRoles = [],
   onSubmit,
   isSaving = false,
+  testPoEmail = '',
+  setTestPoEmail = () => {},
+  onTestPoEmail = () => {},
+  isTestingPoEmail = false,
 }) {
   // Bagian 1: Notifikasi Tim & Alur Kerja yang dapat dikonfigurasi penerimanya
   const configurableEvents = [
@@ -238,6 +242,45 @@ export default function EmailNotificationSettingsTab({
             </p>
           </div>
         </div>
+
+        {/* Test PO email delivery */}
+        <section className="rounded-xl border border-indigo-200 bg-indigo-50/60 p-4 sm:p-5">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+            <div className="max-w-2xl">
+              <h3 className="flex items-center gap-2 text-sm font-bold text-indigo-950">
+                <Send className="h-4 w-4 text-indigo-600" />
+                Uji Email Purchase Order
+              </h3>
+              <p className="mt-1 text-xs leading-relaxed text-indigo-800">
+                Kirim contoh email PO melalui mail transport yang sama dengan notifikasi PO. Email ini memakai data dummy dan hanya dikirim ke alamat di bawah; penerima TO/CC/BCC produksi tidak digunakan.
+              </p>
+            </div>
+            <div className="flex w-full flex-col gap-2 sm:w-auto sm:min-w-[380px] sm:flex-row">
+              <label className="sr-only" htmlFor="po-test-email">Alamat email tujuan uji</label>
+              <input
+                id="po-test-email"
+                type="email"
+                value={testPoEmail}
+                onChange={(event) => setTestPoEmail(event.target.value)}
+                placeholder="nama@perusahaan.co.id"
+                maxLength={255}
+                className="min-w-0 flex-1 rounded-lg border border-indigo-200 bg-white px-3 py-2 text-sm text-gray-800 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
+              />
+              <button
+                type="button"
+                onClick={onTestPoEmail}
+                disabled={isTestingPoEmail || !testPoEmail.trim()}
+                className="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {isTestingPoEmail ? <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" /> : <Send className="h-4 w-4" />}
+                {isTestingPoEmail ? 'Mengirim…' : 'Kirim Email Uji'}
+              </button>
+            </div>
+          </div>
+          <p className="mt-2 text-[11px] text-indigo-700">
+            Email bertanda [TEST] berisi contoh PO, tanpa lampiran atau tautan SharePoint. Status berhasil berarti mail server menerima permintaan; cek inbox/spam untuk memastikan email tiba.
+          </p>
+        </section>
 
         {/* SECTION 1: NOTIFIKASI TIM & ALUR KERJA (DAPAT DIKONFIGURASI) */}
         <div className="space-y-4">

@@ -27,12 +27,18 @@
 <body>
     <div class="card">
         <div class="header">
-            <h1>Purchase Order Diterima</h1>
+            <h1>{{ !empty($isTest) ? 'Email Uji Template PO' : 'Purchase Order Diterima' }}</h1>
             <p>QSales Notification System — PT ALFA CIPTA TEKNOLOGI VIRTUAL</p>
         </div>
         <div class="body">
+            @if(!empty($isTest))
+            <div style="margin-bottom: 16px; padding: 12px 14px; border: 1px solid #fcd34d; border-radius: 6px; background: #fffbeb; color: #92400e; font-size: 12px; font-weight: 600;">EMAIL UJI — data di bawah ini dummy dan bukan PO pelanggan.</div>
+            <p>Halo,</p>
+            <p>Email ini dikirim dari Settings QSales untuk memeriksa template PO dan pengiriman email.</p>
+            @else
             <p>Halo Tim Finance & Manajemen,</p>
             <p>Purchase Order (PO) pelanggan baru telah berhasil dicatat ke dalam sistem QSales:</p>
+            @endif
 
             @if(!empty($emailNote))
             <div style="margin: 18px 0; padding: 14px 16px; border-left: 4px solid #0f766e; border-radius: 6px; background: #f0fdfa; color: #334155; font-size: 13px; line-height: 1.6;">
@@ -74,7 +80,9 @@
                 <tr>
                     <td class="label">Status SharePoint</td>
                     <td class="value">
-                        @if($sharePointUrl)
+                        @if(!empty($isTest))
+                            <span class="badge badge-warning">Email uji — dokumen tidak dilampirkan</span>
+                        @elseif($sharePointUrl)
                             <span class="badge badge-success">✓ Tersinkronisasi ke SharePoint</span>
                         @else
                             <span class="badge badge-warning">⚠ Belum Tersinkronisasi / Akses Lokal</span>
@@ -84,13 +92,17 @@
             </table>
 
             <div class="btn-group">
-                @if($sharePointUrl)
+                @if(!empty($isTest))
+                    <span class="badge badge-warning">Tidak ada tautan dokumen pada email uji</span>
+                @elseif($sharePointUrl)
                     <a href="{{ $sharePointUrl }}" class="btn btn-primary" target="_blank">Buka Dokumen di SharePoint &rarr;</a>
+                    <a href="{{ $qsalesUrl }}" class="btn btn-secondary" target="_blank">Lihat Detail Quotation di QSales</a>
+                @else
+                    <a href="{{ $qsalesUrl }}" class="btn btn-secondary" target="_blank">Lihat Detail Quotation di QSales</a>
                 @endif
-                <a href="{{ $qsalesUrl }}" class="btn btn-secondary" target="_blank">Lihat Detail Quotation di QSales</a>
             </div>
 
-            @if(!$sharePointUrl)
+            @if(!$sharePointUrl && empty($isTest))
             <p style="font-size: 12px; color: #94a3b8; margin-top: 16px;">
                 <em>Catatan: Dokumen PO dapat diunduh langsung melalui tautan sistem QSales di atas.</em>
             </p>

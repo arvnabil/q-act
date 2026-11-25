@@ -89,6 +89,8 @@ export default function Settings({
   // Email Notification Settings State
   const [emailForm, setEmailForm] = useState(emailNotificationSettings || {});
   const [isSavingEmail, setIsSavingEmail] = useState(false);
+  const [testPoEmail, setTestPoEmail] = useState('aqila@activ.co.id');
+  const [isTestingPoEmail, setIsTestingPoEmail] = useState(false);
 
   useEffect(() => {
     setEmailForm(emailNotificationSettings || {});
@@ -102,6 +104,22 @@ export default function Settings({
     }, {
       preserveScroll: true,
       onFinish: () => setIsSavingEmail(false)
+    });
+  };
+
+  const handleTestPoEmail = () => {
+    const recipient = testPoEmail.trim();
+    if (!recipient) {
+      toast.error('Masukkan alamat email tujuan uji.');
+      return;
+    }
+
+    setIsTestingPoEmail(true);
+    router.post(route('settings.email-notifications.test-po'), { email: recipient }, {
+      preserveScroll: true,
+      onSuccess: () => toast.success(`Email uji diteruskan ke mail transport untuk ${recipient}. Periksa inbox dan folder spam.`),
+      onError: (errors) => toast.error(errors.po_test_email || errors.email || 'Email uji gagal dikirim.'),
+      onFinish: () => setIsTestingPoEmail(false),
     });
   };
 
@@ -1110,6 +1128,10 @@ export default function Settings({
               availableRoles={availableRoles}
               onSubmit={handleSaveEmailNotifications}
               isSaving={isSavingEmail}
+              testPoEmail={testPoEmail}
+              setTestPoEmail={setTestPoEmail}
+              onTestPoEmail={handleTestPoEmail}
+              isTestingPoEmail={isTestingPoEmail}
             />
           )}
 
