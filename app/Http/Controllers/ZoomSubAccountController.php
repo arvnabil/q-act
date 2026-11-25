@@ -80,9 +80,10 @@ class ZoomSubAccountController extends Controller
             $detailCache = $detailCaches->get($subAccount->zoom_account_id);
             if ($detailCache) {
                 $details = (array) $detailCache->payload;
-                $this->syncAccountTypeFromDetails($subAccount, $details);
-
-                if (! $subAccount->last_seen_at || ! $detailCache->fetched_at || $detailCache->fetched_at->greaterThanOrEqualTo($subAccount->last_seen_at)) {
+                // A list sync is a fresh Zoom snapshot. Older detail cache must not
+                // overwrite values such as account_type shown by the list endpoint.
+                if (! $subAccount->last_seen_at || ($detailCache->fetched_at && $detailCache->fetched_at->greaterThan($subAccount->last_seen_at))) {
+                    $this->syncAccountTypeFromDetails($subAccount, $details);
                     $this->syncAccountSummaryFromDetails($subAccount, $details);
                 }
             }
@@ -210,6 +211,42 @@ class ZoomSubAccountController extends Controller
         ]);
     }
 
+    public function refreshAccountDetails(ZoomSubAccount $zoomSubAccount, ZoomService $zoomService): JsonResponse
+    {
+        $result = $zoomService->readSubAccount($zoomSubAccount->zoom_account_id, 'account');
+        if (! $result['available'] || ! is_array($result['data'])) {
+            return response()->json([
+                'message' => $result['message'] ?? 'Detail akun tidak berhasil diperbarui dari Zoom.',
+            ], 502);
+        }
+
+        $fetchedAt = now();
+        DB::transaction(function () use ($zoomSubAccount, $result, $fetchedAt) {
+            ZoomSubAccountDetail::query()->updateOrCreate(
+                ['zoom_account_id' => $zoomSubAccount->zoom_account_id, 'detail_type' => 'account'],
+                ['payload' => $result['data'], 'fetched_at' => $fetchedAt]
+            );
+
+            $this->syncAccountSummaryFromDetails($zoomSubAccount, $result['data']);
+        });
+
+        $zoomSubAccount->refresh();
+
+        return response()->json([
+            'message' => 'Detail akun berhasil diperbarui dari Zoom.',
+            'account' => [
+                'zoom_account_id' => $zoomSubAccount->zoom_account_id,
+                'account_type' => $zoomSubAccount->account_type,
+                'seats' => $zoomSubAccount->seats,
+                'account_name' => $zoomSubAccount->account_name,
+                'owner_email' => $zoomSubAccount->owner_email,
+                'subscription_start_time' => $zoomSubAccount->subscription_start_time?->toDateString(),
+                'subscription_end_time' => $zoomSubAccount->subscription_end_time?->toDateString(),
+            ],
+            'fetched_at' => $fetchedAt->toIso8601String(),
+        ]);
+    }
+
     private function cachedZoomDetail(
         ZoomSubAccount $subAccount,
         string $cacheType,
@@ -222,7 +259,12 @@ class ZoomSubAccountController extends Controller
             ->where('detail_type', $cacheType)
             ->first();
 
-        if ($cache && ! $refresh) {
+        $accountCacheIsStale = $endpoint === 'account'
+            && $cache
+            && $subAccount->last_seen_at
+            && (! $cache->fetched_at || $cache->fetched_at->lessThanOrEqualTo($subAccount->last_seen_at));
+
+        if ($cache && ! $refresh && ! $accountCacheIsStale) {
             if ($endpoint === 'account') {
                 $details = (array) $cache->payload;
                 $this->syncAccountTypeFromDetails($subAccount, $details);
@@ -262,9 +304,9 @@ class ZoomSubAccountController extends Controller
         if ($cache) {
             if ($endpoint === 'account') {
                 $details = (array) $cache->payload;
-                $this->syncAccountTypeFromDetails($subAccount, $details);
 
-                if (! $subAccount->last_seen_at || ! $cache->fetched_at || $cache->fetched_at->greaterThanOrEqualTo($subAccount->last_seen_at)) {
+                if (! $subAccount->last_seen_at || ($cache->fetched_at && $cache->fetched_at->greaterThan($subAccount->last_seen_at))) {
+                    $this->syncAccountTypeFromDetails($subAccount, $details);
                     $this->syncAccountSummaryFromDetails($subAccount, $details);
                 }
             }

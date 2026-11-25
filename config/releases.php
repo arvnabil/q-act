@@ -1,14 +1,34 @@
 <?php
 
 return [
-    'current_version' => 'v2.5.5',
+    'current_version' => 'v2.5.6',
     'last_updated' => '2026-11-25',
     'releases' => [
+        [
+            'version' => 'v2.5.6',
+            'week' => '2026 - Minggu ke-48 (23 Nov - 29 Nov 2026)',
+            'date' => '2026-11-25',
+            'is_current' => true,
+            'tag' => 'Zoom Account Detail Refresh',
+            'summary' => 'Detail sub-account Zoom dapat diperbarui langsung dari daftar akun.',
+            'highlights' => [
+                'Ikon Perbarui dari Zoom tersedia di samping tombol lihat pada setiap baris sub-account.',
+                'Detail terbaru diminta dari endpoint Account Details Zoom, disimpan ke cache QSales, dan daftar diperbarui tanpa membuka halaman detail.',
+                'Status berhasil atau pesan kegagalan pembaruan ditampilkan di halaman daftar.',
+                'Badge versi sidebar mengikuti versi aktif dari konfigurasi rilis.',
+            ],
+            'categories' => [
+                'Zoom Sub Account' => [
+                    'Pembaruan per akun memakai permission detail akun yang sama dengan halaman Account Details.',
+                    'Tidak memerlukan migrasi database; cache detail yang sudah ada diperbarui setelah respons Zoom berhasil diterima.',
+                ],
+            ],
+        ],
         [
             'version' => 'v2.5.5',
             'week' => '2026 - Minggu ke-48 (23 Nov - 29 Nov 2026)',
             'date' => '2026-11-25',
-            'is_current' => true,
+            'is_current' => false,
             'tag' => 'Searchable Brand Selects',
             'summary' => 'Kolom pilihan Brand kini dapat dicari di form produk dan quotation.',
             'highlights' => [

@@ -168,6 +168,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/sub-accounts/export/excel', [\App\Http\Controllers\ZoomSubAccountController::class, 'exportExcel'])->name('sub-accounts.export.excel')->middleware('permission:zoom_sub_accounts_details');
         Route::get('/sub-accounts/export/pdf', [\App\Http\Controllers\ZoomSubAccountController::class, 'exportPdf'])->name('sub-accounts.export.pdf')->middleware('permission:zoom_sub_accounts_details');
         Route::get('/sub-accounts/{zoomSubAccount:zoom_account_id}', [\App\Http\Controllers\ZoomSubAccountController::class, 'show'])->name('sub-accounts.show')->middleware('permission:zoom_sub_accounts_details');
+        Route::post('/sub-accounts/{zoomSubAccount:zoom_account_id}/refresh-details', [\App\Http\Controllers\ZoomSubAccountController::class, 'refreshAccountDetails'])->name('sub-accounts.details.refresh')->middleware('permission:zoom_sub_accounts_details');
         Route::post('/sub-accounts/sync', [\App\Http\Controllers\ZoomSubAccountController::class, 'sync'])->name('sub-accounts.sync')->middleware('permission:zoom_sub_accounts_sync');
         Route::get('/customers/search', [\App\Http\Controllers\ZoomSubAccountController::class, 'searchCustomers'])->name('customers.search')->middleware('permission:zoom_sub_accounts_match');
         Route::put('/sub-accounts/{zoomSubAccount:zoom_account_id}/customer', [\App\Http\Controllers\ZoomSubAccountController::class, 'updateCustomerMatch'])->name('sub-accounts.customer.update')->middleware('permission:zoom_sub_accounts_match');

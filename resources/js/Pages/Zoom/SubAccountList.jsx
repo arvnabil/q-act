@@ -118,6 +118,8 @@ export default function SubAccountList({ subAccounts, syncRuns = [], summary = {
   const [presence, setPresence] = useState(filters.presence || 'present');
   const [expiry, setExpiry] = useState(filters.expiry || 'all');
   const [syncing, setSyncing] = useState(false);
+  const [refreshingAccountId, setRefreshingAccountId] = useState(null);
+  const [detailRefreshNotice, setDetailRefreshNotice] = useState(null);
   const [selectedAccount, setSelectedAccount] = useState(null);
   const [exporting, setExporting] = useState(null);
   const [exportProgress, setExportProgress] = useState(null);
@@ -182,6 +184,19 @@ export default function SubAccountList({ subAccounts, syncRuns = [], summary = {
     setSyncing(true);
     router.post(route('zoom.sub-accounts.sync'), {}, { preserveScroll: true, onFinish: () => setSyncing(false) });
   };
+  const refreshAccountDetails = async account => {
+    setRefreshingAccountId(account.zoom_account_id);
+    setDetailRefreshNotice(null);
+    try {
+      const { data } = await axios.post(route('zoom.sub-accounts.details.refresh', account.zoom_account_id));
+      setDetailRefreshNotice({ type: 'success', message: `${data.message} ${account.account_name || account.account_number} · ${data.account?.account_type || 'Tipe akun tidak dikirim Zoom.'}` });
+      router.reload({ only: ['subAccounts'], preserveScroll: true });
+    } catch (error) {
+      setDetailRefreshNotice({ type: 'error', message: error.response?.data?.message || 'Detail akun gagal diperbarui. Coba lagi beberapa saat.' });
+    } finally {
+      setRefreshingAccountId(null);
+    }
+  };
 
   return <AuthenticatedLayout>
     <Head title="Zoom Sub Account List" />
@@ -196,6 +211,8 @@ export default function SubAccountList({ subAccounts, syncRuns = [], summary = {
           {canSync ? <button type="button" disabled={!zoomConfigured || syncing} onClick={sync} className="inline-flex items-center justify-center gap-2 rounded-xl bg-teal-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-50">{syncing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />} Sinkronkan sekarang</button> : <span className="rounded-xl border border-slate-200 px-4 py-2.5 text-xs font-medium text-slate-500">Akses sinkronisasi tidak diberikan</span>}
         </div>
       </div>
+
+      {detailRefreshNotice && <div className={`rounded-xl border px-4 py-3 text-sm ${detailRefreshNotice.type === 'success' ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : 'border-rose-200 bg-rose-50 text-rose-800'}`} role="status" aria-live="polite">{detailRefreshNotice.message}</div>}
 
       {exporting && <div className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900" role="status" aria-live="polite">
         <div className="flex items-center gap-2 font-semibold"><Loader2 className="h-4 w-4 animate-spin" />{exportProgress?.generating ? 'Detail sudah diperiksa. Laporan sedang dibuat…' : exportProgress?.total ? `Memeriksa detail akun Zoom: ${exportProgress.completed} dari ${exportProgress.total}` : 'Memeriksa cache detail akun Zoom…'}</div>
@@ -241,7 +258,7 @@ export default function SubAccountList({ subAccounts, syncRuns = [], summary = {
               <td className="px-3 py-3.5"><div className="space-y-2 text-xs"><div><div className="text-[10px] uppercase tracking-wide text-slate-400">Mulai layanan</div><div className="mt-0.5 whitespace-nowrap font-medium text-slate-700">{date(account.subscription_start_time)}</div></div><div><div className="text-[10px] uppercase tracking-wide text-slate-400">Renewal</div><div className="mt-0.5 whitespace-nowrap font-medium text-amber-700">{date(account.subscription_end_time)}</div></div></div></td>
               <td className="px-3 py-3.5">{account.customer ? <><div className="truncate font-semibold text-slate-800" title={account.customer.name}>{account.customer.name}</div><div className="mt-1 truncate text-[10px] text-emerald-700" title={account.matcher?.name ? `Sales terkait: ${account.matcher.name}` : 'Kaitan customer dikonfirmasi'}><CheckCircle2 className="mr-1 inline h-3 w-3" />Terkait{account.matcher?.name ? ` · ${account.matcher.name}` : ''}</div></> : <div><div className="text-xs font-medium text-amber-700">Belum ditautkan</div>{canMatchCustomers && account.suggestions?.[0] && <button type="button" onClick={() => setSelectedAccount({ ...account, initialSuggestion: account.suggestions[0] })} title={`${account.suggestions[0].name} · ${account.suggestions[0].score}% cocok`} className="mt-1 block max-w-full truncate text-left text-[10px] text-blue-700 hover:underline">Saran: {account.suggestions[0].name} <span className="font-semibold">{account.suggestions[0].score}%</span></button>}</div>}{account.sales_pic ? <div className="mt-2 inline-flex max-w-full items-center gap-1 truncate rounded-md bg-teal-50 px-2 py-1 text-[10px] text-teal-800" title={`Sales PIC renewal: ${account.sales_pic.name}`}><Users className="h-3 w-3 shrink-0" />PIC: {account.sales_pic.name}</div> : <div className="mt-2 truncate text-[10px] text-amber-700" title="Reminder renewal tidak dikirim tanpa Sales PIC">PIC belum ditentukan · tanpa reminder</div>}</td>
               <td className="px-3 py-3.5">{account.is_present ? <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-full bg-emerald-50 px-2 py-1 text-[10px] font-semibold text-emerald-700"><CheckCircle2 className="h-3 w-3" /> Aktif</span> : <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-full bg-slate-100 px-2 py-1 text-[10px] font-semibold text-slate-600"><AlertCircle className="h-3 w-3" /> Hilang</span>}<div className="mt-2 text-[10px] leading-4 text-slate-400" title={`Terakhir terlihat: ${timestamp(account.last_seen_at)}`}>{timestamp(account.last_seen_at)}</div></td>
-              <td className="px-3 py-3.5"><div className="flex justify-center gap-1.5">{canViewDetails && <Link href={route('zoom.sub-accounts.show', account.zoom_account_id)} title="Lihat detail plan" aria-label={`Lihat detail plan ${account.account_name || account.zoom_account_id}`} className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 text-slate-600 transition hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700"><Eye className="h-4 w-4" /></Link>}{canMatchCustomers && <button type="button" onClick={() => setSelectedAccount(account)} title={account.customer ? 'Ubah customer dan Sales PIC' : 'Tinjau saran dan tautkan customer'} aria-label={account.customer ? `Ubah kaitan ${account.account_name || account.zoom_account_id}` : `Tautkan customer ${account.account_name || account.zoom_account_id}`} className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 text-slate-600 transition hover:border-teal-300 hover:bg-teal-50 hover:text-teal-700"><Link2 className="h-4 w-4" /></button>}</div></td>
+              <td className="px-3 py-3.5"><div className="flex justify-center gap-1.5">{canViewDetails && <><Link href={route('zoom.sub-accounts.show', account.zoom_account_id)} title="Lihat detail plan" aria-label={`Lihat detail plan ${account.account_name || account.zoom_account_id}`} className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 text-slate-600 transition hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700"><Eye className="h-4 w-4" /></Link><button type="button" onClick={() => refreshAccountDetails(account)} disabled={!!refreshingAccountId} title="Perbarui detail akun dari Zoom" aria-label={`Perbarui detail akun ${account.account_name || account.zoom_account_id} dari Zoom`} className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 text-slate-600 transition hover:border-teal-300 hover:bg-teal-50 hover:text-teal-700 disabled:cursor-wait disabled:opacity-50">{refreshingAccountId === account.zoom_account_id ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}</button></>}{canMatchCustomers && <button type="button" onClick={() => setSelectedAccount(account)} title={account.customer ? 'Ubah customer dan Sales PIC' : 'Tinjau saran dan tautkan customer'} aria-label={account.customer ? `Ubah kaitan ${account.account_name || account.zoom_account_id}` : `Tautkan customer ${account.account_name || account.zoom_account_id}`} className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 text-slate-600 transition hover:border-teal-300 hover:bg-teal-50 hover:text-teal-700"><Link2 className="h-4 w-4" /></button>}</div></td>
             </tr>) : <tr><td colSpan={8} className="px-4 py-14 text-center"><ShieldCheck className="mx-auto h-9 w-9 text-slate-300" /><div className="mt-2 font-medium text-slate-700">Belum ada data sub-account</div><div className="mt-1 text-sm text-slate-400">Jalankan sinkronisasi Zoom untuk mengambil daftar akun.</div></td></tr>}
           </tbody>
         </table></div>
